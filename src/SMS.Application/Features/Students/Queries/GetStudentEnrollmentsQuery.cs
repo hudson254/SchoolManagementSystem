@@ -1,8 +1,10 @@
-using MediatR;
-using SMS.Application.DTOs;
-using SMS.Application.Exceptions;
+using FluentValidation;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Students.Queries
 {
     public class GetStudentEnrollmentsQuery : IRequest<IEnumerable<EnrollmentDto>>
@@ -36,28 +38,28 @@ namespace SMS.Application.Features.Students.Queries
                 throw new NotFoundException("Student", request.StudentId);
             }
 
-            var enrollments = await _enrollmentRepository.GetStudentEnrollmentsAsync(
-                request.StudentId,
-                request.SemesterId,
-                request.Status,
-                cancellationToken);
+            var enrollments = await _enrollmentRepository.GetStudentEnrollmentsAsync(request.StudentId);
 
             return enrollments.Select(e => new EnrollmentDto
             {
                 Id = e.Id,
                 StudentId = e.StudentId,
-                UnitId = e.UnitId,
-                SemesterId = e.SemesterId,
+                UnitId = e.UnitId ?? Guid.Empty,
+                SemesterId = e.SemesterId ?? Guid.Empty,
                 EnrollmentDate = e.EnrollmentDate,
                 Status = e.Status,
                 DropDate = e.DropDate,
-                StudentName = e.Student.User.FullName,
-                StudentNumber = e.Student.StudentNumber,
-                UnitName = e.Unit.Name,
-                UnitCode = e.Unit.Code,
-                Credits = e.Unit.Credits,
-                SemesterName = e.Semester.Name
+                StudentName = e.Student?.User?.FullName ?? "",
+                StudentNumber = e.Student?.StudentNumber ?? "",
+                UnitName = e.Unit?.Name ?? "",
+                UnitCode = e.Unit?.Code ?? "",
+                Credits = e.Unit?.Credits ?? 0,
+                SemesterName = e.Semester?.Name ?? ""
             });
         }
     }
 }
+
+
+
+

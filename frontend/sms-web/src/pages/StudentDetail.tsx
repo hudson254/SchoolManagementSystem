@@ -402,7 +402,7 @@ export const StudentDetail: React.FC = () => {
                     <ListItemText
                       primary="Accommodation"
                       secondary={
-                        student.accommodation ? `${student.accommodation.roomNumber} - ${student.accommodation.blockName}` : 'Not Assigned'
+                        student.accommodation ? `${student.accommodation.houseNumber} - ${student.accommodation.laneName}` : 'Not Assigned'
                       }
                     />
                   </ListItem>
@@ -523,21 +523,23 @@ export const StudentDetail: React.FC = () => {
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
-                    Room Number
+                    House Number
                   </Typography>
-                  <Typography variant="h6">{student.accommodation.roomNumber}</Typography>
+                  <Typography variant="h6">{student.accommodation.houseNumber}</Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
-                    Block
+                    Lane
                   </Typography>
-                  <Typography variant="h6">{student.accommodation.blockName}</Typography>
+                  <Typography variant="h6">{student.accommodation.laneName}</Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
-                    Building
+                    Assigned Date
                   </Typography>
-                  <Typography variant="h6">{student.accommodation.buildingName}</Typography>
+                  <Typography variant="h6">
+                    {new Date(student.accommodation.assignedDate).toLocaleDateString()}
+                  </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">

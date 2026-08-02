@@ -1,3 +1,4 @@
+using SMS.Shared.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ namespace SMS.API.Controllers.v1
 {
     [ApiVersion("1.0")]
     [Authorize]
+    [Route("api/v{version:apiVersion}/students")]
     public class StudentController : BaseApiController
     {
         private readonly ILogger<StudentController> _logger;
@@ -29,9 +31,9 @@ namespace SMS.API.Controllers.v1
         {
             var query = new GetStudentsQuery
             {
+                SearchTerm = searchTerm ?? string.Empty,
                 Page = page,
-                PageSize = pageSize,
-                SearchTerm = searchTerm
+                PageSize = pageSize
             };
             var result = await Mediator.Send(query, cancellationToken);
             return Ok(result);

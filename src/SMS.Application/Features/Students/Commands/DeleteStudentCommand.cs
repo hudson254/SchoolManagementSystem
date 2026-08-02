@@ -1,7 +1,10 @@
-using MediatR;
-using SMS.Application.Exceptions;
+using FluentValidation;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Students.Commands
 {
     public class DeleteStudentCommand : IRequest
@@ -39,9 +42,14 @@ namespace SMS.Application.Features.Students.Commands
             await _studentRepository.DeleteAsync(student, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Student", "Delete", student.Id, null, $"Deleted student: {student.StudentNumber}");
+            await _auditService.LogAsync("Delete", "Student", $"Student deleted: {student.StudentNumber}");
 
             _logger.LogInformation("Student deleted: {StudentNumber}", student.StudentNumber);
         }
     }
 }
+
+
+
+
+

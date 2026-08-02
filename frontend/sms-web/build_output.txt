@@ -1,0 +1,146 @@
+
+> sms-web@1.0.0 build
+> tsc && vite build
+
+src/App.tsx(16,7): error TS6133: 'withDefault' is declared but its value is never read.
+src/components/Common/DataTable.tsx(1,17): error TS6133: 'useState' is declared but its value is never read.
+src/components/Common/DataTable.tsx(16,3): error TS6133: 'Chip' is declared but its value is never read.
+src/components/Common/DataTable.tsx(77,29): error TS6133: 'event' is declared but its value is never read.
+src/components/Common/ErrorBoundary.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/Common/ProtectedRoute.tsx(29,33): error TS2339: Property 'isEmailVerified' does not exist on type 'User'.
+src/components/Forms/AssignmentForm.tsx(82,9): error TS6133: 'dueDate' is declared but its value is never read.
+src/components/Forms/AssignmentForm.tsx(351,32): error TS6133: 'e' is declared but its value is never read.
+src/components/Forms/CourseForm.tsx(76,9): error TS6133: 'isActive' is declared but its value is never read.
+src/components/Forms/CourseForm.tsx(88,34): error TS2339: Property 'getDepartments' does not exist on type '{ getCourses: (params: GetCoursesParams) => Promise<PagedResponse<Course>>; getCourse: (id: string) => Promise<CourseDetails>; ... 4 more ...; getProgrammes: (courseId: string) => Promise<...>; }'.
+src/components/Forms/CourseForm.tsx(179,17): error TS17001: JSX elements cannot have multiple attributes with the same name.
+src/components/Forms/StudentForm.tsx(85,34): error TS2554: Expected 1 arguments, but got 0.
+src/components/Forms/StudentForm.tsx(92,57): error TS2345: Argument of type '{ email: string; firstName: string; lastName: string; phoneNumber: string; dateOfBirth: string; address?: string | undefined; programmeId?: string | undefined; gender?: string | undefined; emergencyContactName?: string | undefined; emergencyContactPhone?: string | undefined; emergencyContactRelation?: string | undef...' is not assignable to parameter of type 'UpdateStudentRequest'.
+  Property 'isEnrolled' is missing in type '{ email: string; firstName: string; lastName: string; phoneNumber: string; dateOfBirth: string; address?: string | undefined; programmeId?: string | undefined; gender?: string | undefined; emergencyContactName?: string | undefined; emergencyContactPhone?: string | undefined; emergencyContactRelation?: string | undef...' but required in type 'UpdateStudentRequest'.
+src/components/Forms/UnitForm.tsx(82,9): error TS6133: 'isActive' is declared but its value is never read.
+src/components/Forms/UnitForm.tsx(194,17): error TS17001: JSX elements cannot have multiple attributes with the same name.
+src/components/Layout/Header.tsx(31,16): error TS6133: 'PersonAddIcon' is declared but its value is never read.
+src/components/Layout/Layout.tsx(14,9): error TS6133: 'isMobile' is declared but its value is never read.
+src/components/Layout/Sidebar.tsx(13,3): error TS6133: 'Tooltip' is declared but its value is never read.
+src/components/Layout/Sidebar.tsx(23,3): error TS6133: 'Event' is declared but its value is never read.
+src/hooks/useApi.ts(40,30): error TS6133: 'url' is declared but its value is never read.
+src/hooks/useApi.ts(40,43): error TS6133: 'options' is declared but its value is never read.
+src/pages/Accommodation.tsx(31,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Accommodation.tsx(34,3): error TS6133: 'Avatar' is declared but its value is never read.
+src/pages/Accommodation.tsx(35,3): error TS6133: 'List' is declared but its value is never read.
+src/pages/Accommodation.tsx(36,3): error TS6133: 'ListItem' is declared but its value is never read.
+src/pages/Accommodation.tsx(37,3): error TS6133: 'ListItemText' is declared but its value is never read.
+src/pages/Accommodation.tsx(38,3): error TS6133: 'ListItemAvatar' is declared but its value is never read.
+src/pages/Accommodation.tsx(45,13): error TS6133: 'DeleteIcon' is declared but its value is never read.
+src/pages/Accommodation.tsx(49,11): error TS6133: 'HomeIcon' is declared but its value is never read.
+src/pages/Accommodation.tsx(51,16): error TS6133: 'TransferIcon' is declared but its value is never read.
+src/pages/Accommodation.tsx(52,18): error TS6133: 'CheckCircleIcon' is declared but its value is never read.
+src/pages/Accommodation.tsx(53,13): error TS6133: 'CancelIcon' is declared but its value is never read.
+src/pages/Accommodation.tsx(132,28): error TS6133: 'event' is declared but its value is never read.
+src/pages/Accommodation.tsx(147,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Assignments.tsx(29,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Assignments.tsx(31,3): error TS6133: 'Card' is declared but its value is never read.
+src/pages/Assignments.tsx(32,3): error TS6133: 'CardContent' is declared but its value is never read.
+src/pages/Assignments.tsx(43,18): error TS6133: 'CheckCircleIcon' is declared but its value is never read.
+src/pages/Assignments.tsx(44,13): error TS6133: 'CancelIcon' is declared but its value is never read.
+src/pages/Assignments.tsx(45,15): error TS6133: 'ScheduleIcon' is declared but its value is never read.
+src/pages/Assignments.tsx(111,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Calendar.tsx(23,3): error TS6133: 'Badge' is declared but its value is never read.
+src/pages/Calendar.tsx(28,12): error TS6133: 'TodayIcon' is declared but its value is never read.
+src/pages/Calendar.tsx(29,18): error TS6133: 'ChevronLeftIcon' is declared but its value is never read.
+src/pages/Calendar.tsx(30,19): error TS6133: 'ChevronRightIcon' is declared but its value is never read.
+src/pages/Calendar.tsx(79,10): error TS6133: 'selectedEvent' is declared but its value is never read.
+src/pages/Calendar.tsx(89,10): error TS6133: 'currentView' is declared but its value is never read.
+src/pages/Calendar.tsx(89,23): error TS6133: 'setCurrentView' is declared but its value is never read.
+src/pages/Calendar.tsx(113,28): error TS6133: 'event' is declared but its value is never read.
+src/pages/Calendar.tsx(169,9): error TS6133: 'getEventBadge' is declared but its value is never read.
+src/pages/Calendar.tsx(301,24): error TS2304: Cannot find name 'DeleteIcon'.
+src/pages/Courses.tsx(29,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Courses.tsx(31,3): error TS6133: 'Card' is declared but its value is never read.
+src/pages/Courses.tsx(32,3): error TS6133: 'CardContent' is declared but its value is never read.
+src/pages/Courses.tsx(108,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Grades.tsx(16,3): error TS6133: 'TableSortLabel' is declared but its value is never read.
+src/pages/Grades.tsx(18,3): error TS6133: 'Dialog' is declared but its value is never read.
+src/pages/Grades.tsx(19,3): error TS6133: 'DialogTitle' is declared but its value is never read.
+src/pages/Grades.tsx(20,3): error TS6133: 'DialogContent' is declared but its value is never read.
+src/pages/Grades.tsx(21,3): error TS6133: 'DialogActions' is declared but its value is never read.
+src/pages/Grades.tsx(28,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Grades.tsx(35,17): error TS6133: 'ViewIcon' is declared but its value is never read.
+src/pages/Grades.tsx(36,11): error TS6133: 'EditIcon' is declared but its value is never read.
+src/pages/Grades.tsx(37,18): error TS6133: 'CheckCircleIcon' is declared but its value is never read.
+src/pages/Grades.tsx(45,9): error TS6133: 'user' is declared but its value is never read.
+src/pages/Grades.tsx(83,9): error TS6133: 'handleSort' is declared but its value is never read.
+src/pages/Grades.tsx(89,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Grades.tsx(192,18): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(192,41): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(193,18): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(193,50): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(194,18): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(194,50): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(206,18): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(206,41): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(207,18): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(207,55): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(208,18): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Grades.tsx(208,59): error TS2304: Cannot find name 'MenuItem'.
+src/pages/Lecturers.tsx(30,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Lecturers.tsx(34,10): error TS6133: 'AddIcon' is declared but its value is never read.
+src/pages/Lecturers.tsx(115,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Profile.tsx(4,3): error TS6133: 'Paper' is declared but its value is never read.
+src/pages/Profile.tsx(14,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Profile.tsx(77,32): error TS2339: Property 'getProfile' does not exist on type '{ getUsers: (params: GetUsersParams) => Promise<PagedResponse<UserDetail>>; getUser: (id: string) => Promise<UserDetail>; ... 9 more ...; getLoginHistory: (userId: string, params?: { ...; } | undefined) => Promise<...>; }'.
+src/pages/Profile.tsx(112,56): error TS2339: Property 'updateProfile' does not exist on type '{ getUsers: (params: GetUsersParams) => Promise<PagedResponse<UserDetail>>; getUser: (id: string) => Promise<UserDetail>; ... 9 more ...; getLoginHistory: (userId: string, params?: { ...; } | undefined) => Promise<...>; }'.
+src/pages/Reports.tsx(7,3): error TS6133: 'Card' is declared but its value is never read.
+src/pages/Reports.tsx(8,3): error TS6133: 'CardContent' is declared but its value is never read.
+src/pages/Reports.tsx(9,3): error TS6133: 'CardActions' is declared but its value is never read.
+src/pages/Reports.tsx(11,3): error TS6133: 'IconButton' is declared but its value is never read.
+src/pages/Reports.tsx(25,12): error TS6133: 'PrintIcon' is declared but its value is never read.
+src/pages/Reports.tsx(34,1): error TS6133: 'useQuery' is declared but its value is never read.
+src/pages/Settings.tsx(15,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Settings.tsx(19,3): error TS6133: 'Slider' is declared but its value is never read.
+src/pages/Settings.tsx(27,14): error TS6133: 'RefreshIcon' is declared but its value is never read.
+src/pages/Settings.tsx(30,15): error TS6133: 'SecurityIcon' is declared but its value is never read.
+src/pages/Settings.tsx(31,20): error TS6133: 'NotificationsIcon' is declared but its value is never read.
+src/pages/Settings.tsx(32,14): error TS6133: 'PaletteIcon' is declared but its value is never read.
+src/pages/Settings.tsx(33,15): error TS6133: 'LanguageIcon' is declared but its value is never read.
+src/pages/Settings.tsx(34,14): error TS6133: 'StorageIcon' is declared but its value is never read.
+src/pages/Settings.tsx(66,9): error TS6133: 'user' is declared but its value is never read.
+src/pages/Settings.tsx(91,28): error TS6133: 'event' is declared but its value is never read.
+src/pages/StudentDetail.tsx(28,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/StudentDetail.tsx(45,18): error TS6133: 'MoneyIcon' is declared but its value is never read.
+src/pages/StudentDetail.tsx(86,9): error TS6133: 'queryClient' is declared but its value is never read.
+src/pages/StudentDetail.tsx(103,28): error TS6133: 'event' is declared but its value is never read.
+src/pages/StudentDetail.tsx(405,33): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(405,60): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(405,98): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(520,18): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(528,53): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(534,53): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(540,53): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(547,36): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/StudentDetail.tsx(548,36): error TS2339: Property 'accommodation' does not exist on type 'StudentDetails'.
+src/pages/Students.tsx(30,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Students.tsx(34,10): error TS6133: 'AddIcon' is declared but its value is never read.
+src/pages/Students.tsx(45,10): error TS6133: 'Link' is declared but its value is never read.
+src/pages/Students.tsx(108,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Timetable.tsx(7,3): error TS6133: 'Card' is declared but its value is never read.
+src/pages/Timetable.tsx(8,3): error TS6133: 'CardContent' is declared but its value is never read.
+src/pages/Timetable.tsx(11,3): error TS6133: 'Chip' is declared but its value is never read.
+src/pages/Timetable.tsx(31,3): error TS6133: 'Divider' is declared but its value is never read.
+src/pages/Timetable.tsx(43,15): error TS6133: 'ScheduleIcon' is declared but its value is never read.
+src/pages/Timetable.tsx(44,11): error TS6133: 'RoomIcon' is declared but its value is never read.
+src/pages/Timetable.tsx(45,13): error TS6133: 'PersonIcon' is declared but its value is never read.
+src/pages/Timetable.tsx(46,13): error TS6133: 'SchoolIcon' is declared but its value is never read.
+src/pages/Timetable.tsx(47,15): error TS6133: 'DownloadIcon' is declared but its value is never read.
+src/pages/Timetable.tsx(48,12): error TS6133: 'PrintIcon' is declared but its value is never read.
+src/pages/Timetable.tsx(126,28): error TS6133: 'event' is declared but its value is never read.
+src/pages/Timetable.tsx(141,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Units.tsx(29,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Units.tsx(31,3): error TS6133: 'Card' is declared but its value is never read.
+src/pages/Units.tsx(32,3): error TS6133: 'CardContent' is declared but its value is never read.
+src/pages/Units.tsx(108,29): error TS6133: 'event' is declared but its value is never read.
+src/pages/Users.tsx(30,3): error TS6133: 'LinearProgress' is declared but its value is never read.
+src/pages/Users.tsx(36,10): error TS6133: 'AddIcon' is declared but its value is never read.
+src/pages/Users.tsx(46,15): error TS6133: 'VerifiedIcon' is declared but its value is never read.
+src/pages/Users.tsx(57,9): error TS6133: 'user' is declared but its value is never read.
+src/pages/Users.tsx(140,29): error TS6133: 'event' is declared but its value is never read.
+src/theme.ts(117,5): error TS2353: Object literal may only specify known properties, and 'MuiDataGrid' does not exist in type 'Components<Omit<Theme, "components">>'.

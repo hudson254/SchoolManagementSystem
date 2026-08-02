@@ -1,8 +1,10 @@
-using MediatR;
-using SMS.Application.DTOs;
-using SMS.Application.Exceptions;
-using SMS.Domain.Interfaces;
+using FluentValidation;
+using SMS.Shared.DTOs;
 
+using SMS.Domain.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Courses.Queries
 {
     public class GetCourseQuery : IRequest<CourseDetailsDto>
@@ -54,19 +56,12 @@ namespace SMS.Application.Features.Courses.Queries
                 TotalUnits = units.Count(),
                 TotalProgrammes = course.Programmes.Count,
                 TotalStudents = course.Programmes.SelectMany(p => p.Students).Count(),
-                Units = units.Select(u => new UnitDto
+                Units = units.Select(u => new UnitSummaryDto
                 {
                     Id = u.Id,
                     Name = u.Name,
                     Code = u.Code,
-                    Description = u.Description,
-                    Credits = u.Credits,
-                    ContactHours = u.ContactHours,
-                    IsActive = u.IsActive,
-                    CourseId = u.CourseId,
-                    CourseName = course.Name,
-                    CourseCode = course.Code,
-                    CreatedDate = u.CreatedDate
+                    Credits = u.Credits
                 }).ToList(),
                 Programmes = course.Programmes.Select(p => new ProgrammeSummaryDto
                 {
@@ -74,10 +69,16 @@ namespace SMS.Application.Features.Courses.Queries
                     Name = p.Name,
                     Code = p.Code,
                     Duration = p.Duration,
-                    TotalCredits = p.TotalCredits
+                    TotalCredits = 0
                 }).ToList(),
-                CreatedDate = course.CreatedDate
+                CreatedDate = course.CreatedDate ?? DateTime.UtcNow
             };
         }
     }
 }
+
+
+
+
+
+

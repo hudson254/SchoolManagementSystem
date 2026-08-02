@@ -1,137 +1,134 @@
 import { api } from './api';
-
-interface Building {
-  id: string;
-  name: string;
-  address?: string;
-  totalFloors: number;
-  hasElevator: boolean;
-  category?: string;
-  isActive: boolean;
-  totalBlocks: number;
-  totalRooms: number;
-}
-
-interface BuildingDetails extends Building {
-  blocks: Block[];
-  occupiedRooms: number;
-  availableRooms: number;
-  occupancyRate: number;
-}
-
-interface Block {
-  id: string;
-  name: string;
-  buildingId: string;
-  floorNumber: number;
-  totalRooms: number;
-  category?: string;
-  isActive: boolean;
-  occupiedRooms: number;
-  availableRooms: number;
-}
-
-interface Room {
-  id: string;
-  roomNumber: string;
-  blockId: string;
-  capacity: number;
-  roomType?: string;
-  pricePerSemester: number;
-  facilities?: string;
-  isAvailable: boolean;
-  isOccupied: boolean;
-  status: string;
-  blockName: string;
-  buildingName: string;
-  currentOccupant?: string;
-}
-
-interface AccommodationAssignment {
-  id: string;
-  studentId: string;
-  roomId: string;
-  semesterId: string;
-  assignmentDate: string;
-  moveInDate?: string;
-  moveOutDate?: string;
-  status: string;
-  assignedBy?: string;
-  remarks?: string;
-  studentName: string;
-  studentNumber: string;
-  roomNumber: string;
-  blockName: string;
-  buildingName: string;
-  semesterName: string;
-}
-
-interface OccupancyReport {
-  totalRooms: number;
-  occupiedRooms: number;
-  availableRooms: number;
-  maintenanceRooms: number;
-  occupancyRate: number;
-  buildingOccupancy: BuildingOccupancy[];
-}
-
-interface BuildingOccupancy {
-  buildingName: string;
-  totalRooms: number;
-  occupiedRooms: number;
-  availableRooms: number;
-  occupancyRate: number;
-}
-
-interface GetRoomsParams {
-  page?: number;
-  pageSize?: number;
-  searchTerm?: string;
-  buildingId?: string;
-  blockId?: string;
-  isAvailable?: boolean;
-  isOccupied?: boolean;
-  roomType?: string;
-  sortBy?: string;
-  sortDescending?: boolean;
-}
-
-interface PagedResponse<T> {
-  items: T[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
+import type {
+  Lane,
+  House,
+  AccommodationDashboard,
+  CreateLaneRequest,
+  UpdateLaneRequest,
+  CreateHouseRequest,
+  AssignHouseRequest,
+  ReassignHouseRequest,
+  VacateHouseRequest,
+  LaneOccupancyReport,
+  HouseOccupancyReport,
+  StudentAccommodation,
+  VacantHouseReport,
+  MaintenanceReport,
+  OccupancyStatistics,
+} from '../types/accommodation.types';
 
 export const accommodationService = {
+  // ===== Lane Management =====
+  getLanes: (searchTerm?: string) =>
+    api.get<Lane[]>('/accommodation/lanes', { params: { searchTerm } }),
+
+  getLane: (id: string) =>
+    api.get<Lane>(`/accommodation/lanes/${id}`),
+
+  createLane: (data: CreateLaneRequest) =>
+    api.post<Guid>('/accommodation/lanes', data),
+
+  updateLane: (id: string, data: UpdateLaneRequest) =>
+    api.put<boolean>(`/accommodation/lanes/${id}`, data),
+
+  deleteLane: (id: string) =>
+    api.delete(`/accommodation/lanes/${id}`),
+
+  // ===== House Management =====
+  getHouses: (laneId?: string, searchTerm?: string, status?: string) =>
+    api.get<House[]>('/accommodation/houses', { params: { laneId, searchTerm, status } }),
+
+  getLaneHouses: (laneId: string) =>
+    api.get<House[]>(`/accommodation/lanes/${laneId}/houses`),
+
+  getHouse: (id: string) =>
+    api.get<House>(`/accommodation/houses/${id}`),
+
+  createHouses: (data: CreateHouseRequest) =>
+    api.post<string[]>('/accommodation/houses', data),
+
+  updateHouse: (id: string, data: any) =>
+    api.put<boolean>(`/accommodation/houses/${id}`, data),
+
+  deleteHouse: (id: string) =>
+    api.delete(`/accommodation/houses/${id}`),
+
+  setHouseMaintenance: (houseId: string, isUnderMaintenance: boolean, notes?: string) =>
+    api.post<boolean>(`/accommodation/houses/${houseId}/maintenance`, { isUnderMaintenance, notes }),
+
+  setHouseUnavailable: (houseId: string, isUnavailable: boolean, notes?: string) =>
+    api.post<boolean>(`/accommodation/houses/${houseId}/unavailable`, { isUnavailable, notes }),
+
+  // ===== Allocation =====
+  assignHouse: (houseId: string, data: AssignHouseRequest) =>
+    api.post<Guid>(`/accommodation/houses/${houseId}/assign`, data),
+
+  reassignHouse: (data: ReassignHouseRequest) =>
+    api.post<boolean>('/accommodation/houses/reassign', data),
+
+  vacateHouse: (houseId: string, data?: VacateHouseRequest) =>
+    api.post(`/accommodation/houses/${houseId}/vacate`, data ?? {}),
+
+  getAvailableHouses: (laneId?: string) =>
+    api.get<House[]>('/accommodation/houses/available', { params: { laneId } }),
+
+  // ===== Dashboard =====
+  getDashboard: () =>
+    api.get<AccommodationDashboard>('/accommodation/dashboard'),
+
+  // ===== Reports =====
+  getLaneOccupancyReport: (laneId?: string) =>
+    api.get<LaneOccupancyReport[]>('/accommodation/reports/lane-occupancy', { params: { laneId } }),
+
+  getHouseOccupancyReport: (laneId?: string, status?: string) =>
+    api.get<HouseOccupancyReport[]>('/accommodation/reports/house-occupancy', { params: { laneId, status } }),
+
+  getStudentAccommodationList: (searchTerm?: string, status?: string) =>
+    api.get<StudentAccommodation[]>('/accommodation/reports/student-accommodation', { params: { searchTerm, status } }),
+
+  getVacantHouseReport: (laneId?: string) =>
+    api.get<VacantHouseReport>('/accommodation/reports/vacant-houses', { params: { laneId } }),
+
+  getMaintenanceReport: () =>
+    api.get<MaintenanceReport>('/accommodation/reports/maintenance'),
+
+  getOccupancyStatistics: () =>
+    api.get<OccupancyStatistics>('/accommodation/reports/occupancy-statistics'),
+
+  // ===== Legacy (kept for backward compatibility) =====
   getBuildings: () =>
-    api.get<Building[]>('/accommodation/buildings'),
+    api.get<any[]>('/accommodation/buildings'),
 
   getBuilding: (id: string) =>
-    api.get<BuildingDetails>(`/accommodation/buildings/${id}`),
+    api.get<any>(`/accommodation/buildings/${id}`),
 
   createBuilding: (data: any) =>
-    api.post<Building>('/accommodation/buildings', data),
+    api.post<any>('/accommodation/buildings', data),
 
-  getRooms: (params: GetRoomsParams) =>
-    api.get<PagedResponse<Room>>('/accommodation/rooms', { params }),
+  getRooms: (params: any) =>
+    api.get<any>('/accommodation/rooms', { params }),
 
   getAvailableRooms: (buildingId?: string, blockId?: string) =>
-    api.get<Room[]>('/accommodation/rooms/available', { params: { buildingId, blockId } }),
+    api.get<any[]>('/accommodation/rooms/available', { params: { buildingId, blockId } }),
 
   assignRoom: (data: { roomId: string; studentId: string; semesterId: string; remarks?: string }) =>
-    api.post<AccommodationAssignment>(`/accommodation/rooms/${data.roomId}/assign`, data),
+    api.post<any>(`/accommodation/rooms/${data.roomId}/assign`, data),
 
   transferRoom: (assignmentId: string, newRoomId: string, remarks?: string) =>
-    api.post<AccommodationAssignment>(`/accommodation/assignments/${assignmentId}/transfer`, { newRoomId, remarks }),
+    api.post<any>(`/accommodation/assignments/${assignmentId}/transfer`, { newRoomId, remarks }),
 
   vacateRoom: (assignmentId: string, remarks?: string) =>
     api.post(`/accommodation/assignments/${assignmentId}/vacate`, { remarks }),
 
   getOccupancyReport: (buildingId?: string) =>
-    api.get<OccupancyReport>('/accommodation/reports/occupancy', { params: { buildingId } }),
+    api.get<any>('/accommodation/reports/occupancy', { params: { buildingId } }),
 
-  getStudentAssignment: (studentId: string, semesterId?: string) =>
-    api.get<AccommodationAssignment>(`/accommodation/assignments/student/${studentId}`, { params: { semesterId } }),
+  getVacantRoomsReport: (buildingId?: string) =>
+    api.get<any>('/accommodation/reports/vacant', { params: { buildingId } }),
+
+  getStudentAssignment: (studentId: string) =>
+    api.get<any>(`/accommodation/assignments/student/${studentId}`),
 };
+
+type Guid = string;
+

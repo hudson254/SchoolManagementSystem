@@ -1,32 +1,28 @@
-using System.ComponentModel.DataAnnotations;
 using SMS.Domain.Common;
+using System;
 
 namespace SMS.Domain.Entities
 {
-    public class Grade : BaseEntity
+    public class Grade : BaseEntity, ITenantAwareEntity
     {
-        [Required]
         public Guid StudentId { get; set; }
-
-        [Required]
-        public Guid EnrollmentId { get; set; }
-
-        [Required]
-        [MaxLength(2)]
+        public Guid UnitId { get; set; }
+        public Guid? EnrollmentId { get; set; }
+        public Guid? SemesterId { get; set; }
+        public decimal Score { get; set; }
+        public string? LetterGrade { get; set; }
+        public string? Remarks { get; set; }
         public string? GradeValue { get; set; }
 
-        public decimal? Score { get; set; }
-
-        [MaxLength(500)]
-        public string? Remarks { get; set; }
-
+        // Additional properties required by handlers
         public DateTime? GradedDate { get; set; }
-        public Guid? GradedBy { get; set; }
-
-        public bool IsPublished { get; set; } = false;
+        public bool IsPublished { get; set; }
         public DateTime? PublishedDate { get; set; }
 
-        public virtual Student? Student { get; set; }
-        public virtual StudentEnrollment? Enrollment { get; set; }
+        // Navigation properties
+        public virtual Student Student { get; set; }
+        public virtual Unit Unit { get; set; }
+        public virtual Enrollment Enrollment { get; set; }
+        public virtual Semester Semester { get; set; }
     }
 }

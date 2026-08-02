@@ -25,7 +25,6 @@ A comprehensive, production-ready School Management System built with ASP.NET Co
 - Entity Framework Core
 - MediatR (CQRS)
 - FluentValidation
-- AutoMapper
 - Serilog
 - Hangfire
 

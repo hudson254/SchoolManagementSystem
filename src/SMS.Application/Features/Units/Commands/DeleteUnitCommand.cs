@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using SMS.Application.Exceptions;
 using SMS.Domain.Interfaces;
 
@@ -6,7 +7,7 @@ namespace SMS.Application.Features.Units.Commands
 {
     public class DeleteUnitCommand : IRequest
     {
-        public Guid UnitId { get; set; }
+        public Guid Id { get; set; }
     }
 
     public class DeleteUnitCommandHandler : IRequestHandler<DeleteUnitCommand>
@@ -30,27 +31,25 @@ namespace SMS.Application.Features.Units.Commands
 
         public async Task Handle(DeleteUnitCommand request, CancellationToken cancellationToken)
         {
-            var unit = await _unitRepository.GetUnitWithDetailsAsync(request.UnitId, cancellationToken);
+            var unit = await _unitRepository.GetUnitWithDetailsAsync(request.Id, cancellationToken);
             if (unit == null)
             {
-                throw new NotFoundException("Unit", request.UnitId);
+                throw new NotFoundException("Unit", request.Id);
             }
 
-            // Check if unit has any active enrollments
-            var hasActiveEnrollments = unit.Enrollments.Any(e => e.Status == "Enrolled" || e.Status == "InProgress");
-            if (hasActiveEnrollments)
+            // Check if unit has any enrollments
+            if (unit.Enrollments != null && unit.Enrollments.Any())
             {
-                throw new BusinessRuleException(
-                    "Cannot delete unit",
-                    "Unit has active student enrollments. Please drop all students before deleting the unit.");
+                throw new BusinessRuleException("Cannot delete unit with existing enrollments");
             }
 
+            await _auditService.LogActivityAsync("Unit", "Delete", unit.Id.ToString(), request.Id.ToString());
             await _unitRepository.DeleteAsync(unit, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Unit", "Delete", unit.Id, null, $"Unit: {unit.Code}");
-
+            await _auditService.LogAsync("DeleteUnit", unit.Id.ToString(), $"Unit deleted: {unit.Code}");
             _logger.LogInformation("Unit deleted: {UnitCode}", unit.Code);
         }
     }
 }
+

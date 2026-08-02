@@ -37,7 +37,7 @@ export function useApi<T>() {
   return { ...state, execute, reset };
 }
 
-export function useApiGet<T>(url: string, options?: RequestInit) {
+export function useApiGet<T>(_url: string, _options?: RequestInit) {
   return useApi<T>();
 }
 

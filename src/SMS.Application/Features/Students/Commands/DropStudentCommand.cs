@@ -1,8 +1,10 @@
-using MediatR;
 using FluentValidation;
-using SMS.Application.Exceptions;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Students.Commands
 {
     public class DropStudentCommand : IRequest
@@ -49,11 +51,7 @@ namespace SMS.Application.Features.Students.Commands
 
         public async Task Handle(DropStudentCommand request, CancellationToken cancellationToken)
         {
-            var enrollment = await _enrollmentRepository.GetEnrollmentAsync(
-                request.StudentId,
-                request.UnitId,
-                request.SemesterId,
-                cancellationToken);
+            var enrollment = await _enrollmentRepository.GetEnrollmentAsync(request.StudentId, request.UnitId, cancellationToken);
 
             if (enrollment == null)
             {
@@ -61,14 +59,18 @@ namespace SMS.Application.Features.Students.Commands
             }
 
             enrollment.Status = "Dropped";
-            enrollment.DropDate = DateTime.UtcNow;
+            enrollment.IsActive = false;
 
-            _enrollmentRepository.Update(enrollment);
+            await _enrollmentRepository.UpdateAsync(enrollment, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Enrollment", "Drop", enrollment.Id, null, $"Reason: {request.Reason ?? "Not specified"}");
+            await _auditService.LogAsync("Drop", "Enrollment", $"Student {request.StudentId} dropped from Unit {request.UnitId}. Reason: {request.Reason ?? "Not specified"}");
 
             _logger.LogInformation("Student {StudentId} dropped from unit {UnitId}", request.StudentId, request.UnitId);
         }
     }
 }
+
+
+
+

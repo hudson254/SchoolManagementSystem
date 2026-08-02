@@ -1,147 +1,125 @@
-using MediatR;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentValidation;
+using MediatR;
+using Microsoft.Extensions.Logging;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
-using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
+
 
 namespace SMS.Application.Features.Auth.Commands
 {
     public class RegisterCommand : IRequest<AuthResponseDto>
     {
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string ConfirmPassword { get; set; } = string.Empty;
-        public string PhoneNumber { get; set; } = string.Empty;
-        public string Organization { get; set; } = string.Empty;
-        public string Role { get; set; } = "Student";
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Role { get; set; } = "User";
     }
 
     public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
     {
         public RegisterCommandValidator()
         {
-            RuleFor(x => x.FirstName)
-                .NotEmpty().WithMessage("First name is required")
-                .MaximumLength(100);
-
-            RuleFor(x => x.LastName)
-                .NotEmpty().WithMessage("Last name is required")
-                .MaximumLength(100);
-
             RuleFor(x => x.Email)
                 .NotEmpty().WithMessage("Email is required")
-                .EmailAddress().WithMessage("Invalid email format")
-                .MaximumLength(100);
+                .EmailAddress().WithMessage("A valid email is required");
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Password is required")
-                .MinimumLength(8).WithMessage("Password must be at least 8 characters")
-                .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter")
-                .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter")
-                .Matches(@"[0-9]").WithMessage("Password must contain at least one number")
-                .Matches(@"[^a-zA-Z0-9]").WithMessage("Password must contain at least one special character");
+                .MinimumLength(8).WithMessage("Password must be at least 8 characters");
 
             RuleFor(x => x.ConfirmPassword)
+                .NotEmpty().WithMessage("Confirm password is required")
                 .Equal(x => x.Password).WithMessage("Passwords do not match");
 
-            RuleFor(x => x.PhoneNumber)
-                .NotEmpty().WithMessage("Phone number is required")
-                .MaximumLength(20);
+            RuleFor(x => x.FirstName)
+                .NotEmpty().WithMessage("First name is required");
 
-            RuleFor(x => x.Role)
-                .Must(role => new[] { "Student", "Lecturer", "Receptionist" }.Contains(role))
-                .When(x => !string.IsNullOrEmpty(x.Role))
-                .WithMessage("Invalid role. Valid roles: Student, Lecturer, Receptionist");
+            RuleFor(x => x.LastName)
+                .NotEmpty().WithMessage("Last name is required");
         }
     }
 
     public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthResponseDto>
     {
-        private readonly IUserManagerService _userManager;
+        private readonly IUserManagerService _userManagerService;
         private readonly IJwtService _jwtService;
-        private readonly IEmailService _emailService;
         private readonly IAuditService _auditService;
         private readonly ILogger<RegisterCommandHandler> _logger;
 
         public RegisterCommandHandler(
-            IUserManagerService userManager,
+            IUserManagerService userManagerService,
             IJwtService jwtService,
-            IEmailService emailService,
             IAuditService auditService,
             ILogger<RegisterCommandHandler> logger)
         {
-            _userManager = userManager;
+            _userManagerService = userManagerService;
             _jwtService = jwtService;
-            _emailService = emailService;
             _auditService = auditService;
             _logger = logger;
         }
 
         public async Task<AuthResponseDto> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+            // Validate passwords match
+            if (request.Password != request.ConfirmPassword)
+            {
+                throw new SMS.Application.Exceptions.ValidationException("Passwords do not match");
+            }
+
+            // Check if user already exists
+            var existingUser = await _userManagerService.FindByEmailAsync(request.Email);
             if (existingUser != null)
             {
-                throw new ConflictException("User", "Email", request.Email);
+                throw new ConflictException("User with this email already exists");
             }
 
-            var user = new User
-            {
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                Email = request.Email,
-                UserName = request.Email,
-                PhoneNumber = request.PhoneNumber,
-                Organization = request.Organization,
-                IsActive = true,
-                IsEmailVerified = false
-            };
-
-            var createResult = await _userManager.CreateUserAsync(user, request.Password);
-            if (!createResult.Succeeded)
-            {
-                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
-                throw new ValidationException($"User creation failed: {errors}");
-            }
-
-            await _userManager.AddToRoleAsync(user, request.Role);
-
-            await _auditService.LogAsync("User", "Register", user.Id, null, $"Email: {request.Email}, Role: {request.Role}");
-
-            var verificationToken = await _userManager.GenerateEmailVerificationTokenAsync(user);
-            await _emailService.SendVerificationEmailAsync(
+            // Create user
+            var user = await _userManagerService.CreateUserAsync(
                 request.Email,
-                request.FirstName,
-                verificationToken,
-                user.Id);
+                request.Email,
+                request.Password,
+                request.Role);
 
-            _logger.LogInformation("User registered: {Email} with role {Role}", request.Email, request.Role);
+            if (user == null)
+            {
+                throw new ExternalServiceException("User creation service returned null");
+            }
 
-            var roles = new List<string> { request.Role };
-            var accessToken = _jwtService.GenerateAccessToken(user, roles);
-            var refreshToken = _jwtService.GenerateRefreshToken();
+            var typedUser = (User)user;
 
-            user.UpdateRefreshToken(refreshToken, DateTime.UtcNow.AddDays(7));
-            await _userManager.UpdateUserAsync(user);
+            // Get user roles
+            var roles = await _userManagerService.GetRolesAsync(typedUser);
+            var rolesList = roles?.ToList() ?? new List<string>();
 
+            // Generate tokens
+            var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, rolesList);
+            var refreshToken = await _userManagerService.GenerateRefreshTokenAsync(typedUser.Id.ToString());
+
+            // Log successful registration
+            await _auditService.LogAsync("Register", typedUser.Id.ToString(), $"User registered successfully with role {request.Role}");
+
+            _logger.LogInformation("User registered successfully: {Email} with role {Role}", request.Email, request.Role);
+
+            // Return response
             return new AuthResponseDto
             {
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
-                UserId = user.Id,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Roles = roles,
-                Permissions = new List<string>(),
-                TenantId = user.TenantId,
-                RequiresEmailVerification = true,
-                ExpiresIn = 3600
+                ExpiresIn = 3600,
+                TokenType = "Bearer",
+                UserId = typedUser.Id.ToString(),
+                Email = typedUser.Email,
+                Username = typedUser.UserName,
+                Roles = rolesList
             };
         }
     }

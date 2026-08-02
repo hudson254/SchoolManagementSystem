@@ -1,7 +1,10 @@
-using MediatR;
-using SMS.Application.DTOs;
-using SMS.Domain.Interfaces;
+using FluentValidation;
+using SMS.Shared.DTOs;
 
+using SMS.Domain.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Courses.Queries
 {
     public class GetCoursesQuery : IRequest<PagedResult<CourseDto>>
@@ -58,7 +61,7 @@ namespace SMS.Application.Features.Courses.Queries
                 DepartmentId = c.DepartmentId,
                 DepartmentName = c.Department.Name,
                 DepartmentCode = c.Department.Code,
-                CreatedDate = c.CreatedDate
+                CreatedDate = c.CreatedDate ?? DateTime.UtcNow
             }).ToList();
 
             return new PagedResult<CourseDto>
@@ -72,3 +75,8 @@ namespace SMS.Application.Features.Courses.Queries
         }
     }
 }
+
+
+
+
+

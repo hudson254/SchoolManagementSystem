@@ -389,7 +389,7 @@ export const Profile: React.FC = () => {
                       Member Since
                     </Typography>
                     <Typography variant="body2">
-                      {profile?.createdDate ? new Date(profile.createdDate).toLocaleDateString() : 'N/A'}
+                      {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'N/A'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -397,7 +397,7 @@ export const Profile: React.FC = () => {
                       Tenant
                     </Typography>
                     <Typography variant="body2">
-                      {profile?.tenantName || 'Default'}
+                      {profile?.tenantId || 'Default'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>

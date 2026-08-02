@@ -33,6 +33,16 @@ export interface StudentDetails extends Student {
   inProgressUnits: number;
   enrollments: EnrollmentSummary[];
   grades: GradeSummary[];
+  accommodation?: {
+    assignmentId: string;
+    houseId: string;
+    houseNumber: string;
+    laneId: string;
+    laneName: string;
+    status: string;
+    assignedDate: string;
+    vacatedDate?: string;
+  };
 }
 
 export interface EnrollmentSummary {

@@ -1,26 +1,31 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Moq;
+using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace SMS.IntegrationTests.Database
 {
     public class DatabaseFixture : IAsyncLifetime
     {
-        private readonly PostgreSqlContainer _postgreSqlContainer;
         private ApplicationDbContext? _context;
+        private readonly bool _useInMemory;
 
         public DatabaseFixture()
         {
-            _postgreSqlContainer = new PostgreSqlBuilder()
-                .WithImage("postgres:16-alpine")
-                .WithDatabase("testdb")
-                .WithUsername("testuser")
-                .WithPassword("testpass123")
-                .WithCleanUp(true)
-                .Build();
+            // Default to InMemory unless Docker is confirmed available
+            // On Windows, Docker Desktop may not be running in CI/dev environments
+            // Testcontainers requires Docker to be running; fall back to InMemory otherwise
+            var dockerHost = Environment.GetEnvironmentVariable("DOCKER_HOST");
+            var dockerSocket = Environment.GetEnvironmentVariable("TESTCONTAINERS_DOCKER_SOCKET");
+            var isDockerEnv = !string.IsNullOrEmpty(dockerHost)
+                || !string.IsNullOrEmpty(dockerSocket)
+                || System.IO.File.Exists("/.dockerenv")
+                || System.IO.File.Exists("/var/run/docker.sock");
+
+            _useInMemory = !isDockerEnv;
         }
 
         public ApplicationDbContext CreateContext()
@@ -28,40 +33,69 @@ namespace SMS.IntegrationTests.Database
             if (_context != null)
                 return _context;
 
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseNpgsql(_postgreSqlContainer.GetConnectionString())
-                .Options;
+            var mockCurrentUserService = new Mock<ICurrentUserService>();
+            mockCurrentUserService.Setup(x => x.UserId).Returns("test-user-id");
+            mockCurrentUserService.Setup(x => x.Email).Returns("test@test.com");
+            mockCurrentUserService.Setup(x => x.Username).Returns("testuser");
+            mockCurrentUserService.Setup(x => x.IsAuthenticated).Returns(true);
 
-            _context = new ApplicationDbContext(
-                options,
-                Mock.Of<ITenantResolver>(),
-                Mock.Of<IAuditService>());
+            // Use fully qualified type to avoid ambiguity with SMS.Multitenancy.Interfaces.ITenantContext
+            var mockTenantContext = new Mock<SMS.Domain.Interfaces.ITenantContext>();
+            mockTenantContext.Setup(x => x.TenantId).Returns("11111111-1111-1111-1111-111111111111");
+
+            if (_useInMemory)
+            {
+                var inMemoryOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
+                    .UseInMemoryDatabase($"TestDb_{Guid.NewGuid():N}")
+                    .Options;
+
+                _context = new ApplicationDbContext(
+                    inMemoryOptions,
+                    mockCurrentUserService.Object,
+                    mockTenantContext.Object);
+            }
+            else
+            {
+                var npgsqlOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
+                    .UseNpgsql("Host=localhost;Database=testdb;Username=testuser;Password=testpass123")
+                    .Options;
+
+                _context = new ApplicationDbContext(
+                    npgsqlOptions,
+                    mockCurrentUserService.Object,
+                    mockTenantContext.Object);
+            }
 
             return _context;
         }
 
         public async Task InitializeAsync()
         {
-            await _postgreSqlContainer.StartAsync();
-            
             var context = CreateContext();
-            await context.Database.MigrateAsync();
+            await context.Database.EnsureCreatedAsync();
         }
 
         public async Task DisposeAsync()
         {
             if (_context != null)
             {
-                await _context.DisposeAsync();
+                try
+                {
+                    await _context.Database.EnsureDeletedAsync();
+                }
+                finally
+                {
+                    await _context.DisposeAsync();
+                }
             }
-            await _postgreSqlContainer.DisposeAsync();
         }
 
         public async Task ResetDatabaseAsync()
         {
             var context = CreateContext();
             await context.Database.EnsureDeletedAsync();
-            await context.Database.MigrateAsync();
+            await context.Database.EnsureCreatedAsync();
         }
     }
 }
+

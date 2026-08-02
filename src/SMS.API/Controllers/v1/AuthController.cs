@@ -114,7 +114,7 @@ namespace SMS.API.Controllers.v1
             [FromQuery] string token,
             CancellationToken cancellationToken)
         {
-            var command = new VerifyEmailCommand { UserId = Guid.Parse(userId), Token = token };
+            var command = new VerifyEmailCommand { UserId = userId, Token = token };
             await Mediator.Send(command, cancellationToken);
             return Ok(new { Message = "Email verified successfully" });
         }

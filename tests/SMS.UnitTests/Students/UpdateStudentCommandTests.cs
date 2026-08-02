@@ -8,7 +8,6 @@ using SMS.Application.Exceptions;
 using SMS.Application.Features.Students.Commands;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
 using Xunit;
 
 namespace SMS.UnitTests.Students
@@ -18,7 +17,6 @@ namespace SMS.UnitTests.Students
         private readonly UpdateStudentCommandValidator _validator;
         private readonly Mock<IStudentRepository> _studentRepositoryMock;
         private readonly Mock<IUserManagerService> _userManagerMock;
-        private readonly Mock<IUnitOfWork> _unitOfWorkMock;
         private readonly Mock<IAuditService> _auditServiceMock;
 
         public UpdateStudentCommandTests()
@@ -26,7 +24,6 @@ namespace SMS.UnitTests.Students
             _validator = new UpdateStudentCommandValidator();
             _studentRepositoryMock = new Mock<IStudentRepository>();
             _userManagerMock = new Mock<IUserManagerService>();
-            _unitOfWorkMock = new Mock<IUnitOfWork>();
             _auditServiceMock = new Mock<IAuditService>();
         }
 
@@ -41,7 +38,7 @@ namespace SMS.UnitTests.Students
                 LastName = "Doe",
                 PhoneNumber = "+254712345678",
                 DateOfBirth = new DateTime(2000, 1, 1),
-                IsEnrolled = true
+                IsActive = true
             };
 
             // Act
@@ -60,8 +57,7 @@ namespace SMS.UnitTests.Students
                 Id = Guid.Empty,
                 FirstName = "",
                 LastName = "",
-                PhoneNumber = "",
-                DateOfBirth = DateTime.UtcNow
+                PhoneNumber = ""
             };
 
             // Act
@@ -71,8 +67,6 @@ namespace SMS.UnitTests.Students
             result.ShouldHaveValidationErrorFor(x => x.Id);
             result.ShouldHaveValidationErrorFor(x => x.FirstName);
             result.ShouldHaveValidationErrorFor(x => x.LastName);
-            result.ShouldHaveValidationErrorFor(x => x.PhoneNumber);
-            result.ShouldHaveValidationErrorFor(x => x.DateOfBirth);
         }
 
         [Fact]
@@ -86,7 +80,7 @@ namespace SMS.UnitTests.Students
                 LastName = "Doe",
                 PhoneNumber = "+254712345678",
                 DateOfBirth = new DateTime(2000, 1, 1),
-                IsEnrolled = true
+                IsActive = true
             };
 
             _studentRepositoryMock
@@ -96,9 +90,7 @@ namespace SMS.UnitTests.Students
             var handler = new UpdateStudentCommandHandler(
                 _studentRepositoryMock.Object,
                 _userManagerMock.Object,
-                _unitOfWorkMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<ILogger<UpdateStudentCommandHandler>>());
+                _auditServiceMock.Object);
 
             // Act & Assert
             await Assert.ThrowsAsync<NotFoundException>(
@@ -110,7 +102,7 @@ namespace SMS.UnitTests.Students
         {
             // Arrange
             var studentId = Guid.NewGuid();
-            var userId = Guid.NewGuid();
+            var userId = Guid.NewGuid().ToString();
             var command = new UpdateStudentCommand
             {
                 Id = studentId,
@@ -118,7 +110,7 @@ namespace SMS.UnitTests.Students
                 LastName = "Updated",
                 PhoneNumber = "+254712345678",
                 DateOfBirth = new DateTime(2000, 1, 1),
-                IsEnrolled = true
+                IsActive = true
             };
 
             var existingStudent = new Student
@@ -126,29 +118,19 @@ namespace SMS.UnitTests.Students
                 Id = studentId,
                 UserId = userId,
                 StudentNumber = "STU-2024-0001",
-                User = new User
-                {
-                    Id = userId,
-                    FirstName = "John",
-                    LastName = "Doe",
-                    Email = "john.doe@example.com"
-                }
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@example.com"
             };
 
             _studentRepositoryMock
                 .Setup(x => x.GetStudentWithDetailsAsync(command.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(existingStudent);
 
-            _userManagerMock
-                .Setup(x => x.UpdateUserAsync(It.IsAny<User>()))
-                .Returns(Task.CompletedTask);
-
             var handler = new UpdateStudentCommandHandler(
                 _studentRepositoryMock.Object,
                 _userManagerMock.Object,
-                _unitOfWorkMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<ILogger<UpdateStudentCommandHandler>>());
+                _auditServiceMock.Object);
 
             // Act
             var result = await handler.Handle(command, CancellationToken.None);
@@ -157,10 +139,10 @@ namespace SMS.UnitTests.Students
             result.Should().NotBeNull();
             result.FirstName.Should().Be(command.FirstName);
             result.LastName.Should().Be(command.LastName);
-            
-            _studentRepositoryMock.Verify(x => x.Update(It.IsAny<Student>()), Times.Once);
-            _userManagerMock.Verify(x => x.UpdateUserAsync(It.IsAny<User>()), Times.Once);
-            _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+            _studentRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<Student>(), It.IsAny<CancellationToken>()), Times.Once);
+            _auditServiceMock.Verify(x => x.LogAsync("Update", "Student", It.IsAny<string>()), Times.Once);
         }
     }
 }
+

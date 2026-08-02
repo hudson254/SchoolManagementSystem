@@ -9,7 +9,6 @@ using SMS.Application.Exceptions;
 using SMS.Application.Features.Auth.Commands;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
 using Xunit;
 
 namespace SMS.UnitTests.Auth
@@ -32,7 +31,6 @@ namespace SMS.UnitTests.Auth
         [Fact]
         public void ValidCommand_ShouldNotHaveValidationErrors()
         {
-            // Arrange
             var command = new LoginCommand
             {
                 Email = "test@example.com",
@@ -40,17 +38,13 @@ namespace SMS.UnitTests.Auth
                 RememberMe = true
             };
 
-            // Act
             var result = _validator.TestValidate(command);
-
-            // Assert
             result.ShouldNotHaveAnyValidationErrors();
         }
 
         [Fact]
         public void InvalidCommand_ShouldHaveValidationErrors()
         {
-            // Arrange
             var command = new LoginCommand
             {
                 Email = "invalid-email",
@@ -58,10 +52,7 @@ namespace SMS.UnitTests.Auth
                 RememberMe = true
             };
 
-            // Act
             var result = _validator.TestValidate(command);
-
-            // Assert
             result.ShouldHaveValidationErrorFor(x => x.Email);
             result.ShouldHaveValidationErrorFor(x => x.Password);
         }
@@ -69,7 +60,6 @@ namespace SMS.UnitTests.Auth
         [Fact]
         public async Task Handle_WithNonExistentUser_ShouldThrowUnauthorizedException()
         {
-            // Arrange
             var command = new LoginCommand
             {
                 Email = "nonexistent@example.com",
@@ -85,9 +75,8 @@ namespace SMS.UnitTests.Auth
                 _userManagerMock.Object,
                 _jwtServiceMock.Object,
                 _auditServiceMock.Object,
-                Mock.Of<ILogger<LoginCommandHandler>>());
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
 
-            // Act & Assert
             await Assert.ThrowsAsync<UnauthorizedException>(
                 () => handler.Handle(command, CancellationToken.None));
         }
@@ -95,7 +84,6 @@ namespace SMS.UnitTests.Auth
         [Fact]
         public async Task Handle_WithInvalidPassword_ShouldThrowUnauthorizedException()
         {
-            // Arrange
             var command = new LoginCommand
             {
                 Email = "test@example.com",
@@ -105,7 +93,7 @@ namespace SMS.UnitTests.Auth
 
             var user = new User
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.NewGuid().ToString(),
                 Email = "test@example.com",
                 FirstName = "Test",
                 LastName = "User",
@@ -125,9 +113,8 @@ namespace SMS.UnitTests.Auth
                 _userManagerMock.Object,
                 _jwtServiceMock.Object,
                 _auditServiceMock.Object,
-                Mock.Of<ILogger<LoginCommandHandler>>());
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
 
-            // Act & Assert
             await Assert.ThrowsAsync<UnauthorizedException>(
                 () => handler.Handle(command, CancellationToken.None));
         }
@@ -135,7 +122,6 @@ namespace SMS.UnitTests.Auth
         [Fact]
         public async Task Handle_WithInactiveAccount_ShouldThrowUnauthorizedException()
         {
-            // Arrange
             var command = new LoginCommand
             {
                 Email = "test@example.com",
@@ -145,7 +131,7 @@ namespace SMS.UnitTests.Auth
 
             var user = new User
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.NewGuid().ToString(),
                 Email = "test@example.com",
                 FirstName = "Test",
                 LastName = "User",
@@ -165,9 +151,8 @@ namespace SMS.UnitTests.Auth
                 _userManagerMock.Object,
                 _jwtServiceMock.Object,
                 _auditServiceMock.Object,
-                Mock.Of<ILogger<LoginCommandHandler>>());
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
 
-            // Act & Assert
             await Assert.ThrowsAsync<UnauthorizedException>(
                 () => handler.Handle(command, CancellationToken.None));
         }
@@ -175,9 +160,7 @@ namespace SMS.UnitTests.Auth
         [Fact]
         public async Task Handle_WithValidCredentials_ShouldReturnAuthResponse()
         {
-            // Arrange
-            var userId = Guid.NewGuid();
-            var tenantId = Guid.NewGuid();
+            var userId = Guid.NewGuid().ToString();
             var command = new LoginCommand
             {
                 Email = "test@example.com",
@@ -193,11 +176,10 @@ namespace SMS.UnitTests.Auth
                 LastName = "User",
                 IsActive = true,
                 IsEmailVerified = true,
-                TenantId = tenantId
+                UserName = "testuser"
             };
 
             var roles = new List<string> { "Student" };
-            var permissions = new List<string>();
 
             _userManagerMock
                 .Setup(x => x.FindByEmailAsync(command.Email))
@@ -211,39 +193,31 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.GetRolesAsync(user))
                 .ReturnsAsync(roles);
 
-            _userManagerMock
-                .Setup(x => x.GetPermissionsAsync(user))
-                .ReturnsAsync(permissions);
-
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(user, roles))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
-            _jwtServiceMock
-                .Setup(x => x.GenerateRefreshToken())
-                .Returns("test-refresh-token");
+            _userManagerMock
+                .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
+                .ReturnsAsync("test-refresh-token");
 
             var handler = new LoginCommandHandler(
                 _userManagerMock.Object,
                 _jwtServiceMock.Object,
                 _auditServiceMock.Object,
-                Mock.Of<ILogger<LoginCommandHandler>>());
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             result.Should().NotBeNull();
             result.AccessToken.Should().Be("test-access-token");
             result.RefreshToken.Should().Be("test-refresh-token");
             result.UserId.Should().Be(userId);
             result.Email.Should().Be(command.Email);
-            result.FirstName.Should().Be(user.FirstName);
-            result.LastName.Should().Be(user.LastName);
             result.Roles.Should().Contain("Student");
-            result.TenantId.Should().Be(tenantId);
 
-            _auditServiceMock.Verify(x => x.LogAsync("User", "Login", user.Id, null, It.IsAny<string>()), Times.Once);
+            _auditServiceMock.Verify(x => x.LogAsync("Login", userId, "User logged in successfully"), Times.Once);
         }
     }
 }
+

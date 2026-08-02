@@ -1,13 +1,16 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
 namespace SMS.Domain.Interfaces
 {
     public interface IEmailService
     {
-        Task SendEmailAsync(string to, string subject, string body, bool isHtml = false);
-        Task SendEmailAsync(string to, string subject, string body, string? from = null, bool isHtml = false);
-        Task SendWelcomeEmailAsync(string to, string name);
-        Task SendVerificationEmailAsync(string to, string name, string token, Guid userId);
-        Task SendPasswordResetEmailAsync(string to, string name, string token);
-        Task SendAssignmentNotificationAsync(string to, string name, string assignmentTitle);
-        Task SendGradeNotificationAsync(string to, string name, string unitName, string grade);
+        Task SendEmailAsync(string toEmail, string subject, string body);
+        Task SendEmailAsync(string toEmail, string subject, string body, List<string> attachments);
+        Task SendEmailWithAttachmentAsync(string toEmail, string subject, string body, byte[] attachmentData, string attachmentName);
+        Task SendPasswordResetEmailAsync(string toEmail, string resetLink);
+        Task SendVerificationEmailAsync(string toEmail, string verificationLink);
+        Task SendTemplateEmailAsync(string toEmail, string templateName, Dictionary<string, string> templateData);
+        Task SendEmailToMultipleAsync(List<string> toEmails, string subject, string body);
     }
 }

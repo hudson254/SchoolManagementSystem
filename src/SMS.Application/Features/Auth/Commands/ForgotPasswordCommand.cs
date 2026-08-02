@@ -1,26 +1,18 @@
 using MediatR;
-using FluentValidation;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace SMS.Application.Features.Auth.Commands
 {
-    public class ForgotPasswordCommand : IRequest
+    public class ForgotPasswordCommand : IRequest<bool>
     {
-        public string Email { get; set; } = string.Empty;
+        public string Email { get; set; }
     }
 
-    public class ForgotPasswordCommandValidator : AbstractValidator<ForgotPasswordCommand>
-    {
-        public ForgotPasswordCommandValidator()
-        {
-            RuleFor(x => x.Email)
-                .NotEmpty().WithMessage("Email is required")
-                .EmailAddress().WithMessage("Invalid email format");
-        }
-    }
-
-    public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordCommand>
+    public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordCommand, bool>
     {
         private readonly IUserManagerService _userManager;
         private readonly IEmailService _emailService;
@@ -36,24 +28,32 @@ namespace SMS.Application.Features.Auth.Commands
             _logger = logger;
         }
 
-        public async Task Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
+        public async Task<bool> Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
-
-            // Always return success even if user not found (security best practice)
+            var user = await _userManager.GetUserByEmailAsync(request.Email);
             if (user == null)
             {
-                _logger.LogWarning("Password reset requested for non-existent user: {Email}", request.Email);
-                return;
+                // Always return true to avoid user enumeration.
+                return true;
             }
 
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            await _emailService.SendPasswordResetEmailAsync(
-                request.Email,
-                user.FirstName,
-                token);
+            var resetLink = $"https://localhost:5001/reset-password?token={token}&email={request.Email}";
 
-            _logger.LogInformation("Password reset email sent to: {Email}", request.Email);
+            try
+            {
+                await _emailService.SendPasswordResetEmailAsync(request.Email, resetLink);
+            }
+            catch (Exception ex)
+            {
+                // Email delivery failures must NOT break the forgot-password flow.
+                // The endpoint always returns 204 regardless of SMTP availability
+                // (e.g., in test/development environments without an SMTP server).
+                _logger.LogWarning(ex, "Failed to send password reset email to {Email}", request.Email);
+            }
+
+            return true;
         }
     }
 }
+

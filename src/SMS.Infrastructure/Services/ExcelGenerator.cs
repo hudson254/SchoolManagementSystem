@@ -1,5 +1,10 @@
-using OfficeOpenXml;
+using Microsoft.Extensions.Logging;
 using SMS.Domain.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using OfficeOpenXml;
 
 namespace SMS.Infrastructure.Services
 {
@@ -13,34 +18,36 @@ namespace SMS.Infrastructure.Services
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         }
 
-        public async Task<byte[]> GenerateExcelAsync<T>(IEnumerable<T> data, string sheetName = "Sheet1")
+        public async Task<byte[]> GenerateExcelFromDataAsync<T>(IEnumerable<T> data, string sheetName = "Sheet1")
         {
             try
             {
-                using var package = new ExcelPackage();
-                var worksheet = package.Workbook.Worksheets.Add(sheetName);
-
-                var properties = typeof(T).GetProperties();
-                for (int i = 0; i < properties.Length; i++)
+                using (var package = new ExcelPackage())
                 {
-                    worksheet.Cells[1, i + 1].Value = properties[i].Name;
-                    worksheet.Cells[1, i + 1].Style.Font.Bold = true;
-                }
+                    var worksheet = package.Workbook.Worksheets.Add(sheetName ?? "Sheet1");
 
-                var rowIndex = 2;
-                foreach (var item in data)
-                {
+                    var properties = typeof(T).GetProperties();
+
                     for (int i = 0; i < properties.Length; i++)
                     {
-                        var value = properties[i].GetValue(item);
-                        worksheet.Cells[rowIndex, i + 1].Value = value?.ToString();
+                        worksheet.Cells[1, i + 1].Value = properties[i].Name;
+                        worksheet.Cells[1, i + 1].Style.Font.Bold = true;
                     }
-                    rowIndex++;
+
+                    int row = 2;
+                    foreach (var item in data)
+                    {
+                        for (int col = 0; col < properties.Length; col++)
+                        {
+                            var value = properties[col].GetValue(item);
+                            worksheet.Cells[row, col + 1].Value = value?.ToString();
+                        }
+                        row++;
+                    }
+
+                    worksheet.Cells.AutoFitColumns();
+                    return await Task.FromResult(package.GetAsByteArray());
                 }
-
-                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                return await Task.FromResult(package.GetAsByteArray());
             }
             catch (Exception ex)
             {
@@ -49,89 +56,35 @@ namespace SMS.Infrastructure.Services
             }
         }
 
-        public async Task<byte[]> GenerateExcelWithHeadersAsync<T>(IEnumerable<T> data, Dictionary<string, string> headers, string sheetName = "Sheet1")
+        public async Task<byte[]> GenerateStudentReportExcelAsync(object reportData)
         {
+            // Convert object to appropriate type if needed
+            // For now, return a simple report
             try
             {
-                using var package = new ExcelPackage();
-                var worksheet = package.Workbook.Worksheets.Add(sheetName);
-
-                var properties = typeof(T).GetProperties();
-                for (int i = 0; i < properties.Length; i++)
+                using (var package = new ExcelPackage())
                 {
-                    var headerName = headers.TryGetValue(properties[i].Name, out var value) ? value : properties[i].Name;
-                    worksheet.Cells[1, i + 1].Value = headerName;
-                    worksheet.Cells[1, i + 1].Style.Font.Bold = true;
-                }
+                    var worksheet = package.Workbook.Worksheets.Add("Student Report");
 
-                var rowIndex = 2;
-                foreach (var item in data)
-                {
-                    for (int i = 0; i < properties.Length; i++)
+                    worksheet.Cells[1, 1].Value = "Student Number";
+                    worksheet.Cells[1, 2].Value = "First Name";
+                    worksheet.Cells[1, 3].Value = "Last Name";
+                    worksheet.Cells[1, 4].Value = "Email";
+                    worksheet.Cells[1, 5].Value = "Programme";
+                    worksheet.Cells[1, 6].Value = "Status";
+
+                    for (int i = 1; i <= 6; i++)
                     {
-                        var value = properties[i].GetValue(item);
-                        worksheet.Cells[rowIndex, i + 1].Value = value?.ToString();
+                        worksheet.Cells[1, i].Style.Font.Bold = true;
                     }
-                    rowIndex++;
+
+                    worksheet.Cells.AutoFitColumns();
+                    return await Task.FromResult(package.GetAsByteArray());
                 }
-
-                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                return await Task.FromResult(package.GetAsByteArray());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to generate Excel file with headers");
-                throw;
-            }
-        }
-
-        public async Task<byte[]> GenerateReportAsync<T>(IEnumerable<T> data, string title, Dictionary<string, string> headers)
-        {
-            try
-            {
-                using var package = new ExcelPackage();
-                var worksheet = package.Workbook.Worksheets.Add("Report");
-
-                // Title
-                worksheet.Cells[1, 1].Value = title;
-                worksheet.Cells[1, 1, 1, 10].Merge = true;
-                worksheet.Cells[1, 1].Style.Font.Size = 16;
-                worksheet.Cells[1, 1].Style.Font.Bold = true;
-                worksheet.Cells[1, 1].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
-
-                worksheet.Cells[2, 1].Value = $"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm}";
-                worksheet.Cells[2, 1, 2, 10].Merge = true;
-                worksheet.Cells[2, 1].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
-
-                var properties = typeof(T).GetProperties();
-                var startRow = 4;
-
-                for (int i = 0; i < properties.Length; i++)
-                {
-                    var headerName = headers.TryGetValue(properties[i].Name, out var value) ? value : properties[i].Name;
-                    worksheet.Cells[startRow, i + 1].Value = headerName;
-                    worksheet.Cells[startRow, i + 1].Style.Font.Bold = true;
-                }
-
-                var rowIndex = startRow + 1;
-                foreach (var item in data)
-                {
-                    for (int i = 0; i < properties.Length; i++)
-                    {
-                        var value = properties[i].GetValue(item);
-                        worksheet.Cells[rowIndex, i + 1].Value = value?.ToString();
-                    }
-                    rowIndex++;
-                }
-
-                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                return await Task.FromResult(package.GetAsByteArray());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to generate Excel report");
+                _logger.LogError(ex, "Failed to generate student report");
                 throw;
             }
         }

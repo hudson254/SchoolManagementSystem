@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -8,29 +8,32 @@ import { SnackbarProvider } from 'notistack';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext';
 import { theme } from './theme';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/Layout';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { ProtectedRoute } from './components/Common/ProtectedRoute';
+import { Layout } from './components/Layout/Layout';
+import { ErrorBoundary } from './components/Common/ErrorBoundary';
 
-// Lazy load pages
-const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Students = lazy(() => import('./pages/Students'));
-const StudentDetail = lazy(() => import('./pages/StudentDetail'));
-const Lecturers = lazy(() => import('./pages/Lecturers'));
-const Courses = lazy(() => import('./pages/Courses'));
-const Units = lazy(() => import('./pages/Units'));
-const Timetable = lazy(() => import('./pages/Timetable'));
-const Accommodation = lazy(() => import('./pages/Accommodation'));
-const Assignments = lazy(() => import('./pages/Assignments'));
-const Grades = lazy(() => import('./pages/Grades'));
-const Reports = lazy(() => import('./pages/Reports'));
-const Users = lazy(() => import('./pages/Users'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Profile = lazy(() => import('./pages/Profile'));
-const Calendar = lazy(() => import('./pages/Calendar'));
-const NotFound = lazy(() => import('./pages/NotFound'));
+// Lazy load pages (pages use named exports, so map them to default for React.lazy)
+const loadPage = (importFn: () => Promise<any>, componentName?: string) =>
+  lazy(() => importFn().then((m) => ({ default: componentName ? m[componentName] : (m.default || m) })));
+
+const Login = loadPage(() => import('./pages/Login'), 'Login');
+const Register = loadPage(() => import('./pages/Register'), 'Register');
+const Dashboard = loadPage(() => import('./pages/Dashboard'), 'Dashboard');
+const Students = loadPage(() => import('./pages/Students'), 'Students');
+const StudentDetail = loadPage(() => import('./pages/StudentDetail'), 'StudentDetail');
+const Lecturers = loadPage(() => import('./pages/Lecturers'), 'Lecturers');
+const Courses = loadPage(() => import('./pages/Courses'), 'Courses');
+const Units = loadPage(() => import('./pages/Units'), 'Units');
+const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
+const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
+const Assignments = loadPage(() => import('./pages/Assignments'), 'Assignments');
+const Grades = loadPage(() => import('./pages/Grades'), 'Grades');
+const Reports = loadPage(() => import('./pages/Reports'), 'Reports');
+const Users = loadPage(() => import('./pages/Users'), 'Users');
+const Settings = loadPage(() => import('./pages/Settings'), 'Settings');
+const Profile = loadPage(() => import('./pages/Profile'), 'Profile');
+const Calendar = loadPage(() => import('./pages/Calendar'), 'Calendar');
+const NotFound = loadPage(() => import('./pages/NotFound'), 'NotFound');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -99,3 +102,4 @@ function App() {
 }
 
 export default App;
+

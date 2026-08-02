@@ -1,9 +1,10 @@
-using MediatR;
 using FluentValidation;
-using SMS.Application.DTOs;
-using SMS.Application.Exceptions;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Courses.Commands
 {
     public class UpdateCourseCommand : IRequest<CourseDto>
@@ -86,10 +87,10 @@ namespace SMS.Application.Features.Courses.Commands
             course.Objectives = request.Objectives;
             course.IsActive = request.IsActive;
 
-            _courseRepository.Update(course);
+            await _courseRepository.UpdateAsync(course, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Course", "Update", course.Id, null, $"Course: {course.Code}");
+            await _auditService.LogActivityAsync("Course", "Update", course.Id.ToString(), "Update-Course");
 
             _logger.LogInformation("Course updated: {CourseCode}", course.Code);
 
@@ -105,8 +106,13 @@ namespace SMS.Application.Features.Courses.Commands
                 DepartmentId = course.DepartmentId,
                 DepartmentName = department.Name,
                 DepartmentCode = department.Code,
-                CreatedDate = course.CreatedDate
+                CreatedDate = course.CreatedDate ?? DateTime.UtcNow
             };
         }
     }
 }
+
+
+
+
+

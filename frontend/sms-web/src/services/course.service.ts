@@ -78,6 +78,11 @@ export const courseService = {
   getUnits: (courseId: string) =>
     api.get<UnitSummary[]>(`/courses/${courseId}/units`),
 
-  getProgrammes: (courseId: string) =>
-    api.get<ProgrammeSummary[]>(`/courses/${courseId}/programmes`),
+  getDepartments: () =>
+    api.get<any[]>('/departments'),
+
+  getProgrammes: (courseId?: string) =>
+    courseId
+      ? api.get<ProgrammeSummary[]>(`/courses/${courseId}/programmes`)
+      : api.get<any[]>('/programmes'),
 };

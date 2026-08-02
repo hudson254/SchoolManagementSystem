@@ -1,196 +1,113 @@
-using System.Linq.Expressions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
 
 namespace SMS.Persistence.Repositories
 {
-    public class EnrollmentRepository : IEnrollmentRepository
+    public class EnrollmentRepository : BaseRepository<Enrollment>, IEnrollmentRepository
     {
-        private readonly ApplicationDbContext _context;
-
-        public EnrollmentRepository(ApplicationDbContext context)
+        public EnrollmentRepository(ApplicationDbContext context, ILogger<EnrollmentRepository> logger)
+            : base(context, logger)
         {
-            _context = context;
         }
 
-        public async Task<StudentEnrollment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Enrollment>> GetEnrollmentsByStudentAsync(Guid studentId)
         {
-            return await _context.StudentEnrollments
-                .Include(e => e.Student)
-                    .ThenInclude(s => s.User)
-                .Include(e => e.Unit)
+            return await _dbSet.Where(e => e.StudentId == studentId && !e.IsDeleted).ToListAsync();
+        }
+
+        public async Task<IEnumerable<Enrollment>> GetEnrollmentsByCourseAsync(Guid courseId)
+        {
+            return await _dbSet.Where(e => e.CourseId == courseId && !e.IsDeleted).ToListAsync();
+        }
+
+        public async Task<IEnumerable<Enrollment>> GetEnrollmentsByUnitAsync(Guid unitId)
+        {
+            // Enrollment doesn't have UnitId, so find by course of the unit
+            return await _dbSet.Where(e => !e.IsDeleted)
+                .Include(e => e.Course)
+                .ThenInclude(c => c.Units)
+                .Where(e => e.Course.Units.Any(u => u.Id == unitId))
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Enrollment>> GetActiveEnrollmentsAsync()
+        {
+            return await _dbSet.Where(e => e.Status == "Active" && !e.IsDeleted).ToListAsync();
+        }
+
+        public async Task<IEnumerable<Enrollment>> GetEnrollmentsBySemesterAsync(string semester)
+        {
+            return await _dbSet.Where(e => e.Semester.Name == semester && !e.IsDeleted)
                 .Include(e => e.Semester)
-                .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted, cancellationToken);
+                .ToListAsync();
         }
 
-        public async Task<IEnumerable<StudentEnrollment>> GetAllAsync(CancellationToken cancellationToken = default)
+        public async Task<bool> IsStudentEnrolledAsync(Guid studentId, Guid unitId)
         {
-            return await _context.StudentEnrollments
-                .Include(e => e.Student)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .Where(e => !e.IsDeleted)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.Where(e => e.StudentId == studentId && !e.IsDeleted)
+                .Include(e => e.Course)
+                .ThenInclude(c => c.Units)
+                .AnyAsync(e => e.Course.Units.Any(u => u.Id == unitId));
         }
 
-        public async Task<IEnumerable<StudentEnrollment>> FindAsync(Expression<Func<StudentEnrollment, bool>> predicate, CancellationToken cancellationToken = default)
+        public async Task<int> GetEnrollmentCountByCourseAsync(Guid courseId)
         {
-            return await _context.StudentEnrollments
-                .Include(e => e.Student)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .Where(e => !e.IsDeleted)
-                .Where(predicate)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.CountAsync(e => e.CourseId == courseId && !e.IsDeleted);
         }
 
-        public async Task<StudentEnrollment> AddAsync(StudentEnrollment entity, CancellationToken cancellationToken = default)
+        public async Task<int> GetEnrollmentCountByUnitAsync(Guid unitId)
         {
-            await _context.StudentEnrollments.AddAsync(entity, cancellationToken);
-            return entity;
+            return await _dbSet.Where(e => !e.IsDeleted)
+                .Include(e => e.Course)
+                .ThenInclude(c => c.Units)
+                .CountAsync(e => e.Course.Units.Any(u => u.Id == unitId));
         }
 
-        public async Task<IEnumerable<StudentEnrollment>> AddRangeAsync(IEnumerable<StudentEnrollment> entities, CancellationToken cancellationToken = default)
+        public async Task<Enrollment> GetEnrollmentAsync(Guid studentId, Guid courseId, CancellationToken cancellationToken = default)
         {
-            await _context.StudentEnrollments.AddRangeAsync(entities, cancellationToken);
-            return entities;
+            return await _dbSet.FirstOrDefaultAsync(e => e.StudentId == studentId && e.CourseId == courseId && !e.IsDeleted, cancellationToken);
         }
 
-        public Task UpdateAsync(StudentEnrollment entity, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Enrollment>> GetEnrollmentsAsync(CancellationToken cancellationToken = default)
         {
-            _context.StudentEnrollments.Update(entity);
-            return Task.CompletedTask;
-        }
-
-        public async Task DeleteAsync(StudentEnrollment entity, CancellationToken cancellationToken = default)
-        {
-            entity.SoftDelete("SYSTEM");
-            _context.StudentEnrollments.Update(entity);
-            await Task.CompletedTask;
-        }
-
-        public async Task<bool> ExistsAsync(Expression<Func<StudentEnrollment, bool>> predicate, CancellationToken cancellationToken = default)
-        {
-            return await _context.StudentEnrollments.AnyAsync(predicate, cancellationToken);
-        }
-
-        public async Task<int> CountAsync(Expression<Func<StudentEnrollment, bool>>? predicate = null, CancellationToken cancellationToken = default)
-        {
-            var query = _context.StudentEnrollments.Where(e => !e.IsDeleted);
-            if (predicate != null)
-                query = query.Where(predicate);
-            return await query.CountAsync(cancellationToken);
-        }
-
-        public async Task<StudentEnrollment?> GetEnrollmentAsync(Guid studentId, Guid unitId, Guid semesterId, CancellationToken cancellationToken = default)
-        {
-            return await _context.StudentEnrollments
-                .Include(e => e.Student)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .FirstOrDefaultAsync(e =>
-                    e.StudentId == studentId &&
-                    e.UnitId == unitId &&
-                    e.SemesterId == semesterId &&
-                    !e.IsDeleted, cancellationToken);
-        }
-
-        public async Task<IEnumerable<StudentEnrollment>> GetStudentEnrollmentsAsync(Guid studentId, Guid? semesterId, string? status, CancellationToken cancellationToken = default)
-        {
-            var query = _context.StudentEnrollments
-                .Include(e => e.Student)
-                    .ThenInclude(s => s.User)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .Where(e => e.StudentId == studentId && !e.IsDeleted);
-
-            if (semesterId.HasValue)
-                query = query.Where(e => e.SemesterId == semesterId.Value);
-
-            if (!string.IsNullOrEmpty(status))
-                query = query.Where(e => e.Status == status);
-
-            return await query.ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<StudentEnrollment>> GetUnitEnrollmentsAsync(Guid unitId, Guid? semesterId, CancellationToken cancellationToken = default)
-        {
-            var query = _context.StudentEnrollments
-                .Include(e => e.Student)
-                    .ThenInclude(s => s.User)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .Where(e => e.UnitId == unitId && !e.IsDeleted);
-
-            if (semesterId.HasValue)
-                query = query.Where(e => e.SemesterId == semesterId.Value);
-
-            return await query.ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<StudentEnrollment>> GetSemesterEnrollmentsAsync(Guid semesterId, CancellationToken cancellationToken = default)
-        {
-            return await _context.StudentEnrollments
-                .Include(e => e.Student)
-                    .ThenInclude(s => s.User)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .Where(e => e.SemesterId == semesterId && !e.IsDeleted)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<StudentEnrollment>> GetActiveEnrollmentsAsync(CancellationToken cancellationToken = default)
-        {
-            return await _context.StudentEnrollments
-                .Include(e => e.Student)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .Where(e => e.Status == "Enrolled" || e.Status == "InProgress")
-                .Where(e => !e.IsDeleted)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.Where(e => !e.IsDeleted).Include(e => e.Student).Include(e => e.Course).ToListAsync(cancellationToken);
         }
 
         public async Task<int> CountEnrollmentsAsync(CancellationToken cancellationToken = default)
         {
-            return await _context.StudentEnrollments
-                .Where(e => !e.IsDeleted)
-                .CountAsync(cancellationToken);
+            return await _dbSet.CountAsync(e => !e.IsDeleted, cancellationToken);
         }
 
-        public async Task<IEnumerable<(string ProgrammeName, int Count)>> GetProgrammeEnrollmentCountsAsync(CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(Guid studentId, CancellationToken cancellationToken = default)
         {
-            return await _context.StudentEnrollments
-                .Where(e => !e.IsDeleted && e.Student.Programme != null)
-                .GroupBy(e => e.Student.Programme.Name)
-                .Select(g => new { ProgrammeName = g.Key, Count = g.Count() })
-                .Select(x => (x.ProgrammeName, x.Count))
+            return await _dbSet.Where(e => e.StudentId == studentId && !e.IsDeleted)
+                .Include(e => e.Course)
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<StudentEnrollment>> GetEnrollmentsByYearAsync(int? academicYearId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<object>> GetProgrammeEnrollmentCountsAsync(CancellationToken cancellationToken = default)
         {
-            var query = _context.StudentEnrollments
-                .Include(e => e.Student)
-                .Include(e => e.Unit)
-                .Include(e => e.Semester)
-                .ThenInclude(s => s.AcademicYear)
-                .Where(e => !e.IsDeleted);
-
-            if (academicYearId.HasValue)
-            {
-                query = query.Where(e => e.Semester.AcademicYearId == academicYearId.Value);
-            }
-
-            return await query.ToListAsync(cancellationToken);
+            return await _dbSet.Where(e => !e.IsDeleted)
+                .GroupBy(e => e.Student.Programme.Name)
+                .Select(g => new { Programme = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<StudentEnrollment>> GetEnrollmentsAsync(CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Enrollment>> GetEnrollmentsByYearAsync(int year, CancellationToken cancellationToken = default)
         {
-            return await _context.StudentEnrollments
-                .Where(e => !e.IsDeleted)
+            return await _dbSet.Where(e => e.EnrollmentDate.Year == year && !e.IsDeleted)
+                .Include(e => e.Student)
+                .Include(e => e.Course)
                 .ToListAsync(cancellationToken);
         }
     }
 }
+

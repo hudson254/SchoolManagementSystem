@@ -1,35 +1,59 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using SMS.Domain.Common;
 
 namespace SMS.Domain.Entities
 {
-    public class Room : BaseEntity
+    [Table("rooms")]
+    public class Room : BaseEntity, ITenantAwareEntity
     {
-        [Required]
+        [Column("room_number")]
         [MaxLength(20)]
+        [Required]
         public string RoomNumber { get; set; } = string.Empty;
 
-        [Required]
+        [Column("block_id")]
         public Guid BlockId { get; set; }
 
-        public int Capacity { get; set; } = 1;
+        [Column("floor")]
+        public int Floor { get; set; }
 
-        [MaxLength(20)]
+        [Column("capacity")]
+        public int Capacity { get; set; }
+
+        [Column("occupied_count")]
+        public int OccupiedCount { get; set; }
+
+        [Column("room_type")]
+        [MaxLength(50)]
         public string? RoomType { get; set; }
 
-        public decimal PricePerSemester { get; set; }
-
+        [Column("facilities")]
         [MaxLength(500)]
         public string? Facilities { get; set; }
 
+        [Column("price_per_semester")]
+        public decimal PricePerSemester { get; set; }
+
+        [Column("status")]
+        [MaxLength(50)]
+        public string? Status { get; set; }
+
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
+
+        [Column("is_available")]
         public bool IsAvailable { get; set; } = true;
-        public bool IsOccupied { get; set; } = false;
 
-        [MaxLength(20)]
-        public string? Status { get; set; } = "Available";
+        [NotMapped]
+        public bool IsOccupied => OccupiedCount > 0;
 
-        public virtual Block? Block { get; set; }
-        public virtual AccommodationAssignment? CurrentAssignment { get; set; }
-        public virtual ICollection<AccommodationAssignment> AssignmentHistory { get; set; } = new List<AccommodationAssignment>();
+        public void Occupy() { OccupiedCount++; }
+        public void Vacate() { if (OccupiedCount > 0) OccupiedCount--; }
+
+        // Navigation properties
+        public virtual Block Block { get; set; }
+        public virtual ICollection<Accommodation>? Accommodations { get; set; }
     }
 }

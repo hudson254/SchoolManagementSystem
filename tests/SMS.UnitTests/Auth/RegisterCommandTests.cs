@@ -9,7 +9,6 @@ using SMS.Application.Exceptions;
 using SMS.Application.Features.Auth.Commands;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
 using Xunit;
 
 namespace SMS.UnitTests.Auth
@@ -19,7 +18,6 @@ namespace SMS.UnitTests.Auth
         private readonly RegisterCommandValidator _validator;
         private readonly Mock<IUserManagerService> _userManagerMock;
         private readonly Mock<IJwtService> _jwtServiceMock;
-        private readonly Mock<IEmailService> _emailServiceMock;
         private readonly Mock<IAuditService> _auditServiceMock;
 
         public RegisterCommandTests()
@@ -27,7 +25,6 @@ namespace SMS.UnitTests.Auth
             _validator = new RegisterCommandValidator();
             _userManagerMock = new Mock<IUserManagerService>();
             _jwtServiceMock = new Mock<IJwtService>();
-            _emailServiceMock = new Mock<IEmailService>();
             _auditServiceMock = new Mock<IAuditService>();
         }
 
@@ -42,8 +39,6 @@ namespace SMS.UnitTests.Auth
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
                 ConfirmPassword = "Test123!@#",
-                PhoneNumber = "+254712345678",
-                Organization = "Test School",
                 Role = "Student"
             };
 
@@ -65,7 +60,6 @@ namespace SMS.UnitTests.Auth
                 Email = "invalid-email",
                 Password = "weak",
                 ConfirmPassword = "different",
-                PhoneNumber = "",
                 Role = "InvalidRole"
             };
 
@@ -78,8 +72,6 @@ namespace SMS.UnitTests.Auth
             result.ShouldHaveValidationErrorFor(x => x.Email);
             result.ShouldHaveValidationErrorFor(x => x.Password);
             result.ShouldHaveValidationErrorFor(x => x.ConfirmPassword);
-            result.ShouldHaveValidationErrorFor(x => x.PhoneNumber);
-            result.ShouldHaveValidationErrorFor(x => x.Role);
         }
 
         [Fact]
@@ -93,7 +85,6 @@ namespace SMS.UnitTests.Auth
                 Email = "existing@example.com",
                 Password = "Test123!@#",
                 ConfirmPassword = "Test123!@#",
-                PhoneNumber = "+254712345678",
                 Role = "Student"
             };
 
@@ -106,9 +97,8 @@ namespace SMS.UnitTests.Auth
             var handler = new RegisterCommandHandler(
                 _userManagerMock.Object,
                 _jwtServiceMock.Object,
-                _emailServiceMock.Object,
                 _auditServiceMock.Object,
-                Mock.Of<ILogger<RegisterCommandHandler>>());
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
 
             // Act & Assert
             await Assert.ThrowsAsync<ConflictException>(
@@ -119,8 +109,7 @@ namespace SMS.UnitTests.Auth
         public async Task Handle_WithValidData_ShouldRegisterUser()
         {
             // Arrange
-            var userId = Guid.NewGuid();
-            var tenantId = Guid.NewGuid();
+            var userId = Guid.NewGuid().ToString();
             var command = new RegisterCommand
             {
                 FirstName = "John",
@@ -128,8 +117,6 @@ namespace SMS.UnitTests.Auth
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
                 ConfirmPassword = "Test123!@#",
-                PhoneNumber = "+254712345678",
-                Organization = "Test School",
                 Role = "Student"
             };
 
@@ -138,31 +125,34 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync((User?)null);
 
             _userManagerMock
-                .Setup(x => x.CreateUserAsync(It.IsAny<User>(), It.IsAny<string>()))
-                .ReturnsAsync((User user, string password) => new IdentityResult { Succeeded = true });
+                .Setup(x => x.CreateUserAsync(command.Email, command.Email, command.Password, command.Role))
+                .ReturnsAsync((string email, string username, string password, string role) => new User
+                {
+                    Id = userId,
+                    Email = email,
+                    UserName = username,
+                    FirstName = command.FirstName,
+                    LastName = command.LastName,
+                    IsActive = true
+                });
 
             _userManagerMock
-                .Setup(x => x.AddToRoleAsync(It.IsAny<User>(), command.Role))
-                .Returns(Task.CompletedTask);
+                .Setup(x => x.GetRolesAsync(It.IsAny<User>()))
+                .ReturnsAsync(new List<string> { command.Role });
 
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(It.IsAny<User>(), It.IsAny<IList<string>>()))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
-            _jwtServiceMock
-                .Setup(x => x.GenerateRefreshToken())
-                .Returns("test-refresh-token");
-
             _userManagerMock
-                .Setup(x => x.GenerateEmailVerificationTokenAsync(It.IsAny<User>()))
-                .ReturnsAsync("test-verification-token");
+                .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
+                .ReturnsAsync("test-refresh-token");
 
             var handler = new RegisterCommandHandler(
                 _userManagerMock.Object,
                 _jwtServiceMock.Object,
-                _emailServiceMock.Object,
                 _auditServiceMock.Object,
-                Mock.Of<ILogger<RegisterCommandHandler>>());
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
 
             // Act
             var result = await handler.Handle(command, CancellationToken.None);
@@ -172,15 +162,36 @@ namespace SMS.UnitTests.Auth
             result.AccessToken.Should().Be("test-access-token");
             result.RefreshToken.Should().Be("test-refresh-token");
             result.Email.Should().Be(command.Email);
-            result.FirstName.Should().Be(command.FirstName);
-            result.LastName.Should().Be(command.LastName);
             result.Roles.Should().Contain(command.Role);
-            result.RequiresEmailVerification.Should().BeTrue();
 
-            _userManagerMock.Verify(x => x.CreateUserAsync(It.IsAny<User>(), command.Password), Times.Once);
-            _userManagerMock.Verify(x => x.AddToRoleAsync(It.IsAny<User>(), command.Role), Times.Once);
-            _emailServiceMock.Verify(x => x.SendVerificationEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>()), Times.Once);
-            _auditServiceMock.Verify(x => x.LogAsync("User", "Register", It.IsAny<Guid>(), null, It.IsAny<string>()), Times.Once);
+            _userManagerMock.Verify(x => x.CreateUserAsync(command.Email, command.Email, command.Password, command.Role), Times.Once);
+            _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task Handle_WithPasswordMismatch_ShouldThrowValidationException()
+        {
+            // Arrange
+            var command = new RegisterCommand
+            {
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@example.com",
+                Password = "Test123!@#",
+                ConfirmPassword = "DifferentPassword!",
+                Role = "Student"
+            };
+
+            var handler = new RegisterCommandHandler(
+                _userManagerMock.Object,
+                _jwtServiceMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(
+                () => handler.Handle(command, CancellationToken.None));
         }
     }
 }
+

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using FluentValidation.TestHelper;
 using Moq;
+using Microsoft.Extensions.Logging;
 using SMS.Application.Exceptions;
 using SMS.Application.Features.Units.Commands;
 using SMS.Domain.Entities;
@@ -32,7 +33,6 @@ namespace SMS.UnitTests.Units
         [Fact]
         public void ValidCommand_ShouldNotHaveValidationErrors()
         {
-            // Arrange
             var command = new CreateUnitCommand
             {
                 Name = "Introduction to Programming",
@@ -42,17 +42,13 @@ namespace SMS.UnitTests.Units
                 CourseId = Guid.NewGuid()
             };
 
-            // Act
             var result = _validator.TestValidate(command);
-
-            // Assert
             result.ShouldNotHaveAnyValidationErrors();
         }
 
         [Fact]
         public void InvalidCommand_ShouldHaveValidationErrors()
         {
-            // Arrange
             var command = new CreateUnitCommand
             {
                 Name = "",
@@ -62,10 +58,7 @@ namespace SMS.UnitTests.Units
                 CourseId = Guid.Empty
             };
 
-            // Act
             var result = _validator.TestValidate(command);
-
-            // Assert
             result.ShouldHaveValidationErrorFor(x => x.Name);
             result.ShouldHaveValidationErrorFor(x => x.Code);
             result.ShouldHaveValidationErrorFor(x => x.Credits);
@@ -76,7 +69,6 @@ namespace SMS.UnitTests.Units
         [Fact]
         public void CreditsExceedsMax_ShouldHaveValidationError()
         {
-            // Arrange
             var command = new CreateUnitCommand
             {
                 Name = "Test Unit",
@@ -86,17 +78,13 @@ namespace SMS.UnitTests.Units
                 CourseId = Guid.NewGuid()
             };
 
-            // Act
             var result = _validator.TestValidate(command);
-
-            // Assert
             result.ShouldHaveValidationErrorFor(x => x.Credits);
         }
 
         [Fact]
         public async Task Handle_WithExistingCode_ShouldThrowConflictException()
         {
-            // Arrange
             var command = new CreateUnitCommand
             {
                 Name = "Introduction to Programming",
@@ -106,7 +94,7 @@ namespace SMS.UnitTests.Units
                 CourseId = Guid.NewGuid()
             };
 
-            var existingUnit = new Unit { Code = "CSC101" };
+            var existingUnit = new SMS.Domain.Entities.Unit { Code = "CSC101" };
 
             _unitRepositoryMock
                 .Setup(x => x.GetByCodeAsync(command.Code, It.IsAny<CancellationToken>()))
@@ -119,7 +107,6 @@ namespace SMS.UnitTests.Units
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateUnitCommandHandler>>());
 
-            // Act & Assert
             await Assert.ThrowsAsync<ConflictException>(
                 () => handler.Handle(command, CancellationToken.None));
         }
@@ -127,7 +114,6 @@ namespace SMS.UnitTests.Units
         [Fact]
         public async Task Handle_WithNonExistentCourse_ShouldThrowNotFoundException()
         {
-            // Arrange
             var command = new CreateUnitCommand
             {
                 Name = "Introduction to Programming",
@@ -139,7 +125,7 @@ namespace SMS.UnitTests.Units
 
             _unitRepositoryMock
                 .Setup(x => x.GetByCodeAsync(command.Code, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Unit?)null);
+                .ReturnsAsync((SMS.Domain.Entities.Unit?)null);
 
             _courseRepositoryMock
                 .Setup(x => x.GetByIdAsync(command.CourseId, It.IsAny<CancellationToken>()))
@@ -152,7 +138,6 @@ namespace SMS.UnitTests.Units
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateUnitCommandHandler>>());
 
-            // Act & Assert
             await Assert.ThrowsAsync<NotFoundException>(
                 () => handler.Handle(command, CancellationToken.None));
         }
@@ -160,7 +145,6 @@ namespace SMS.UnitTests.Units
         [Fact]
         public async Task Handle_WithValidData_ShouldCreateUnit()
         {
-            // Arrange
             var courseId = Guid.NewGuid();
             var command = new CreateUnitCommand
             {
@@ -180,15 +164,15 @@ namespace SMS.UnitTests.Units
 
             _unitRepositoryMock
                 .Setup(x => x.GetByCodeAsync(command.Code, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Unit?)null);
+                .ReturnsAsync((SMS.Domain.Entities.Unit?)null);
 
             _courseRepositoryMock
                 .Setup(x => x.GetByIdAsync(command.CourseId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(course);
 
             _unitRepositoryMock
-                .Setup(x => x.AddAsync(It.IsAny<Unit>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Unit u, CancellationToken ct) => u);
+                .Setup(x => x.AddAsync(It.IsAny<SMS.Domain.Entities.Unit>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((SMS.Domain.Entities.Unit u, CancellationToken ct) => u);
 
             var handler = new CreateUnitCommandHandler(
                 _unitRepositoryMock.Object,
@@ -197,24 +181,21 @@ namespace SMS.UnitTests.Units
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateUnitCommandHandler>>());
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             result.Should().NotBeNull();
             result.Name.Should().Be(command.Name);
             result.Code.Should().Be(command.Code);
             result.Credits.Should().Be(command.Credits);
             result.CourseId.Should().Be(courseId);
 
-            _unitRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Unit>(), It.IsAny<CancellationToken>()), Times.Once);
+            _unitRepositoryMock.Verify(x => x.AddAsync(It.IsAny<SMS.Domain.Entities.Unit>(), It.IsAny<CancellationToken>()), Times.Once);
             _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
         public async Task Handle_WithValidPrerequisite_ShouldCreateUnitWithPrerequisite()
         {
-            // Arrange
             var courseId = Guid.NewGuid();
             var prerequisiteId = Guid.NewGuid();
             var command = new CreateUnitCommand
@@ -234,7 +215,7 @@ namespace SMS.UnitTests.Units
                 Code = "BSCS"
             };
 
-            var prerequisite = new Unit
+            var prerequisite = new SMS.Domain.Entities.Unit
             {
                 Id = prerequisiteId,
                 Name = "Introduction to Programming",
@@ -243,7 +224,7 @@ namespace SMS.UnitTests.Units
 
             _unitRepositoryMock
                 .Setup(x => x.GetByCodeAsync(command.Code, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Unit?)null);
+                .ReturnsAsync((SMS.Domain.Entities.Unit?)null);
 
             _courseRepositoryMock
                 .Setup(x => x.GetByIdAsync(command.CourseId, It.IsAny<CancellationToken>()))
@@ -254,8 +235,8 @@ namespace SMS.UnitTests.Units
                 .ReturnsAsync(prerequisite);
 
             _unitRepositoryMock
-                .Setup(x => x.AddAsync(It.IsAny<Unit>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Unit u, CancellationToken ct) => u);
+                            .Setup(x => x.AddAsync(It.IsAny<SMS.Domain.Entities.Unit>(), It.IsAny<CancellationToken>()))
+                            .ReturnsAsync((SMS.Domain.Entities.Unit u, CancellationToken ct) => u);
 
             var handler = new CreateUnitCommandHandler(
                 _unitRepositoryMock.Object,
@@ -264,10 +245,8 @@ namespace SMS.UnitTests.Units
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateUnitCommandHandler>>());
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             result.Should().NotBeNull();
             result.PrerequisiteUnitId.Should().Be(prerequisiteId);
 
@@ -275,3 +254,4 @@ namespace SMS.UnitTests.Units
         }
     }
 }
+

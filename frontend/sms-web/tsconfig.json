@@ -12,22 +12,22 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@components/*": ["src/components/*"],
-      "@pages/*": ["src/pages/*"],
-      "@hooks/*": ["src/hooks/*"],
-      "@services/*": ["src/services/*"],
-      "@utils/*": ["src/utils/*"],
-      "@contexts/*": ["src/contexts/*"],
-      "@types/*": ["src/types/*"]
+      "@/*": ["./src/*"],
+      "@components/*": ["./src/components/*"],
+      "@pages/*": ["./src/pages/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@services/*": ["./src/services/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@contexts/*": ["./src/contexts/*"],
+      "@types/*": ["./src/types/*"]
     },
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
+

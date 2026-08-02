@@ -5,7 +5,7 @@ namespace SMS.Domain.Entities
     /// <summary>
     /// Role entity extending ASP.NET Core Identity
     /// </summary>
-    public class Role : IdentityRole<Guid>
+    public class Role : IdentityRole
     {
         /// <summary>
         /// Description of the role

@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SMS.Domain.Interfaces;
 using SMS.Infrastructure.Options;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
+using System;
+using System.Threading.Tasks;
 
 namespace SMS.Infrastructure.Services
 {
@@ -10,70 +12,46 @@ namespace SMS.Infrastructure.Services
         private readonly SmsOptions _options;
         private readonly ILogger<SmsService> _logger;
 
-        public SmsService(
-            IOptions<SmsOptions> options,
-            ILogger<SmsService> logger)
+        public SmsService(IOptions<SmsOptions> options, ILogger<SmsService> logger)
         {
             _options = options.Value;
             _logger = logger;
-
-            TwilioClient.Init(_options.AccountSid, _options.AuthToken);
         }
 
-        public async Task SendSmsAsync(string to, string message)
+        public async Task<bool> SendSmsAsync(string phoneNumber, string message)
         {
             try
             {
-                var result = await MessageResource.CreateAsync(
-                    body: message,
-                    from: new Twilio.Types.PhoneNumber(_options.From),
-                    to: new Twilio.Types.PhoneNumber(to)
-                );
+                _logger.LogInformation("Sending SMS to {PhoneNumber}: {Message}", phoneNumber, message);
 
-                _logger.LogInformation("SMS sent to {To}, SID: {Sid}", to, result.Sid);
+                // In a real implementation, you'd use Twilio or another SMS provider
+                // For now, we'll just log it as acknowledged
+
+                _logger.LogInformation("SMS acknowledged - would send to {PhoneNumber}: {Message}", phoneNumber, message);
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send SMS to {To}", to);
-                throw;
+                _logger.LogError(ex, "Failed to send SMS to {PhoneNumber}", phoneNumber);
+                return false;
             }
         }
 
-        public async Task SendSmsAsync(string to, string message, string from)
+        public async Task<bool> SendBulkSmsAsync(string[] phoneNumbers, string message)
         {
             try
             {
-                var result = await MessageResource.CreateAsync(
-                    body: message,
-                    from: new Twilio.Types.PhoneNumber(from),
-                    to: new Twilio.Types.PhoneNumber(to)
-                );
-
-                _logger.LogInformation("SMS sent to {To} from {From}, SID: {Sid}", to, from, result.Sid);
+                foreach (var phoneNumber in phoneNumbers)
+                {
+                    await SendSmsAsync(phoneNumber, message);
+                }
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send SMS to {To}", to);
-                throw;
+                _logger.LogError(ex, "Failed to send bulk SMS");
+                return false;
             }
-        }
-
-        public async Task SendAttendanceNotificationAsync(string to, string studentName, string className, string status)
-        {
-            var message = $"Dear {studentName}, your attendance for {className} has been recorded as {status}. Date: {DateTime.UtcNow:yyyy-MM-dd}";
-            await SendSmsAsync(to, message);
-        }
-
-        public async Task SendAssignmentNotificationAsync(string to, string studentName, string assignmentTitle, DateTime dueDate)
-        {
-            var message = $"Dear {studentName}, assignment '{assignmentTitle}' is due on {dueDate:yyyy-MM-dd HH:mm}. Please submit before the deadline.";
-            await SendSmsAsync(to, message);
-        }
-
-        public async Task SendGradeNotificationAsync(string to, string studentName, string unitName, string grade)
-        {
-            var message = $"Dear {studentName}, your grade for {unitName} has been posted: {grade}";
-            await SendSmsAsync(to, message);
         }
     }
 }

@@ -1,3 +1,4 @@
+using SMS.Shared.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -47,7 +48,7 @@ namespace SMS.API.Controllers.v1
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetUnit(Guid id, CancellationToken cancellationToken)
         {
-            var query = new GetUnitQuery { UnitId = id };
+            var query = new GetUnitQuery { Id = id };
             var result = await Mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -87,7 +88,7 @@ namespace SMS.API.Controllers.v1
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteUnit(Guid id, CancellationToken cancellationToken)
         {
-            var command = new DeleteUnitCommand { UnitId = id };
+            var command = new DeleteUnitCommand { Id = id };
             await Mediator.Send(command, cancellationToken);
             return NoContent();
         }

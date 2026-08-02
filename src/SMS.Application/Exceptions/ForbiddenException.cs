@@ -1,25 +1,17 @@
+using System;
+
 namespace SMS.Application.Exceptions
 {
     public class ForbiddenException : Exception
     {
-        public ForbiddenException()
-            : base("You do not have permission to access this resource.")
-        {
-        }
+        public string? Resource { get; }
 
-        public ForbiddenException(string message)
-            : base(message)
+        public ForbiddenException() : base() { }
+        public ForbiddenException(string message) : base(message) { }
+        public ForbiddenException(string resource, string userId) 
+            : base($"User '{userId}' does not have permission to access '{resource}'.") 
         {
-        }
-
-        public ForbiddenException(string message, Exception innerException)
-            : base(message, innerException)
-        {
-        }
-
-        public ForbiddenException(string resource, string action)
-            : base($"You do not have permission to {action} '{resource}'.")
-        {
+            Resource = resource;
         }
     }
 }

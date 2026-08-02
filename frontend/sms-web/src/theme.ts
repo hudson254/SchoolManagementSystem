@@ -114,20 +114,6 @@ export const themeOptions: ThemeOptions = {
         root: { borderRadius: 6 },
       },
     },
-    MuiDataGrid: {
-      styleOverrides: {
-        root: {
-          border: 'none',
-          '& .MuiDataGrid-cell': {
-            borderBottom: '1px solid #e0e5d6',
-          },
-          '& .MuiDataGrid-columnHeaders': {
-            backgroundColor: '#f5f7f0',
-            borderBottom: '2px solid #576426',
-          },
-        },
-      },
-    },
   },
 };
 

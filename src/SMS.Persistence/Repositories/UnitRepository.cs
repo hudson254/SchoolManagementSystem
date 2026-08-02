@@ -1,118 +1,50 @@
-using System.Linq.Expressions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
 
 namespace SMS.Persistence.Repositories
 {
-    public class UnitRepository : IUnitRepository
+    public class UnitRepository : BaseRepository<Unit>, IUnitRepository
     {
-        private readonly ApplicationDbContext _context;
-
-        public UnitRepository(ApplicationDbContext context)
+        public UnitRepository(ApplicationDbContext context, ILogger<UnitRepository> logger)
+            : base(context, logger)
         {
-            _context = context;
-        }
-
-        public async Task<Unit?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        {
-            return await _context.Units
-                .Include(u => u.Course)
-                .Include(u => u.Prerequisite)
-                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
-        }
-
-        public async Task<IEnumerable<Unit>> GetAllAsync(CancellationToken cancellationToken = default)
-        {
-            return await _context.Units
-                .Include(u => u.Course)
-                .Where(u => !u.IsDeleted)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<Unit>> FindAsync(Expression<Func<Unit, bool>> predicate, CancellationToken cancellationToken = default)
-        {
-            return await _context.Units
-                .Include(u => u.Course)
-                .Where(u => !u.IsDeleted)
-                .Where(predicate)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<Unit> AddAsync(Unit entity, CancellationToken cancellationToken = default)
-        {
-            await _context.Units.AddAsync(entity, cancellationToken);
-            return entity;
-        }
-
-        public async Task<IEnumerable<Unit>> AddRangeAsync(IEnumerable<Unit> entities, CancellationToken cancellationToken = default)
-        {
-            await _context.Units.AddRangeAsync(entities, cancellationToken);
-            return entities;
-        }
-
-        public Task UpdateAsync(Unit entity, CancellationToken cancellationToken = default)
-        {
-            _context.Units.Update(entity);
-            return Task.CompletedTask;
-        }
-
-        public async Task DeleteAsync(Unit entity, CancellationToken cancellationToken = default)
-        {
-            entity.SoftDelete("SYSTEM");
-            _context.Units.Update(entity);
-            await Task.CompletedTask;
-        }
-
-        public async Task<bool> ExistsAsync(Expression<Func<Unit, bool>> predicate, CancellationToken cancellationToken = default)
-        {
-            return await _context.Units.AnyAsync(predicate, cancellationToken);
-        }
-
-        public async Task<int> CountAsync(Expression<Func<Unit, bool>>? predicate = null, CancellationToken cancellationToken = default)
-        {
-            var query = _context.Units.Where(u => !u.IsDeleted);
-            if (predicate != null)
-                query = query.Where(predicate);
-            return await query.CountAsync(cancellationToken);
-        }
-
-        public async Task<Unit?> GetByCodeAsync(string code, CancellationToken cancellationToken = default)
-        {
-            return await _context.Units
-                .Include(u => u.Course)
-                .FirstOrDefaultAsync(u => u.Code == code && !u.IsDeleted, cancellationToken);
-        }
-
-        public async Task<Unit?> GetUnitWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
-        {
-            return await _context.Units
-                .Include(u => u.Course)
-                .Include(u => u.Prerequisite)
-                .Include(u => u.Allocations)
-                    .ThenInclude(a => a.Lecturer)
-                        .ThenInclude(l => l.User)
-                .Include(u => u.Enrollments)
-                .Include(u => u.Assignments)
-                .Include(u => u.LectureNotes)
-                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
         }
 
         public async Task<IEnumerable<Unit>> GetUnitsByCourseIdAsync(Guid courseId, CancellationToken cancellationToken = default)
         {
-            return await _context.Units
-                .Include(u => u.Course)
-                .Where(u => u.CourseId == courseId && !u.IsDeleted)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.Where(u => u.CourseId == courseId && !u.IsDeleted).ToListAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<Unit>> GetActiveUnitsAsync(CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Unit>> GetUnitsByCourseAsync(Guid courseId, CancellationToken cancellationToken = default)
         {
-            return await _context.Units
+            return await _dbSet.Where(u => u.CourseId == courseId && !u.IsDeleted).ToListAsync(cancellationToken);
+        }
+
+        public async Task<IEnumerable<Unit>> GetUnitsBySemesterAsync(int semester, CancellationToken cancellationToken = default)
+        {
+            return await _dbSet.Where(u => u.Semester == semester && !u.IsDeleted).ToListAsync(cancellationToken);
+        }
+
+        public async Task<Unit> GetByCodeAsync(string code, CancellationToken cancellationToken = default)
+        {
+            return await _dbSet.FirstOrDefaultAsync(u => u.Code == code && !u.IsDeleted, cancellationToken);
+        }
+
+        public async Task<Unit> GetUnitWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return await _dbSet
                 .Include(u => u.Course)
-                .Where(u => u.IsActive && !u.IsDeleted)
-                .ToListAsync(cancellationToken);
+                .Include(u => u.Grades)
+                .Include(u => u.Assignments)
+                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
         }
 
         public async Task<IEnumerable<Unit>> GetUnitsAsync(
@@ -120,71 +52,54 @@ namespace SMS.Persistence.Repositories
             int pageSize,
             string? searchTerm,
             Guid? courseId,
+            int? semester,
             bool? isActive,
             string sortBy,
             bool sortDescending,
             CancellationToken cancellationToken = default)
         {
-            var query = _context.Units
-                .Include(u => u.Course)
-                .Include(u => u.Prerequisite)
-                .Where(u => !u.IsDeleted);
+            var query = _dbSet.Where(u => !u.IsDeleted).AsQueryable();
 
-            if (!string.IsNullOrEmpty(searchTerm))
-            {
-                query = query.Where(u =>
-                    u.Name.Contains(searchTerm) ||
-                    u.Code.Contains(searchTerm) ||
-                    u.Description.Contains(searchTerm));
-            }
-
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                query = query.Where(u => u.Name.Contains(searchTerm) || u.Code.Contains(searchTerm));
             if (courseId.HasValue)
                 query = query.Where(u => u.CourseId == courseId.Value);
-
+            if (semester.HasValue)
+                query = query.Where(u => u.Semester == semester.Value);
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
 
-            query = sortDescending
-                ? query.OrderByDescending(GetSortExpression(sortBy))
-                : query.OrderBy(GetSortExpression(sortBy));
+            query = sortBy?.ToLower() switch
+            {
+                "name" => sortDescending ? query.OrderByDescending(u => u.Name) : query.OrderBy(u => u.Name),
+                "code" => sortDescending ? query.OrderByDescending(u => u.Code) : query.OrderBy(u => u.Code),
+                "credits" => sortDescending ? query.OrderByDescending(u => u.Credits) : query.OrderBy(u => u.Credits),
+                _ => query.OrderBy(u => u.Name)
+            };
 
-            return await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync(cancellationToken);
+            return await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         }
 
-        public async Task<int> CountUnitsAsync(string? searchTerm, Guid? courseId, bool? isActive, CancellationToken cancellationToken = default)
+        public async Task<int> CountUnitsAsync(
+            string? searchTerm,
+            Guid? courseId,
+            int? semester,
+            bool? isActive,
+            CancellationToken cancellationToken = default)
         {
-            var query = _context.Units.Where(u => !u.IsDeleted);
+            var query = _dbSet.Where(u => !u.IsDeleted).AsQueryable();
 
-            if (!string.IsNullOrEmpty(searchTerm))
-            {
-                query = query.Where(u =>
-                    u.Name.Contains(searchTerm) ||
-                    u.Code.Contains(searchTerm) ||
-                    u.Description.Contains(searchTerm));
-            }
-
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                query = query.Where(u => u.Name.Contains(searchTerm) || u.Code.Contains(searchTerm));
             if (courseId.HasValue)
                 query = query.Where(u => u.CourseId == courseId.Value);
-
+            if (semester.HasValue)
+                query = query.Where(u => u.Semester == semester.Value);
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
 
             return await query.CountAsync(cancellationToken);
         }
-
-        private static Expression<Func<Unit, object>> GetSortExpression(string sortBy)
-        {
-            return sortBy.ToLowerInvariant() switch
-            {
-                "name" => u => u.Name,
-                "code" => u => u.Code,
-                "credits" => u => u.Credits,
-                "createddate" => u => u.CreatedDate,
-                _ => u => u.CreatedDate
-            };
-        }
     }
 }
+

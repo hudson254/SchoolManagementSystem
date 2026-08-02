@@ -1,115 +1,65 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using SMS.Domain.Common;
 
 namespace SMS.Domain.Entities
 {
-    /// <summary>
-    /// Unit/Module entity representing individual course units
-    /// </summary>
-    public class Unit : BaseEntity
+    [Table("units")]
+    public class Unit : BaseEntity, ITenantAwareEntity
     {
-        /// <summary>
-        /// Unit name
-        /// </summary>
+        [Column("name")]
+        [MaxLength(200)]
         [Required]
-        [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        /// <summary>
-        /// Unit code (e.g., CSC101, BBA201)
-        /// </summary>
+        [Column("code")]
+        [MaxLength(50)]
         [Required]
-        [MaxLength(20)]
         public string Code { get; set; } = string.Empty;
 
-        /// <summary>
-        /// Unit description
-        /// </summary>
+        [Column("description")]
         [MaxLength(1000)]
         public string? Description { get; set; }
 
-        /// <summary>
-        /// Credit value
-        /// </summary>
-        public int Credits { get; set; } = 3;
+        [Column("credits")]
+        public int Credits { get; set; }
 
-        /// <summary>
-        /// Contact hours per week
-        /// </summary>
-        public int ContactHours { get; set; } = 3;
+        [Column("contact_hours")]
+        public int ContactHours { get; set; }
 
-        /// <summary>
-        /// Whether the unit is active
-        /// </summary>
-        public bool IsActive { get; set; } = true;
+        [Column("semester")]
+        public int Semester { get; set; }
 
-        /// <summary>
-        /// Course ID
-        /// </summary>
-        [Required]
+        [Column("course_id")]
         public Guid CourseId { get; set; }
 
-        /// <summary>
-        /// Prerequisite unit ID (if any)
-        /// </summary>
+        [Column("prerequisite_unit_id")]
         public Guid? PrerequisiteUnitId { get; set; }
 
-        /// <summary>
-        /// Learning outcomes
-        /// </summary>
-        [MaxLength(2000)]
+        [Column("learning_outcomes")]
         public string? LearningOutcomes { get; set; }
 
-        /// <summary>
-        /// Assessment methods
-        /// </summary>
-        [MaxLength(500)]
+        [Column("assessment_methods")]
         public string? AssessmentMethods { get; set; }
 
-        /// <summary>
-        /// Recommended textbooks
-        /// </summary>
-        [MaxLength(500)]
+        [Column("recommended_textbooks")]
         public string? RecommendedTextbooks { get; set; }
 
-        /// <summary>
-        /// Navigation property for course
-        /// </summary>
-        public virtual Course Course { get; set; } = null!;
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
 
-        /// <summary>
-        /// Navigation property for prerequisite
-        /// </summary>
+        // Navigation properties
+        [ForeignKey(nameof(CourseId))]
+        public virtual Course? Course { get; set; }
+
+        [ForeignKey(nameof(PrerequisiteUnitId))]
         public virtual Unit? Prerequisite { get; set; }
 
-        /// <summary>
-        /// Navigation property for unit allocations
-        /// </summary>
-        public virtual ICollection<UnitAllocation> Allocations { get; set; } = new List<UnitAllocation>();
-
-        /// <summary>
-        /// Navigation property for lecture notes
-        /// </summary>
-        public virtual ICollection<LectureNote> LectureNotes { get; set; } = new List<LectureNote>();
-
-        /// <summary>
-        /// Navigation property for assignments
-        /// </summary>
-        public virtual ICollection<Assignment> Assignments { get; set; } = new List<Assignment>();
-
-        /// <summary>
-        /// Navigation property for classes
-        /// </summary>
-        public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
-
-        /// <summary>
-        /// Navigation property for student enrollments
-        /// </summary>
-        public virtual ICollection<StudentEnrollment> Enrollments { get; set; } = new List<StudentEnrollment>();
-
-        /// <summary>
-        /// Navigation property for programme units
-        /// </summary>
-        public virtual ICollection<ProgrammeUnit> ProgrammeUnits { get; set; } = new List<ProgrammeUnit>();
+        public virtual ICollection<Enrollment>? Enrollments { get; set; }
+        public virtual ICollection<Assignment>? Assignments { get; set; }
+        public virtual ICollection<Grade>? Grades { get; set; }
     }
 }
+

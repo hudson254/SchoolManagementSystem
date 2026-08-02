@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SMS.Application.DTOs;
 using SMS.Application.Features.Reports.Queries;
+using SMS.Application.Features.Accommodation.Queries;
 
 namespace SMS.API.Controllers.v1
 {
@@ -18,9 +19,6 @@ namespace SMS.API.Controllers.v1
             _logger = logger;
         }
 
-        /// <summary>
-        /// Generate a student enrollment report
-        /// </summary>
         [HttpGet("student-enrollment")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(StudentReportDto), StatusCodes.Status200OK)]
@@ -38,9 +36,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate a lecturer workload report
-        /// </summary>
         [HttpGet("lecturer-workload")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(IEnumerable<LecturerWorkloadReportDto>), StatusCodes.Status200OK)]
@@ -53,9 +48,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate a course statistics report
-        /// </summary>
         [HttpGet("course-statistics")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(IEnumerable<CourseStatisticsDto>), StatusCodes.Status200OK)]
@@ -68,9 +60,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate an assignment completion report
-        /// </summary>
         [HttpGet("assignment-completion")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(IEnumerable<AssignmentCompletionReportDto>), StatusCodes.Status200OK)]
@@ -83,9 +72,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate a grade distribution report
-        /// </summary>
         [HttpGet("grade-distribution")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(GradeDistributionReportDto), StatusCodes.Status200OK)]
@@ -103,9 +89,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate an accommodation occupancy report
-        /// </summary>
         [HttpGet("occupancy")]
         [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(typeof(OccupancyReportDto), StatusCodes.Status200OK)]
@@ -118,9 +101,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate a user activity report
-        /// </summary>
         [HttpGet("user-activity")]
         [Authorize(Policy = "AdministratorAccess")]
         [ProducesResponseType(typeof(UserActivityReportDto), StatusCodes.Status200OK)]
@@ -138,9 +118,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Generate a timetable utilization report
-        /// </summary>
         [HttpGet("timetable-utilization")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(TimetableUtilizationReportDto), StatusCodes.Status200OK)]
@@ -153,9 +130,6 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
-        /// <summary>
-        /// Export report as PDF
-        /// </summary>
         [HttpGet("export/pdf")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -176,9 +150,6 @@ namespace SMS.API.Controllers.v1
             return File(result.FileContent, "application/pdf", result.FileName);
         }
 
-        /// <summary>
-        /// Export report as Excel
-        /// </summary>
         [HttpGet("export/excel")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -199,9 +170,6 @@ namespace SMS.API.Controllers.v1
             return File(result.FileContent, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", result.FileName);
         }
 
-        /// <summary>
-        /// Export report as CSV
-        /// </summary>
         [HttpGet("export/csv")]
         [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]

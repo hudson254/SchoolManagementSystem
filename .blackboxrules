@@ -1,0 +1,88 @@
+# Windows Command Execution Policy
+
+## Mandatory Windows Command Compatibility
+
+The development environment is Microsoft Windows. All commands generated and executed **must be fully compatible with Windows Command Prompt (CMD) or Windows PowerShell**.
+
+### Prohibited Command Chaining
+
+**Never use the Linux or Unix command chaining operator:**
+
+* `&&`
+
+Windows environments used for this project may not support this syntax consistently, particularly when commands are executed through automation tools or AI agent execution environments.
+
+### Required Execution Method
+
+Execute **one command at a time**.
+
+Wait for the previous command to complete successfully before issuing the next command.
+
+For example, do **not** generate commands such as:
+
+```text
+dotnet restore && dotnet build && dotnet test
+```
+
+Instead generate:
+
+```text
+dotnet restore
+```
+
+After successful completion:
+
+```text
+dotnet build
+```
+
+After successful completion:
+
+```text
+dotnet test
+```
+
+### PowerShell Considerations
+
+Do not assume PowerShell-specific features are available unless explicitly instructed.
+
+Prefer commands that work in both:
+
+* Windows Command Prompt (CMD)
+* Windows PowerShell
+
+### Cross Platform Compatibility
+
+Whenever possible:
+
+* Detect the operating system before generating commands.
+* If the operating system is Windows, generate Windows-compatible commands only.
+* Do not generate Bash syntax.
+* Do not generate Linux shell operators.
+* Do not generate Unix-specific path separators or utilities unless they have Windows equivalents.
+
+### Error Recovery
+
+If a command fails:
+
+1. Stop execution immediately.
+2. Diagnose the failure.
+3. Correct the underlying issue.
+4. Re-run only the failed command.
+5. Continue with the remaining commands one at a time.
+
+Do not continue executing subsequent commands after a failure.
+
+### Output Requirements
+
+Whenever multiple commands are required:
+
+* Present them as separate executable commands.
+* Never combine commands into a single line using `&&`, `;`, or any other command chaining mechanism.
+* Ensure each command can be copied and executed independently.
+
+### Compliance Requirement
+
+These rules are mandatory and apply to every command generated during auditing, development, debugging, testing, deployment, and maintenance of the School Management System.
+
+Failure to follow these requirements is considered a violation of the execution policy and the generated commands must be regenerated using Windows-compatible syntax.

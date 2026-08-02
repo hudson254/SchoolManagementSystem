@@ -1,66 +1,31 @@
 using MediatR;
-using FluentValidation;
-using SMS.Application.Exceptions;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SMS.Application.Features.Auth.Commands
 {
-    public class VerifyEmailCommand : IRequest
+    public class VerifyEmailCommand : IRequest<bool>
     {
-        public Guid UserId { get; set; }
-        public string Token { get; set; } = string.Empty;
+        public string UserId { get; set; }
+        public string Token { get; set; }
     }
 
-    public class VerifyEmailCommandValidator : AbstractValidator<VerifyEmailCommand>
-    {
-        public VerifyEmailCommandValidator()
-        {
-            RuleFor(x => x.UserId)
-                .NotEmpty().WithMessage("User ID is required");
-
-            RuleFor(x => x.Token)
-                .NotEmpty().WithMessage("Verification token is required");
-        }
-    }
-
-    public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand>
+    public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand, bool>
     {
         private readonly IUserManagerService _userManager;
-        private readonly IAuditService _auditService;
-        private readonly ILogger<VerifyEmailCommandHandler> _logger;
 
-        public VerifyEmailCommandHandler(
-            IUserManagerService userManager,
-            IAuditService auditService,
-            ILogger<VerifyEmailCommandHandler> logger)
+        public VerifyEmailCommandHandler(IUserManagerService userManager)
         {
             _userManager = userManager;
-            _auditService = auditService;
-            _logger = logger;
         }
 
-        public async Task Handle(VerifyEmailCommand request, CancellationToken cancellationToken)
+        public async Task<bool> Handle(VerifyEmailCommand request, CancellationToken cancellationToken)
         {
-            var user = await _userManager.FindByIdAsync(request.UserId.ToString());
-            if (user == null)
-            {
-                throw new NotFoundException("User", request.UserId);
-            }
-
-            var result = await _userManager.ConfirmEmailAsync(user, request.Token);
-
-            if (!result.Succeeded)
-            {
-                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                throw new ValidationException($"Email verification failed: {errors}");
-            }
-
-            user.IsEmailVerified = true;
-            await _userManager.UpdateUserAsync(user);
-
-            await _auditService.LogAsync("User", "VerifyEmail", user.Id, null, "Email verified");
-            _logger.LogInformation("Email verified for user: {Email}", user.Email);
+            var result = await _userManager.VerifyEmailAsync(request.UserId, request.Token);
+            return result;
         }
     }
 }
+

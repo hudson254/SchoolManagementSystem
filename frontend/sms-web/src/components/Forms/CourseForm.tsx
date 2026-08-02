@@ -73,8 +73,6 @@ export const CourseForm: React.FC<CourseFormProps> = ({
     },
   });
 
-  const isActive = watch('isActive');
-
   // Fetch course data if in edit mode
   const { data: course, isLoading } = useQuery({
     queryKey: ['course', courseId],
@@ -174,9 +172,8 @@ export const CourseForm: React.FC<CourseFormProps> = ({
                 fullWidth
                 label="Course Code"
                 required
-                helperText="Uppercase letters and numbers only"
                 error={!!errors.code}
-                helperText={errors.code?.message}
+                helperText={errors.code?.message || 'Uppercase letters and numbers only'}
               />
             )}
           />

@@ -79,7 +79,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({
   });
 
   const courseId = watch('courseId');
-  const isActive = watch('isActive');
 
   // Fetch unit data if in edit mode
   const { data: unit, isLoading } = useQuery({
@@ -189,9 +188,8 @@ export const UnitForm: React.FC<UnitFormProps> = ({
                 fullWidth
                 label="Unit Code"
                 required
-                helperText="Uppercase letters and numbers only"
                 error={!!errors.code}
-                helperText={errors.code?.message}
+                helperText={errors.code?.message || 'Uppercase letters and numbers only'}
               />
             )}
           />

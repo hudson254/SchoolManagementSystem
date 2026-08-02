@@ -20,18 +20,15 @@ import {
   Snackbar,
   Tabs,
   Tab,
-  Badge,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Refresh as RefreshIcon,
-  Today as TodayIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
   Event as EventIcon,
   Assignment as AssignmentIcon,
   School as SchoolIcon,
   CalendarToday as CalendarIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { calendarService } from '../services/calendar.service';
@@ -76,7 +73,6 @@ export const Calendar: React.FC = () => {
   const calendarRef = useRef<any>(null);
   const [tabValue, setTabValue] = useState(0);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -86,7 +82,6 @@ export const Calendar: React.FC = () => {
     eventType: 'other',
   });
   const [success, setSuccess] = useState(false);
-  const [currentView, setCurrentView] = useState('dayGridMonth');
 
   const { data: events, isLoading, refetch } = useQuery({
     queryKey: ['calendar-events'],
@@ -110,7 +105,7 @@ export const Calendar: React.FC = () => {
     },
   });
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
@@ -123,9 +118,8 @@ export const Calendar: React.FC = () => {
     setEventDialogOpen(true);
   };
 
-  const handleEventClick = (clickInfo: any) => {
-    setSelectedEvent(clickInfo.event);
-    // Open event details dialog
+  const handleEventClick = (_clickInfo: any) => {
+    // Event details could be opened in a dialog here in the future.
   };
 
   const handleCreateEvent = () => {
@@ -163,19 +157,6 @@ export const Calendar: React.FC = () => {
         return '#9c27b0';
       default:
         return '#576426';
-    }
-  };
-
-  const getEventBadge = (type: string) => {
-    switch (type) {
-      case 'lecture':
-        return <SchoolIcon fontSize="small" />;
-      case 'assignment':
-        return <AssignmentIcon fontSize="small" />;
-      case 'exam':
-        return <EventIcon fontSize="small" />;
-      default:
-        return <CalendarIcon fontSize="small" />;
     }
   };
 

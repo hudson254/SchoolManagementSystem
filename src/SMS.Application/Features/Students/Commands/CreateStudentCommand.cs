@@ -1,27 +1,29 @@
-using MediatR;
 using FluentValidation;
+using MediatR;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
+using System;
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SMS.Application.Features.Students.Commands
 {
     public class CreateStudentCommand : IRequest<StudentDto>
     {
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string PhoneNumber { get; set; } = string.Empty;
-        public string Organization { get; set; } = string.Empty;
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Email { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Address { get; set; }
         public DateTime DateOfBirth { get; set; }
-        public string? Gender { get; set; }
-        public string? Address { get; set; }
         public Guid? ProgrammeId { get; set; }
-        public string? EmergencyContactName { get; set; }
-        public string? EmergencyContactPhone { get; set; }
-        public string? EmergencyContactRelation { get; set; }
+        public Guid? CurrentSemesterId { get; set; }
+        public string StudentNumber { get; set; }
+        public string Password { get; set; }
     }
 
     public class CreateStudentCommandValidator : AbstractValidator<CreateStudentCommand>
@@ -29,127 +31,142 @@ namespace SMS.Application.Features.Students.Commands
         public CreateStudentCommandValidator()
         {
             RuleFor(x => x.FirstName)
-                .NotEmpty().WithMessage("First name is required")
-                .MaximumLength(100);
+                .NotEmpty().WithMessage("First name is required");
 
             RuleFor(x => x.LastName)
-                .NotEmpty().WithMessage("Last name is required")
-                .MaximumLength(100);
+                .NotEmpty().WithMessage("Last name is required");
 
             RuleFor(x => x.Email)
                 .NotEmpty().WithMessage("Email is required")
-                .EmailAddress().WithMessage("Invalid email format");
+                .EmailAddress().WithMessage("A valid email is required");
 
-            RuleFor(x => x.PhoneNumber)
-                .NotEmpty().WithMessage("Phone number is required")
-                .MaximumLength(20);
+            RuleFor(x => x.Password)
+                .MinimumLength(8).WithMessage("Password must be at least 8 characters")
+                .When(x => !string.IsNullOrEmpty(x.Password));
 
             RuleFor(x => x.DateOfBirth)
                 .NotEmpty().WithMessage("Date of birth is required")
-                .LessThan(DateTime.UtcNow.AddYears(-16))
-                .WithMessage("Student must be at least 16 years old");
+                .LessThan(DateTime.UtcNow).WithMessage("Date of birth must be in the past");
         }
     }
 
     public class CreateStudentCommandHandler : IRequestHandler<CreateStudentCommand, StudentDto>
     {
-        private readonly IUserManagerService _userManager;
         private readonly IStudentRepository _studentRepository;
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IUserManagerService _userManager;
+        private readonly SMS.Multitenancy.Interfaces.ITenantContext _tenantContext;
         private readonly IAuditService _auditService;
-        private readonly ILogger<CreateStudentCommandHandler> _logger;
 
         public CreateStudentCommandHandler(
-            IUserManagerService userManager,
             IStudentRepository studentRepository,
-            IUnitOfWork unitOfWork,
-            IAuditService auditService,
-            ILogger<CreateStudentCommandHandler> logger)
+            IUserManagerService userManager,
+            SMS.Multitenancy.Interfaces.ITenantContext tenantContext,
+            IAuditService auditService)
         {
-            _userManager = userManager;
             _studentRepository = studentRepository;
-            _unitOfWork = unitOfWork;
+            _userManager = userManager;
+            _tenantContext = tenantContext;
             _auditService = auditService;
-            _logger = logger;
         }
 
         public async Task<StudentDto> Handle(CreateStudentCommand request, CancellationToken cancellationToken)
         {
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+            // Check if email already exists
+            var existingUser = await _userManager.GetUserByEmailAsync(request.Email);
             if (existingUser != null)
             {
-                throw new ConflictException("Student", "Email", request.Email);
+                throw new ConflictException("User with this email already exists");
             }
 
-            var user = new User
+            // Create user account. If no password was supplied (administrative
+            // student creation), generate a random secure default password so
+            // the user account can be created successfully. The user can then
+            // use the forgot-password flow to set their own password.
+            var password = string.IsNullOrWhiteSpace(request.Password)
+                ? GenerateDefaultPassword()
+                : request.Password;
+
+            var username = $"{request.FirstName.ToLower()}.{request.LastName.ToLower()}{new Random().Next(100, 999)}";
+            var user = await _userManager.CreateUserAsync(username, request.Email, password, "Student");
+
+            // Sync the User's name fields with the Student's names. UserManagerService
+            // creates users with empty FirstName/LastName, but GetStudent/GetCurrentUser
+            // read names from the User entity, so without this sync the returned
+            // names would be blank.
+            if (user != null)
+            {
+                user.FirstName = request.FirstName;
+                user.LastName = request.LastName;
+                user.PhoneNumber = request.PhoneNumber;
+                user.Email = request.Email;
+                await _userManager.UpdateUserAsync(user);
+            }
+
+            // Create student
+            var student = new Student
             {
                 FirstName = request.FirstName,
                 LastName = request.LastName,
                 Email = request.Email,
-                UserName = request.Email,
                 PhoneNumber = request.PhoneNumber,
-                Organization = request.Organization,
-                IsActive = true,
-                IsEmailVerified = false
-            };
-
-            var createResult = await _userManager.CreateUserAsync(user, "DefaultPassword123!");
-            if (!createResult.Succeeded)
-            {
-                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
-                throw new ValidationException($"User creation failed: {errors}");
-            }
-
-            await _userManager.AddToRoleAsync(user, "Student");
-
-            var student = new Student
-            {
-                UserId = user.Id,
-                StudentNumber = GenerateStudentNumber(),
-                DateOfBirth = request.DateOfBirth,
-                Gender = request.Gender,
                 Address = request.Address,
+                DateOfBirth = request.DateOfBirth,
                 ProgrammeId = request.ProgrammeId,
-                EnrollmentDate = DateTime.UtcNow,
-                IsEnrolled = true,
-                AcademicStatus = "Active",
-                EmergencyContactName = request.EmergencyContactName,
-                EmergencyContactPhone = request.EmergencyContactPhone,
-                EmergencyContactRelation = request.EmergencyContactRelation
+                CurrentSemesterId = request.CurrentSemesterId,
+                StudentNumber = request.StudentNumber ?? $"STU{DateTime.UtcNow:yyyyMMdd}{new Random().Next(1000, 9999)}",
+                UserId = user.Id,
+                IsActive = true,
+                TenantId = Guid.Parse(_tenantContext.TenantId)
             };
 
-            await _studentRepository.AddAsync(student, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            var createdStudent = await _studentRepository.AddAsync(student, cancellationToken);
 
-            await _auditService.LogAsync("Student", "Create", student.Id, null, $"Student Number: {student.StudentNumber}");
-
-            _logger.LogInformation("Student created: {StudentNumber} - {Email}", student.StudentNumber, request.Email);
+            await _auditService.LogAsync("Create", "Student", $"Student created: {createdStudent.StudentNumber}");
 
             return new StudentDto
             {
-                Id = student.Id,
-                UserId = user.Id,
-                StudentNumber = student.StudentNumber,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email ?? string.Empty,
-                PhoneNumber = user.PhoneNumber ?? string.Empty,
-                DateOfBirth = student.DateOfBirth,
-                Gender = student.Gender,
-                Address = student.Address,
-                EnrollmentDate = student.EnrollmentDate,
-                ProgrammeId = student.ProgrammeId,
-                AcademicStatus = student.AcademicStatus,
-                IsEnrolled = student.IsEnrolled,
-                CreatedDate = student.CreatedDate
+                Id = createdStudent.Id,
+                UserId = createdStudent.UserId,
+                StudentNumber = createdStudent.StudentNumber,
+                FirstName = createdStudent.FirstName,
+                LastName = createdStudent.LastName,
+                Email = createdStudent.Email,
+                PhoneNumber = createdStudent.PhoneNumber,
+                Address = createdStudent.Address,
+                ProgrammeId = createdStudent.ProgrammeId,
+                IsActive = createdStudent.IsActive
             };
         }
 
-        private string GenerateStudentNumber()
+        /// <summary>
+        /// Generates a cryptographically strong random default password
+        /// (e.g., for administrative student creation when no password is supplied).
+        /// The generated password satisfies the Identity password policy
+        /// (digit, lowercase, uppercase, min 8 characters).
+        /// </summary>
+        private static string GenerateDefaultPassword()
         {
-            var year = DateTime.UtcNow.Year;
-            var sequence = DateTime.UtcNow.Ticks.ToString().Substring(10, 5);
-            return $"STU-{year}-{sequence}";
+            const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            const string lower = "abcdefghijkmnopqrstuvwxyz";
+            const string digits = "23456789";
+            const string all = upper + lower + digits;
+
+            var bytes = RandomNumberGenerator.GetBytes(12);
+            var chars = new char[12];
+
+            // Ensure at least one char from each required category.
+            chars[0] = upper[bytes[0] % upper.Length];
+            chars[1] = lower[bytes[1] % lower.Length];
+            chars[2] = digits[bytes[2] % digits.Length];
+
+            for (int i = 3; i < chars.Length; i++)
+            {
+                chars[i] = all[bytes[i] % all.Length];
+            }
+
+            // Shuffle to avoid a predictable prefix pattern.
+            RandomNumberGenerator.Shuffle(chars);
+            return new string(chars);
         }
     }
 }

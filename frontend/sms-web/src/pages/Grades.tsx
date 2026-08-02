@@ -13,37 +13,26 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  TableSortLabel,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   FormControl,
   InputLabel,
   Select,
+  MenuItem,
   Grid,
   Alert,
   IconButton,
-  LinearProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
-  Visibility as ViewIcon,
-  Edit as EditIcon,
-  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { gradeService } from '../services/grade.service';
-import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 export const Grades: React.FC = () => {
-  const { user } = useAuth();
-
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,12 +67,6 @@ export const Grades: React.FC = () => {
     if (e.key === 'Enter') {
       handleSearch();
     }
-  };
-
-  const handleSort = (property: string) => {
-    const isAsc = orderBy === property && orderDirection === 'asc';
-    setOrderDirection(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {

@@ -1,71 +1,48 @@
-using SMS.Domain.Entities;
+using Microsoft.AspNetCore.Http;
 using SMS.Domain.Interfaces;
+using MultitenancyInterfaces = SMS.Multitenancy.Interfaces;
 
 namespace SMS.Infrastructure.MultiTenancy
 {
-    public class TenantContext : ITenantContext
+    public class TenantContext : ITenantContext, MultitenancyInterfaces.ITenantContext
     {
-        private readonly ITenantResolver _tenantResolver;
-        private Tenant? _currentTenant;
-        private readonly object _lock = new object();
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public TenantContext(ITenantResolver tenantResolver)
+        public string TenantId { get; private set; } = string.Empty;
+        public string TenantName { get; private set; } = string.Empty;
+        public string ConnectionString { get; private set; } = string.Empty;
+
+        public TenantContext(IHttpContextAccessor httpContextAccessor)
         {
-            _tenantResolver = tenantResolver;
+            _httpContextAccessor = httpContextAccessor;
+            PopulateFromHttpContext();
         }
 
-        public async Task<Tenant?> GetCurrentTenantAsync()
+        private void PopulateFromHttpContext()
         {
-            if (_currentTenant != null)
-                return _currentTenant;
-
-            lock (_lock)
+            var context = _httpContextAccessor.HttpContext;
+            if (context == null)
             {
-                if (_currentTenant != null)
-                    return _currentTenant;
+                return;
             }
 
-            var tenant = await _tenantResolver.GetTenantAsync();
-            if (tenant != null)
+            if (context.Items.TryGetValue("TenantId", out var tenantIdObj) && tenantIdObj is Guid tenantGuid)
             {
-                lock (_lock)
-                {
-                    _currentTenant = tenant;
-                }
+                TenantId = tenantGuid.ToString();
+            }
+            else if (context.Items.TryGetValue("TenantId", out var tenantIdStringObj) && tenantIdStringObj is string tenantIdString)
+            {
+                TenantId = tenantIdString;
             }
 
-            return tenant;
-        }
-
-        public async Task<Guid> GetCurrentTenantIdAsync()
-        {
-            var tenant = await GetCurrentTenantAsync();
-            return tenant?.Id ?? Guid.Empty;
-        }
-
-        public async Task<string?> GetCurrentTenantNameAsync()
-        {
-            var tenant = await GetCurrentTenantAsync();
-            return tenant?.Name;
-        }
-
-        public async Task<string?> GetCurrentTenantSubdomainAsync()
-        {
-            var tenant = await GetCurrentTenantAsync();
-            return tenant?.Subdomain;
-        }
-
-        public async Task<bool> IsTenantActiveAsync()
-        {
-            var tenant = await GetCurrentTenantAsync();
-            return tenant?.IsActive ?? false;
-        }
-
-        public void ClearCache()
-        {
-            lock (_lock)
+            if (context.Items.TryGetValue("TenantName", out var tenantNameObj) && tenantNameObj is string tenantName)
             {
-                _currentTenant = null;
+                TenantName = tenantName;
+            }
+
+            if (context.Items.TryGetValue("TenantConnectionString", out var connectionStringObj) && connectionStringObj is string connectionString)
+            {
+                ConnectionString = connectionString;
             }
         }
     }

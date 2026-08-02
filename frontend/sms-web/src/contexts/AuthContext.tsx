@@ -11,6 +11,10 @@ interface User {
   roles: string[];
   tenantId: string;
   permissions: string[];
+  isEmailVerified?: boolean;
+  isActive?: boolean;
+  lastLoginDate?: string;
+  createdAt?: string;
 }
 
 interface AuthContextType {

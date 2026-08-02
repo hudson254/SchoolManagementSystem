@@ -1,27 +1,28 @@
-using MediatR;
 using FluentValidation;
+using MediatR;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
+using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
+using SMS.Multitenancy.Interfaces;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SMS.Application.Features.Students.Commands
 {
     public class UpdateStudentCommand : IRequest<StudentDto>
     {
         public Guid Id { get; set; }
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
-        public string PhoneNumber { get; set; } = string.Empty;
-        public DateTime DateOfBirth { get; set; }
-        public string? Gender { get; set; }
-        public string? Address { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Address { get; set; }
+        public DateTime? DateOfBirth { get; set; }
         public Guid? ProgrammeId { get; set; }
-        public string? AcademicStatus { get; set; }
-        public bool IsEnrolled { get; set; }
-        public string? EmergencyContactName { get; set; }
-        public string? EmergencyContactPhone { get; set; }
-        public string? EmergencyContactRelation { get; set; }
+        public Guid? CurrentSemesterId { get; set; }
+        public bool IsActive { get; set; }
     }
 
     public class UpdateStudentCommandValidator : AbstractValidator<UpdateStudentCommand>
@@ -32,21 +33,10 @@ namespace SMS.Application.Features.Students.Commands
                 .NotEmpty().WithMessage("Student ID is required");
 
             RuleFor(x => x.FirstName)
-                .NotEmpty().WithMessage("First name is required")
-                .MaximumLength(100);
+                .NotEmpty().WithMessage("First name is required");
 
             RuleFor(x => x.LastName)
-                .NotEmpty().WithMessage("Last name is required")
-                .MaximumLength(100);
-
-            RuleFor(x => x.PhoneNumber)
-                .NotEmpty().WithMessage("Phone number is required")
-                .MaximumLength(20);
-
-            RuleFor(x => x.DateOfBirth)
-                .NotEmpty().WithMessage("Date of birth is required")
-                .LessThan(DateTime.UtcNow.AddYears(-16))
-                .WithMessage("Student must be at least 16 years old");
+                .NotEmpty().WithMessage("Last name is required");
         }
     }
 
@@ -54,22 +44,16 @@ namespace SMS.Application.Features.Students.Commands
     {
         private readonly IStudentRepository _studentRepository;
         private readonly IUserManagerService _userManager;
-        private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
-        private readonly ILogger<UpdateStudentCommandHandler> _logger;
 
         public UpdateStudentCommandHandler(
             IStudentRepository studentRepository,
             IUserManagerService userManager,
-            IUnitOfWork unitOfWork,
-            IAuditService auditService,
-            ILogger<UpdateStudentCommandHandler> logger)
+            IAuditService auditService)
         {
             _studentRepository = studentRepository;
             _userManager = userManager;
-            _unitOfWork = unitOfWork;
             _auditService = auditService;
-            _logger = logger;
         }
 
         public async Task<StudentDto> Handle(UpdateStudentCommand request, CancellationToken cancellationToken)
@@ -80,48 +64,37 @@ namespace SMS.Application.Features.Students.Commands
                 throw new NotFoundException("Student", request.Id);
             }
 
-            var user = student.User;
+            // Update properties
+            student.FirstName = request.FirstName ?? student.FirstName;
+            student.LastName = request.LastName ?? student.LastName;
+            student.PhoneNumber = request.PhoneNumber ?? student.PhoneNumber;
+            student.Address = request.Address ?? student.Address;
+            if (request.DateOfBirth.HasValue)
+                student.DateOfBirth = request.DateOfBirth.Value;
+            if (request.ProgrammeId.HasValue)
+                student.ProgrammeId = request.ProgrammeId.Value;
+            if (request.CurrentSemesterId.HasValue)
+                student.CurrentSemesterId = request.CurrentSemesterId.Value;
+            student.IsActive = request.IsActive;
 
-            user.FirstName = request.FirstName;
-            user.LastName = request.LastName;
-            user.PhoneNumber = request.PhoneNumber;
+            await _studentRepository.UpdateAsync(student, cancellationToken);
 
-            student.DateOfBirth = request.DateOfBirth;
-            student.Gender = request.Gender;
-            student.Address = request.Address;
-            student.ProgrammeId = request.ProgrammeId;
-            student.AcademicStatus = request.AcademicStatus ?? student.AcademicStatus;
-            student.IsEnrolled = request.IsEnrolled;
-            student.EmergencyContactName = request.EmergencyContactName;
-            student.EmergencyContactPhone = request.EmergencyContactPhone;
-            student.EmergencyContactRelation = request.EmergencyContactRelation;
-
-            _studentRepository.Update(student);
-            await _userManager.UpdateUserAsync(user);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            await _auditService.LogAsync("Student", "Update", student.Id, null, $"Updated student: {student.StudentNumber}");
-
-            _logger.LogInformation("Student updated: {StudentNumber}", student.StudentNumber);
+            await _auditService.LogAsync("Update", "Student", $"Student updated: {student.StudentNumber}");
 
             return new StudentDto
             {
                 Id = student.Id,
-                UserId = user.Id,
+                UserId = student.UserId,
                 StudentNumber = student.StudentNumber,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email ?? string.Empty,
-                PhoneNumber = user.PhoneNumber ?? string.Empty,
-                DateOfBirth = student.DateOfBirth,
-                Gender = student.Gender,
+                FirstName = student.FirstName,
+                LastName = student.LastName,
+                Email = student.Email,
+                PhoneNumber = student.PhoneNumber,
                 Address = student.Address,
-                EnrollmentDate = student.EnrollmentDate,
                 ProgrammeId = student.ProgrammeId,
-                AcademicStatus = student.AcademicStatus,
-                IsEnrolled = student.IsEnrolled,
-                CreatedDate = student.CreatedDate
+                IsActive = student.IsActive
             };
         }
     }
 }
+

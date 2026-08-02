@@ -1,9 +1,10 @@
-using MediatR;
 using FluentValidation;
-using SMS.Application.Exceptions;
-using SMS.Domain.Entities;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Students.Commands
 {
     public class EnrollStudentCommand : IRequest
@@ -67,20 +68,17 @@ namespace SMS.Application.Features.Students.Commands
                 throw new NotFoundException("Unit", request.UnitId);
             }
 
-            var existingEnrollment = await _enrollmentRepository.GetEnrollmentAsync(
-                request.StudentId,
-                request.UnitId,
-                request.SemesterId,
-                cancellationToken);
+            var existingEnrollment = await _enrollmentRepository.GetEnrollmentAsync(request.StudentId, request.UnitId, cancellationToken);
 
             if (existingEnrollment != null)
             {
                 throw new ConflictException("Enrollment", "Student-Unit-Semester", $"{request.StudentId}-{request.UnitId}-{request.SemesterId}");
             }
 
-            var enrollment = new StudentEnrollment
+            var enrollment = new SMS.Domain.Entities.Enrollment
             {
                 StudentId = request.StudentId,
+                CourseId = unit.CourseId,
                 UnitId = request.UnitId,
                 SemesterId = request.SemesterId,
                 EnrollmentDate = DateTime.UtcNow,
@@ -90,7 +88,7 @@ namespace SMS.Application.Features.Students.Commands
             await _enrollmentRepository.AddAsync(enrollment, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Enrollment", "Create", enrollment.Id, null, $"Student: {student.StudentNumber}, Unit: {unit.Code}");
+            await _auditService.LogAsync("Enroll", "Enrollment", $"Student {student.StudentNumber} enrolled in Unit {unit.Code}");
 
             _logger.LogInformation("Student {StudentNumber} enrolled in {UnitCode}", student.StudentNumber, unit.Code);
         }

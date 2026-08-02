@@ -1,9 +1,18 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using FluentValidation;
 using SMS.Application;
 using SMS.Persistence;
+using SMS.Persistence.Data;
+using SMS.Persistence.Repositories;
 using SMS.Identity;
+using SMS.Identity.Services;
 using SMS.Infrastructure;
+using SMS.Infrastructure.Services;
+using SMS.Infrastructure.MultiTenancy;
+using SMS.Domain.Interfaces;
+using SMS.Application.Common;
 
 namespace SMS.API.Extensions
 {
@@ -21,9 +30,6 @@ namespace SMS.API.Extensions
 
             // Add FluentValidation
             services.AddValidatorsFromAssembly(typeof(SMS.Application.DependencyInjection).Assembly);
-
-            // Add AutoMapper
-            services.AddAutoMapper(typeof(SMS.Application.DependencyInjection).Assembly);
 
             return services;
         }
@@ -51,12 +57,9 @@ namespace SMS.API.Extensions
         }
 
         public static IServiceCollection AddInfrastructureServices(
-            this IServiceCollection services,
-            IConfiguration configuration)
+                    this IServiceCollection services,
+                    IConfiguration configuration)
         {
-            services.AddScoped<ITenantResolver, TenantResolver>();
-            services.AddScoped<IEmailService, EmailService>();
-            services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<IAuditService, AuditService>();
 
             return services;
@@ -67,8 +70,7 @@ namespace SMS.API.Extensions
             IConfiguration configuration)
         {
             services.AddScoped<IJwtService, JwtService>();
-            services.AddScoped<IUserManagerService, UserManagerService>();
-            services.AddScoped<IRoleManagerService, RoleManagerService>();
+            services.AddScoped<Domain.Interfaces.IUserManagerService, SMS.Identity.Services.UserManagerService>();
 
             return services;
         }

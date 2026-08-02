@@ -1,13 +1,11 @@
+using SMS.Domain.Interfaces;
+
 namespace SMS.Application.Common.Interfaces
 {
-    public interface ICurrentUserService
+    /// <summary>
+    /// Re-exports the domain ICurrentUserService for Application layer use.
+    /// </summary>
+    public interface ICurrentUserService : SMS.Domain.Interfaces.ICurrentUserService
     {
-        string? GetUserId();
-        string? GetUserEmail();
-        string? GetUserRole();
-        bool IsAuthenticated();
-        bool IsInRole(string role);
-        bool HasPermission(string permission);
-        Guid GetTenantId();
     }
 }

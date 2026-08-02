@@ -1,238 +1,100 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
 
 namespace SMS.Persistence.Repositories
 {
-    public class StudentRepository : IStudentRepository
+    public class StudentRepository : BaseRepository<Student>, IStudentRepository
     {
-        private readonly ApplicationDbContext _context;
-
-        public StudentRepository(ApplicationDbContext context)
+        public StudentRepository(ApplicationDbContext context, ILogger<StudentRepository> logger)
+            : base(context, logger)
         {
-            _context = context;
         }
 
-        public async Task<Student?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        public async Task<Student> GetStudentByEmailAsync(string email)
         {
-            return await _context.Students
-                .Include(s => s.User)
-                .Include(s => s.Programme)
-                .Include(s => s.CurrentSemester)
-                .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted, cancellationToken);
+            return await _dbSet.FirstOrDefaultAsync(s => s.Email == email && !s.IsDeleted);
         }
 
-        public async Task<IEnumerable<Student>> GetAllAsync(CancellationToken cancellationToken = default)
+        public async Task<Student> GetStudentByStudentNumberAsync(string studentNumber)
         {
-            return await _context.Students
-                .Include(s => s.User)
-                .Include(s => s.Programme)
-                .Where(s => !s.IsDeleted)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.FirstOrDefaultAsync(s => s.StudentNumber == studentNumber && !s.IsDeleted);
         }
 
-        public async Task<IEnumerable<Student>> FindAsync(Expression<Func<Student, bool>> predicate, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Student>> GetStudentsByCourseAsync(Guid courseId)
         {
-            return await _context.Students
-                .Include(s => s.User)
-                .Include(s => s.Programme)
-                .Where(s => !s.IsDeleted)
-                .Where(predicate)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.Where(s => s.Enrollments.Any(e => e.CourseId == courseId) && !s.IsDeleted).ToListAsync();
         }
 
-        public async Task<Student> AddAsync(Student entity, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Student>> GetStudentsByDepartmentAsync(Guid departmentId)
         {
-            await _context.Students.AddAsync(entity, cancellationToken);
-            return entity;
+            return await _dbSet.Where(s => s.Programme.DepartmentId == departmentId && !s.IsDeleted).ToListAsync();
         }
 
-        public async Task<IEnumerable<Student>> AddRangeAsync(IEnumerable<Student> entities, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Student>> GetActiveStudentsAsync()
         {
-            await _context.Students.AddRangeAsync(entities, cancellationToken);
-            return entities;
+            return await _dbSet.Where(s => s.IsActive && !s.IsDeleted).ToListAsync();
         }
 
-        public Task UpdateAsync(Student entity, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Student>> GetGraduatingStudentsAsync()
         {
-            _context.Students.Update(entity);
-            return Task.CompletedTask;
+            return await _dbSet.Where(s => s.AcademicStatus == "Graduating" && !s.IsDeleted).ToListAsync();
         }
 
-        public async Task DeleteAsync(Student entity, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Student>> SearchStudentsAsync(string searchTerm)
         {
-            entity.SoftDelete("SYSTEM");
-            _context.Students.Update(entity);
-            await Task.CompletedTask;
+            return await _dbSet.Where(s =>
+                (s.FirstName + " " + s.LastName).Contains(searchTerm) ||
+                s.StudentNumber.Contains(searchTerm) ||
+                s.Email.Contains(searchTerm)
+            ).ToListAsync();
         }
 
-        public async Task<bool> ExistsAsync(Expression<Func<Student, bool>> predicate, CancellationToken cancellationToken = default)
+        public async Task<bool> IsStudentNumberUniqueAsync(string studentNumber, Guid? excludeId = null)
         {
-            return await _context.Students.AnyAsync(predicate, cancellationToken);
+            if (excludeId.HasValue)
+                return !await _dbSet.AnyAsync(s => s.StudentNumber == studentNumber && s.Id != excludeId.Value && !s.IsDeleted);
+            return !await _dbSet.AnyAsync(s => s.StudentNumber == studentNumber && !s.IsDeleted);
         }
 
-        public async Task<int> CountAsync(Expression<Func<Student, bool>>? predicate = null, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Student>> GetStudentsWithEnrollmentsAsync()
         {
-            var query = _context.Students.Where(s => !s.IsDeleted);
-            if (predicate != null)
-                query = query.Where(predicate);
-            return await query.CountAsync(cancellationToken);
+            return await _dbSet.Include(s => s.Enrollments).Where(s => !s.IsDeleted).ToListAsync();
         }
 
-        public async Task<Student?> GetStudentWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
+        public async Task<Student> GetStudentWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            return await _context.Students
+            return await _dbSet
                 .Include(s => s.User)
                 .Include(s => s.Programme)
                 .Include(s => s.CurrentSemester)
                 .Include(s => s.Enrollments)
-                    .ThenInclude(e => e.Unit)
-                .Include(s => s.Enrollments)
-                    .ThenInclude(e => e.Semester)
                 .Include(s => s.Grades)
-                    .ThenInclude(g => g.Enrollment)
-                        .ThenInclude(e => e.Unit)
-                .Include(s => s.Grades)
-                    .ThenInclude(g => g.Enrollment)
-                        .ThenInclude(e => e.Semester)
-                .Include(s => s.AccommodationAssignment)
-                    .ThenInclude(a => a.Room)
-                        .ThenInclude(r => r.Block)
-                            .ThenInclude(b => b.Building)
+.Include(s => s.Attendances)
                 .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted, cancellationToken);
+        }
+
+        public async Task<int> CountStudentsAsync(CancellationToken cancellationToken = default)
+        {
+            return await _dbSet.CountAsync(s => !s.IsDeleted, cancellationToken);
         }
 
         public async Task<IEnumerable<Student>> GetStudentsByProgrammeAsync(Guid programmeId, CancellationToken cancellationToken = default)
         {
-            return await _context.Students
-                .Include(s => s.User)
-                .Where(s => s.ProgrammeId == programmeId && !s.IsDeleted)
-                .ToListAsync(cancellationToken);
+            return await _dbSet.Where(s => s.ProgrammeId == programmeId && !s.IsDeleted).ToListAsync(cancellationToken);
         }
 
         public async Task<IEnumerable<Student>> GetStudentsBySemesterAsync(Guid semesterId, CancellationToken cancellationToken = default)
         {
-            return await _context.Students
-                .Include(s => s.User)
-                .Where(s => s.CurrentSemesterId == semesterId && !s.IsDeleted)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<Student?> GetStudentByNumberAsync(string studentNumber, CancellationToken cancellationToken = default)
-        {
-            return await _context.Students
-                .Include(s => s.User)
-                .FirstOrDefaultAsync(s => s.StudentNumber == studentNumber && !s.IsDeleted, cancellationToken);
-        }
-
-        public async Task<IEnumerable<Student>> GetActiveStudentsAsync(CancellationToken cancellationToken = default)
-        {
-            return await _context.Students
-                .Include(s => s.User)
-                .Where(s => s.IsEnrolled && s.AcademicStatus == "Active" && !s.IsDeleted)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<Student>> GetGraduatedStudentsAsync(CancellationToken cancellationToken = default)
-        {
-            return await _context.Students
-                .Include(s => s.User)
-                .Where(s => s.AcademicStatus == "Graduated" && !s.IsDeleted)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<Student>> GetStudentsWithPendingEnrollmentsAsync(CancellationToken cancellationToken = default)
-        {
-            return await _context.Students
-                .Include(s => s.User)
-                .Where(s => s.Enrollments.Any(e => e.Status == "Enrolled" || e.Status == "InProgress") && !s.IsDeleted)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<Student>> GetStudentsAsync(
-            int page,
-            int pageSize,
-            string? searchTerm,
-            string? academicStatus,
-            Guid? programmeId,
-            bool? isEnrolled,
-            string sortBy,
-            bool sortDescending,
-            CancellationToken cancellationToken = default)
-        {
-            var query = _context.Students
-                .Include(s => s.User)
-                .Include(s => s.Programme)
-                .Where(s => !s.IsDeleted);
-
-            if (!string.IsNullOrEmpty(searchTerm))
-            {
-                query = query.Where(s =>
-                    s.StudentNumber.Contains(searchTerm) ||
-                    s.User.FirstName.Contains(searchTerm) ||
-                    s.User.LastName.Contains(searchTerm) ||
-                    s.User.Email.Contains(searchTerm));
-            }
-
-            if (!string.IsNullOrEmpty(academicStatus))
-                query = query.Where(s => s.AcademicStatus == academicStatus);
-
-            if (programmeId.HasValue)
-                query = query.Where(s => s.ProgrammeId == programmeId.Value);
-
-            if (isEnrolled.HasValue)
-                query = query.Where(s => s.IsEnrolled == isEnrolled.Value);
-
-            query = sortDescending
-                ? query.OrderByDescending(GetSortExpression(sortBy))
-                : query.OrderBy(GetSortExpression(sortBy));
-
-            return await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<int> CountStudentsAsync(
-            string? searchTerm,
-            string? academicStatus,
-            Guid? programmeId,
-            bool? isEnrolled,
-            CancellationToken cancellationToken = default)
-        {
-            var query = _context.Students.Where(s => !s.IsDeleted);
-
-            if (!string.IsNullOrEmpty(searchTerm))
-            {
-                query = query.Where(s =>
-                    s.StudentNumber.Contains(searchTerm) ||
-                    s.User.FirstName.Contains(searchTerm) ||
-                    s.User.LastName.Contains(searchTerm) ||
-                    s.User.Email.Contains(searchTerm));
-            }
-
-            if (!string.IsNullOrEmpty(academicStatus))
-                query = query.Where(s => s.AcademicStatus == academicStatus);
-
-            if (programmeId.HasValue)
-                query = query.Where(s => s.ProgrammeId == programmeId.Value);
-
-            if (isEnrolled.HasValue)
-                query = query.Where(s => s.IsEnrolled == isEnrolled.Value);
-
-            return await query.CountAsync(cancellationToken);
-        }
-
-        private static Expression<Func<Student, object>> GetSortExpression(string sortBy)
-        {
-            return sortBy.ToLowerInvariant() switch
-            {
-                "name" => s => s.User.FirstName,
-                "studentnumber" => s => s.StudentNumber,
-                "enrollmentdate" => s => s.EnrollmentDate,
-                "createddate" => s => s.CreatedDate,
-                _ => s => s.CreatedDate
-            };
+            return await _dbSet.Where(s => s.CurrentSemesterId == semesterId && !s.IsDeleted).ToListAsync(cancellationToken);
         }
     }
 }
+

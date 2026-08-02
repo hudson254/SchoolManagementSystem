@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using FluentValidation.TestHelper;
 using Moq;
+using Microsoft.Extensions.Logging;
 using SMS.Application.Exceptions;
 using SMS.Application.Features.Courses.Commands;
 using SMS.Domain.Entities;
@@ -167,8 +168,8 @@ namespace SMS.UnitTests.Courses
                 .ReturnsAsync(department);
 
             _courseRepositoryMock
-                .Setup(x => x.AddAsync(It.IsAny<Course>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Course c, CancellationToken ct) => c);
+                            .Setup(x => x.AddAsync(It.IsAny<Course>(), It.IsAny<CancellationToken>()))
+                            .ReturnsAsync((Course c, CancellationToken ct) => c);
 
             var handler = new CreateCourseCommandHandler(
                 _courseRepositoryMock.Object,
@@ -192,3 +193,4 @@ namespace SMS.UnitTests.Courses
         }
     }
 }
+

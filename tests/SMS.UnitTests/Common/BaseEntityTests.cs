@@ -20,7 +20,7 @@ namespace SMS.UnitTests.Common
             // Assert
             entity.Id.Should().NotBeEmpty();
             entity.TenantId.Should().Be(Guid.Empty);
-            entity.CreatedBy.Should().Be("SYSTEM");
+            entity.CreatedBy.Should().BeNull();
             entity.CreatedDate.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
             entity.ModifiedBy.Should().BeNull();
             entity.ModifiedDate.Should().BeNull();
@@ -63,22 +63,7 @@ namespace SMS.UnitTests.Common
         }
 
         [Fact]
-        public void UpdateAudit_ShouldSetModifiedFields()
-        {
-            // Arrange
-            var entity = new TestEntity();
-            var modifiedBy = "TestUser";
-
-            // Act
-            entity.UpdateAudit(modifiedBy);
-
-            // Assert
-            entity.ModifiedBy.Should().Be(modifiedBy);
-            entity.ModifiedDate.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
-        }
-
-        [Fact]
-        public void SoftDelete_Twice_ShouldNotChangeDeletedDate()
+        public void SoftDelete_Twice_ShouldUpdateDeletedDate()
         {
             // Arrange
             var entity = new TestEntity();

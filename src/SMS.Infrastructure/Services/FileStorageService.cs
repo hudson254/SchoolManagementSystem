@@ -1,5 +1,10 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SMS.Domain.Interfaces;
 using SMS.Infrastructure.Options;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace SMS.Infrastructure.Services
 {
@@ -8,123 +13,116 @@ namespace SMS.Infrastructure.Services
         private readonly FileStorageOptions _options;
         private readonly ILogger<FileStorageService> _logger;
 
-        public FileStorageService(
-            IOptions<FileStorageOptions> options,
-            ILogger<FileStorageService> logger)
+        public FileStorageService(IOptions<FileStorageOptions> options, ILogger<FileStorageService> logger)
         {
             _options = options.Value;
             _logger = logger;
         }
 
-        public async Task<string> SaveFileAsync(byte[] content, string fileName, string container)
+        public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string container = null)
         {
             try
             {
-                var basePath = Path.Combine(_options.Path, container);
-                if (!Directory.Exists(basePath))
+                var basePath = _options.Path ?? "uploads";
+                var containerPath = string.IsNullOrEmpty(container) ? basePath : Path.Combine(basePath, container);
+
+                if (!Directory.Exists(containerPath))
                 {
-                    Directory.CreateDirectory(basePath);
+                    Directory.CreateDirectory(containerPath);
                 }
 
-                var safeFileName = $"{Guid.NewGuid()}_{Path.GetFileName(fileName)}";
-                var filePath = Path.Combine(basePath, safeFileName);
+                var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+                var filePath = Path.Combine(containerPath, uniqueFileName);
 
-                await File.WriteAllBytesAsync(filePath, content);
+                using (var fileStreamOutput = new FileStream(filePath, FileMode.Create))
+                {
+                    await fileStream.CopyToAsync(fileStreamOutput);
+                }
 
-                _logger.LogInformation("File saved: {FilePath}", filePath);
-                return Path.Combine(container, safeFileName);
+                _logger.LogInformation("File uploaded: {FileName} to {Container}", fileName, container ?? "root");
+                return Path.Combine(container ?? "", uniqueFileName).Replace('\\', '/');
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to save file: {FileName}", fileName);
+                _logger.LogError(ex, "Failed to upload file: {FileName}", fileName);
                 throw;
+            }
+        }
+
+        public async Task<Stream> DownloadFileAsync(string filePath)
+        {
+            try
+            {
+                var basePath = _options.Path ?? "uploads";
+                var fullPath = Path.Combine(basePath, filePath.Replace('/', '\\'));
+
+                if (!File.Exists(fullPath))
+                {
+                    throw new FileNotFoundException($"File not found: {filePath}");
+                }
+
+                var memoryStream = new MemoryStream();
+                using (var fileStream = new FileStream(fullPath, FileMode.Open))
+                {
+                    await fileStream.CopyToAsync(memoryStream);
+                }
+
+                memoryStream.Position = 0;
+                return memoryStream;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to download file: {FilePath}", filePath);
+                throw;
+            }
+        }
+
+        public async Task<bool> DeleteFileAsync(string filePath)
+        {
+            try
+            {
+                var basePath = _options.Path ?? "uploads";
+                var fullPath = Path.Combine(basePath, filePath.Replace('/', '\\'));
+
+                if (File.Exists(fullPath))
+                {
+                    File.Delete(fullPath);
+                    _logger.LogInformation("File deleted: {FilePath}", filePath);
+                    return await Task.FromResult(true);
+                }
+
+                return await Task.FromResult(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete file: {FilePath}", filePath);
+                return false;
+            }
+        }
+
+        public async Task<string> GetFileUrlAsync(string filePath)
+        {
+            return await Task.FromResult($"/uploads/{filePath}");
+        }
+
+        public async Task<string> SaveFileAsync(byte[] fileBytes, string fileName, string container = null)
+        {
+            using (var stream = new MemoryStream(fileBytes))
+            {
+                return await UploadFileAsync(stream, fileName, container);
             }
         }
 
         public async Task<byte[]> GetFileAsync(string filePath)
         {
-            try
+            using (var stream = await DownloadFileAsync(filePath))
             {
-                var fullPath = Path.Combine(_options.Path, filePath);
-                if (!File.Exists(fullPath))
+                using (var memoryStream = new MemoryStream())
                 {
-                    _logger.LogWarning("File not found: {FilePath}", fullPath);
-                    return Array.Empty<byte>();
-                }
-
-                return await File.ReadAllBytesAsync(fullPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to read file: {FilePath}", filePath);
-                throw;
-            }
-        }
-
-        public async Task DeleteFileAsync(string filePath)
-        {
-            try
-            {
-                var fullPath = Path.Combine(_options.Path, filePath);
-                if (File.Exists(fullPath))
-                {
-                    File.Delete(fullPath);
-                    _logger.LogInformation("File deleted: {FilePath}", fullPath);
+                    await stream.CopyToAsync(memoryStream);
+                    return memoryStream.ToArray();
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete file: {FilePath}", filePath);
-                throw;
-            }
-        }
-
-        public bool FileExists(string filePath)
-        {
-            var fullPath = Path.Combine(_options.Path, filePath);
-            return File.Exists(fullPath);
-        }
-
-        public async Task<string> GetFileUrlAsync(string filePath)
-        {
-            return $"/api/files/{filePath.Replace("\\", "/")}";
-        }
-
-        public bool IsValidFileExtension(string fileName)
-        {
-            var extension = Path.GetExtension(fileName).ToLowerInvariant();
-            return _options.AllowedExtensions.Contains(extension);
-        }
-
-        public bool IsFileSizeValid(long fileSize)
-        {
-            return fileSize <= _options.MaxFileSizeMB * 1024 * 1024;
-        }
-
-        public string GetFileExtension(string fileName)
-        {
-            return Path.GetExtension(fileName).ToLowerInvariant();
-        }
-
-        public string GetContentType(string fileName)
-        {
-            var extension = GetFileExtension(fileName);
-            return extension switch
-            {
-                ".pdf" => "application/pdf",
-                ".doc" => "application/msword",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ".xls" => "application/vnd.ms-excel",
-                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                ".ppt" => "application/vnd.ms-powerpoint",
-                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".gif" => "image/gif",
-                ".zip" => "application/zip",
-                ".txt" => "text/plain",
-                _ => "application/octet-stream"
-            };
         }
     }
 }

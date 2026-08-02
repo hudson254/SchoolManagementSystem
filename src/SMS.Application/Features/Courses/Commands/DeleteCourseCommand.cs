@@ -1,7 +1,10 @@
-using MediatR;
-using SMS.Application.Exceptions;
+using FluentValidation;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Courses.Commands
 {
     public class DeleteCourseCommand : IRequest
@@ -45,12 +48,19 @@ namespace SMS.Application.Features.Courses.Commands
                     "Course has active units. Please remove all units before deleting the course.");
             }
 
+            await _auditService.LogActivityAsync("Course", "Delete", course.Id.ToString(), request.CourseId.ToString());
             await _courseRepository.DeleteAsync(course, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Course", "Delete", course.Id, null, $"Course: {course.Code}");
+            await _auditService.LogActivityAsync("Course", "Delete", course.Id.ToString(), "Delete-Course");
 
             _logger.LogInformation("Course deleted: {CourseCode}", course.Code);
         }
     }
 }
+
+
+
+
+

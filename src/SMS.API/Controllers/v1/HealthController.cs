@@ -8,7 +8,6 @@ namespace SMS.API.Controllers.v1
     [ApiVersion("1.0")]
     [Route("api/[controller]")]
     [ApiController]
-    [AllowAnonymous]
     public class HealthController : ControllerBase
     {
         private readonly HealthCheckService _healthCheckService;
@@ -26,6 +25,7 @@ namespace SMS.API.Controllers.v1
         /// Get overall health status
         /// </summary>
         [HttpGet]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
         public async Task<IActionResult> Get()
@@ -55,6 +55,7 @@ namespace SMS.API.Controllers.v1
         /// Readiness probe for Kubernetes/Docker
         /// </summary>
         [HttpGet("ready")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
         public async Task<IActionResult> Ready()
@@ -67,6 +68,7 @@ namespace SMS.API.Controllers.v1
         /// Liveness probe for Kubernetes/Docker
         /// </summary>
         [HttpGet("live")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public IActionResult Live()
         {
@@ -127,6 +129,7 @@ namespace SMS.API.Controllers.v1
         /// Check database health
         /// </summary>
         [HttpGet("database")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
         public async Task<IActionResult> DatabaseHealth()

@@ -1,83 +1,48 @@
-using SMS.Domain.Entities;
-using SMS.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
+using SMS.Multitenancy.Interfaces;
+using System.Threading.Tasks;
 
 namespace SMS.Infrastructure.MultiTenancy
 {
     public class TenantResolver : ITenantResolver
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly ITenantStore _tenantStore;
-        private readonly ILogger<TenantResolver> _logger;
 
-        public TenantResolver(
-            IHttpContextAccessor httpContextAccessor,
-            ITenantStore tenantStore,
-            ILogger<TenantResolver> logger)
+        public TenantResolver(IHttpContextAccessor httpContextAccessor)
         {
             _httpContextAccessor = httpContextAccessor;
-            _tenantStore = tenantStore;
-            _logger = logger;
         }
 
-        public async Task<Guid> GetTenantIdAsync()
+        public async Task<string> GetTenantIdAsync()
         {
             var context = _httpContextAccessor.HttpContext;
+            if (context == null) return "default";
 
-            if (context == null)
-                return Guid.Empty;
-
-            // Try from JWT claim
-            var tenantIdClaim = context.User?.FindFirst("tenantId")?.Value;
-            if (!string.IsNullOrEmpty(tenantIdClaim) && Guid.TryParse(tenantIdClaim, out var tenantId))
-                return tenantId;
-
-            // Try from subdomain
-            var subdomain = GetTenantSubdomain();
-            if (!string.IsNullOrEmpty(subdomain))
+            if (context.Request.Headers.TryGetValue("X-Tenant-Id", out var tenantId))
             {
-                var tenant = await _tenantStore.GetTenantBySubdomainAsync(subdomain);
-                if (tenant != null)
-                    return tenant.Id;
+                return tenantId.ToString();
             }
 
-            // Try from header
-            if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader))
-            {
-                if (Guid.TryParse(tenantHeader, out var headerTenantId))
-                    return headerTenantId;
-            }
-
-            // Use default tenant for development
-            if (context.Request.Host.Host.Contains("localhost"))
-            {
-                var defaultTenant = await _tenantStore.GetDefaultTenantAsync();
-                if (defaultTenant != null)
-                    return defaultTenant.Id;
-            }
-
-            _logger.LogWarning("Tenant could not be resolved");
-            return Guid.Empty;
+            return "default";
         }
 
-        public async Task<Tenant?> GetTenantAsync()
+        public async Task<object> GetTenantAsync()
         {
             var tenantId = await GetTenantIdAsync();
-            if (tenantId == Guid.Empty)
-                return null;
-
-            return await _tenantStore.GetTenantByIdAsync(tenantId);
+            return new { Id = tenantId, Name = tenantId };
         }
 
-        public string? GetTenantSubdomain()
+        public string GetTenantSubdomain()
         {
-            var host = _httpContextAccessor.HttpContext?.Request.Host.Host;
-            if (string.IsNullOrEmpty(host))
-                return null;
+            var context = _httpContextAccessor.HttpContext;
+            if (context == null) return null;
 
+            var host = context.Request.Host.Host;
             var parts = host.Split('.');
-            if (parts.Length >= 2)
+            if (parts.Length > 2)
+            {
                 return parts[0];
+            }
 
             return null;
         }

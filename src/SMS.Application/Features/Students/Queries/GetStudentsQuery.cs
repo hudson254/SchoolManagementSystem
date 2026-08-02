@@ -1,83 +1,85 @@
 using MediatR;
+using SMS.Application.Common;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Domain.Interfaces;
+using SMS.Multitenancy.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SMS.Application.Features.Students.Queries
 {
     public class GetStudentsQuery : IRequest<PagedResult<StudentDto>>
     {
+        public string SearchTerm { get; set; }
+        public Guid? ProgrammeId { get; set; }
+        public Guid? SemesterId { get; set; }
+        public bool? IsActive { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
-        public string? SearchTerm { get; set; }
-        public string? AcademicStatus { get; set; }
-        public Guid? ProgrammeId { get; set; }
-        public bool? IsEnrolled { get; set; }
-        public string SortBy { get; set; } = "CreatedDate";
-        public bool SortDescending { get; set; } = false;
     }
 
     public class GetStudentsQueryHandler : IRequestHandler<GetStudentsQuery, PagedResult<StudentDto>>
     {
         private readonly IStudentRepository _studentRepository;
-        private readonly ILogger<GetStudentsQueryHandler> _logger;
 
-        public GetStudentsQueryHandler(
-            IStudentRepository studentRepository,
-            ILogger<GetStudentsQueryHandler> logger)
+        public GetStudentsQueryHandler(IStudentRepository studentRepository)
         {
             _studentRepository = studentRepository;
-            _logger = logger;
         }
 
         public async Task<PagedResult<StudentDto>> Handle(GetStudentsQuery request, CancellationToken cancellationToken)
         {
-            var students = await _studentRepository.GetStudentsAsync(
-                request.Page,
-                request.PageSize,
-                request.SearchTerm,
-                request.AcademicStatus,
-                request.ProgrammeId,
-                request.IsEnrolled,
-                request.SortBy,
-                request.SortDescending,
-                cancellationToken);
+            IEnumerable<Domain.Entities.Student> students;
 
-            var totalCount = await _studentRepository.CountStudentsAsync(
-                request.SearchTerm,
-                request.AcademicStatus,
-                request.ProgrammeId,
-                request.IsEnrolled,
-                cancellationToken);
-
-            var dtos = students.Select(s => new StudentDto
+            if (!string.IsNullOrEmpty(request.SearchTerm))
             {
-                Id = s.Id,
-                UserId = s.UserId,
-                StudentNumber = s.StudentNumber,
-                FirstName = s.User.FirstName,
-                LastName = s.User.LastName,
-                Email = s.User.Email ?? string.Empty,
-                PhoneNumber = s.User.PhoneNumber ?? string.Empty,
-                DateOfBirth = s.DateOfBirth,
-                Gender = s.Gender,
-                Address = s.Address,
-                EnrollmentDate = s.EnrollmentDate,
-                ProgrammeId = s.ProgrammeId,
-                ProgrammeName = s.Programme?.Name,
-                AcademicStatus = s.AcademicStatus,
-                IsEnrolled = s.IsEnrolled,
-                CumulativeGPA = s.CumulativeGPA,
-                TotalCreditsEarned = s.TotalCreditsEarned,
-                CreatedDate = s.CreatedDate
+                students = await _studentRepository.SearchStudentsAsync(request.SearchTerm);
+            }
+            else if (request.ProgrammeId.HasValue)
+            {
+                students = await _studentRepository.GetStudentsByProgrammeAsync(request.ProgrammeId.Value, cancellationToken);
+            }
+            else if (request.SemesterId.HasValue)
+            {
+                students = await _studentRepository.GetStudentsBySemesterAsync(request.SemesterId.Value, cancellationToken);
+            }
+            else if (request.IsActive.HasValue)
+            {
+                students = request.IsActive.Value ? await _studentRepository.GetActiveStudentsAsync() : await _studentRepository.GetAllAsync(cancellationToken);
+            }
+            else
+            {
+                students = await _studentRepository.GetAllAsync(cancellationToken);
+            }
+
+            var allDtos = students.Select(student => new StudentDto
+            {
+                Id = student.Id,
+                UserId = student.UserId,
+                StudentNumber = student.StudentNumber,
+                FirstName = student.FirstName,
+                LastName = student.LastName,
+                Email = student.Email,
+                PhoneNumber = student.PhoneNumber,
+                Address = student.Address,
+                ProgrammeId = student.ProgrammeId,
+                ProgrammeName = student.Programme?.Name,
+                IsActive = student.IsActive
             }).ToList();
+
+            var page = Math.Max(1, request.Page);
+            var pageSize = Math.Max(1, request.PageSize);
 
             return new PagedResult<StudentDto>
             {
-                Items = dtos,
-                Page = request.Page,
-                PageSize = request.PageSize,
-                TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize)
+                Items = allDtos.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
+                TotalCount = allDtos.Count,
+                PageNumber = page,
+                PageSize = pageSize
             };
         }
     }

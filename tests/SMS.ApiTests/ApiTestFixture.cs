@@ -1,117 +1,323 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using SMS.API;
-using SMS.Application.DTOs;
+using SMS.Domain.Entities;
+using SMS.Domain.Interfaces;
+using SMS.Multitenancy.Interfaces;
 using SMS.Persistence.Data;
 using Xunit;
 
 namespace SMS.ApiTests
 {
-    public class ApiTestFixture : WebApplicationFactory<Program>, IAsyncLifetime
+    public class ApiTestFixture : WebApplicationFactory<Program>
     {
-        private string? _adminToken;
-        private Guid? _firstDepartmentId;
-        private Guid? _currentSemesterId;
-        private Guid? _firstUnitId;
+        // xUnit runs test classes in parallel by default, each with its own
+        // fixture instance. EF Core InMemory creates a SEPARATE store per DI
+        // container (unless an explicit shared InMemoryDatabaseRoot is provided).
+        // Parallel fixtures therefore cannot share a static seeded state.
+        // Test assembly parallelization is disabled (TestAssemblyConfig.cs) so
+        // each fixture instance builds & seeds its OWN store sequentially. Seed
+        // state is therefore per-instance (not static).
+        private readonly SemaphoreSlim InitLock = new(1, 1);
+        private bool _initialized;
+        private string? _cachedAdminToken;
+        private bool _disposed;
 
-        public async Task InitializeAsync()
+        private static readonly Guid DefaultTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        private const string AdminEmail = "admin@school.com";
+        private const string AdminPassword = "Admin123!";
+
+        public ApiTestFixture()
         {
-            // Ensure database is created and seeded
-            using var scope = Services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await dbContext.Database.EnsureCreatedAsync();
-
-            // Get admin token
-            _adminToken = await GetAuthTokenAsync("admin@school.com", "Admin123!");
-
-            // Get first department ID
-            _firstDepartmentId = await GetFirstDepartmentIdAsync();
-
-            // Get current semester ID
-            _currentSemesterId = await GetCurrentSemesterIdAsync();
-
-            // Get first unit ID
-            _firstUnitId = await GetFirstUnitIdAsync();
+            // Constructor must NOT access Services (server not built yet).
+            // Seed data is initialized lazily on first use.
         }
 
-        public async Task DisposeAsync()
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            // Clean up
-            using var scope = Services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await dbContext.Database.EnsureDeletedAsync();
+            builder.UseEnvironment("Testing");
+
+            builder.ConfigureServices(services =>
+            {
+                // Program.cs skips AddDbContext for "Testing" environment (line ~84).
+                // We register InMemory here so Identity stores (already registered by Program.cs's AddIdentity)
+                // resolve to the InMemory context.
+                RemoveServiceDescriptors<ApplicationDbContext>(services);
+                RemoveServiceDescriptors(typeof(DbContextOptions<ApplicationDbContext>), services);
+                RemoveServiceDescriptors(typeof(Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<ApplicationDbContext>), services);
+
+                // Use a FIXED database name AND a SHARED InMemoryDatabaseRoot so that
+                // all scopes (seed scope, request pipeline scopes) AND all fixture
+                // instances (each with its own WebApplicationFactory host / DI container)
+                // point to the SAME physical InMemory store. Without the shared root,
+                // each host gets a fresh empty database -> authenticated/DB-dependent
+                // tests fail with empty responses.
+                services.AddDbContext<ApplicationDbContext>(options =>
+                {
+                    options.UseInMemoryDatabase("ApiTestDb");
+                }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
+
+                // NOTE: Do NOT call services.AddIdentity<User,Role>(...) here.
+                // Program.cs already registers Identity with AddIdentity + AddEntityFrameworkStores<ApplicationDbContext>().
+                // Calling AddIdentity again would add duplicate auth schemes (Identity.Application, etc.)
+                // and throw "Scheme already exists: Identity.Application" at host startup.
+                // The EF stores registered by Program.cs will resolve to the InMemory ApplicationDbContext above.
+
+                // Mock ICurrentUserService (some business logic depends on it)
+                RemoveServiceDescriptors(typeof(ICurrentUserService), services);
+                var mockCurrentUser = new Mock<ICurrentUserService>();
+                mockCurrentUser.Setup(x => x.UserId).Returns("test-user-id");
+                mockCurrentUser.Setup(x => x.Email).Returns("test@test.com");
+                mockCurrentUser.Setup(x => x.Username).Returns("testuser");
+                mockCurrentUser.Setup(x => x.IsAuthenticated).Returns(true);
+                mockCurrentUser.Setup(x => x.Roles).Returns(new[] { "Administrator" });
+                services.AddScoped(_ => mockCurrentUser.Object);
+
+                // Mock Domain ITenantContext (fully qualify to avoid ambiguity)
+                RemoveServiceDescriptors(typeof(SMS.Domain.Interfaces.ITenantContext), services);
+                var mockDomainTenant = new Mock<SMS.Domain.Interfaces.ITenantContext>();
+                mockDomainTenant.Setup(x => x.TenantId).Returns(DefaultTenantId.ToString());
+                services.AddScoped(_ => mockDomainTenant.Object);
+
+                // Mock Multitenancy ITenantContext
+                RemoveServiceDescriptors(typeof(SMS.Multitenancy.Interfaces.ITenantContext), services);
+                var mockMultiTenant = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
+                mockMultiTenant.Setup(x => x.TenantId).Returns(DefaultTenantId.ToString());
+                mockMultiTenant.Setup(x => x.TenantName).Returns("Test Tenant");
+                services.AddScoped(_ => mockMultiTenant.Object);
+
+                // Mock ITenantStore used by TenantResolutionMiddleware
+                RemoveServiceDescriptors(typeof(ITenantStore), services);
+                var mockTenantStore = new Mock<ITenantStore>();
+                mockTenantStore
+                    .Setup(x => x.GetTenantAsync(It.IsAny<string>()))
+                    .ReturnsAsync(new Tenant
+                    {
+                        Id = DefaultTenantId,
+                        Name = "Default Tenant",
+                        Organization = "Default Organization",
+                        Subdomain = "default",
+                        IsActive = true
+                    });
+                services.AddScoped(_ => mockTenantStore.Object);
+            });
+        }
+
+        private static void RemoveServiceDescriptors<TService>(IServiceCollection services)
+        {
+            var descriptors = services.Where(d => d.ServiceType == typeof(TService)).ToList();
+            foreach (var d in descriptors)
+                services.Remove(d);
+        }
+
+        private static void RemoveServiceDescriptors(Type serviceType, IServiceCollection services)
+        {
+            var descriptors = services.Where(d => d.ServiceType == serviceType).ToList();
+            foreach (var d in descriptors)
+                services.Remove(d);
+        }
+
+        /// <summary>
+        /// Ensures the database is seeded with roles and admin user.
+        /// Called lazily after the server is built (Services is available).
+        /// </summary>
+        private async Task EnsureSeedDataAsync()
+        {
+            if (_initialized || _disposed) return;
+
+            await InitLock.WaitAsync();
+            try
+            {
+                if (_initialized || _disposed) return;
+
+                using (var scope = Services.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    await dbContext.Database.EnsureCreatedAsync();
+
+                    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
+                    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+
+                    // Create roles
+                    foreach (var roleName in new[] { "Administrator", "Lecturer", "Student", "Moderator" })
+                    {
+                        if (!await roleManager.RoleExistsAsync(roleName))
+                        {
+                            var createRoleResult = await roleManager.CreateAsync(new Role
+                            {
+                                Name = roleName,
+                                NormalizedName = roleName.ToUpperInvariant(),
+                                IsActive = true
+                            });
+
+                            if (!createRoleResult.Succeeded)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Failed creating role '{roleName}': {string.Join(", ", createRoleResult.Errors.Select(e => e.Description))}");
+                            }
+                        }
+                    }
+
+                    // Create/find admin user (seed via Identity pipeline)
+                    var adminUser = await userManager.FindByEmailAsync(AdminEmail);
+                    if (adminUser == null)
+                    {
+                        adminUser = new User
+                        {
+                            UserName = AdminEmail,
+                            Email = AdminEmail,
+                            NormalizedUserName = AdminEmail.ToUpperInvariant(),
+                            NormalizedEmail = AdminEmail.ToUpperInvariant(),
+                            FirstName = "Admin",
+                            LastName = "User",
+                            EmailConfirmed = true,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            SecurityStamp = Guid.NewGuid().ToString("N"),
+                            ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                            RefreshToken = string.Empty,
+                            TenantId = DefaultTenantId
+                        };
+
+                        var createResult = await userManager.CreateAsync(adminUser, AdminPassword);
+                        if (!createResult.Succeeded)
+                        {
+                            throw new InvalidOperationException(
+                                $"Failed creating admin user: {string.Join(", ", createResult.Errors.Select(e => e.Description))}");
+                        }
+                    }
+                    else
+                    {
+                        adminUser.TenantId = DefaultTenantId;
+                        await userManager.UpdateAsync(adminUser);
+                    }
+
+                    // Ensure admin role membership
+                    if (!await userManager.IsInRoleAsync(adminUser, "Administrator"))
+                    {
+                        var addRoleResult = await userManager.AddToRoleAsync(adminUser, "Administrator");
+                        if (!addRoleResult.Succeeded)
+                        {
+                            throw new InvalidOperationException(
+                                $"Failed adding admin role: {string.Join(", ", addRoleResult.Errors.Select(e => e.Description))}");
+                        }
+                    }
+                }
+
+                _initialized = true;
+            }
+            finally
+            {
+                InitLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Hides WebApplicationFactory.CreateClient() so that the InMemory database is
+        /// always seeded (roles + admin user) before any test request is issued.
+        /// WebApplicationFactory.CreateClient() is not virtual, so we use method hiding (`new`).
+        /// All test fields are typed as ApiTestFixture, so this method is resolved at call sites.
+        /// CreateClientWithTenant() calls base.CreateClient() (no recursion).
+        /// </summary>
+        public new HttpClient CreateClient()
+        {
+            return CreateClientWithTenant(null);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            _disposed = true;
+            base.Dispose(disposing);
+        }
+
+        private HttpClient CreateClientWithTenant(string? bearerToken)
+        {
+            // Create the client first to ensure the server is built (Services becomes available)
+            var client = base.CreateClient();
+            client.DefaultRequestHeaders.Add("X-Tenant-Id", "default");
+
+            if (!string.IsNullOrWhiteSpace(bearerToken))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            }
+
+            // Seed data lazily after server is built
+            EnsureSeedDataAsync().GetAwaiter().GetResult();
+
+            return client;
+        }
+
+        private async Task<string> EnsureAdminTokenAsync()
+        {
+            if (!string.IsNullOrWhiteSpace(_cachedAdminToken))
+                return _cachedAdminToken;
+
+            // CreateClientWithTenant builds the server first (via base.CreateClient()),
+            // then seeds the database. Do NOT call EnsureSeedDataAsync() before server is built.
+            // The client is disposed after we extract the token (the token string is what we cache).
+            var client = CreateClientWithTenant(null);
+            try
+            {
+                var loginRequest = new { email = AdminEmail, password = AdminPassword, rememberMe = true };
+                var response = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<SMS.Application.DTOs.AuthResponseDto>();
+                _cachedAdminToken = result?.AccessToken ?? string.Empty;
+            }
+            finally
+            {
+                client.Dispose();
+            }
+            return _cachedAdminToken;
+        }
+
+        public async Task<string> GetAuthTokenAsync()
+        {
+            return await EnsureAdminTokenAsync();
         }
 
         public async Task<string> GetAuthTokenAsync(string email, string password)
         {
-            using var client = CreateClient();
-            var loginRequest = new
+            // CreateClientWithTenant builds the server first, then seeds the database.
+            // Do NOT call EnsureSeedDataAsync() before CreateClient().
+            var client = CreateClientWithTenant(null);
+            try
             {
-                email = email,
-                password = password,
-                rememberMe = true
-            };
+                var loginRequest = new { email, password, rememberMe = true };
+                var response = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
+                response.EnsureSuccessStatusCode();
 
-            var response = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
-            response.EnsureSuccessStatusCode();
-
-            var result = await response.Content.ReadFromJsonAsync<AuthResponseDto>();
-            return result?.AccessToken ?? string.Empty;
+                var result = await response.Content.ReadFromJsonAsync<SMS.Application.DTOs.AuthResponseDto>();
+                return result?.AccessToken ?? string.Empty;
+            }
+            finally
+            {
+                client.Dispose();
+            }
         }
 
-        public async Task<Guid> GetFirstDepartmentIdAsync()
+        public async Task<HttpClient> CreateAuthenticatedClientAsync()
         {
-            using var client = CreateClient();
-            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
-
-            var response = await client.GetAsync("/api/v1/departments");
-            response.EnsureSuccessStatusCode();
-
-            var departments = await response.Content.ReadFromJsonAsync<PagedResult<DepartmentDto>>();
-            return departments?.Items.FirstOrDefault()?.Id ?? Guid.Empty;
+            var token = await EnsureAdminTokenAsync();
+            return CreateClientWithTenant(token);
         }
 
-        public async Task<Guid> GetCurrentSemesterIdAsync()
+        public HttpClient CreateAuthenticatedClient()
         {
-            using var client = CreateClient();
-            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
-
-            var response = await client.GetAsync("/api/v1/semesters/current");
-            response.EnsureSuccessStatusCode();
-
-            var semester = await response.Content.ReadFromJsonAsync<SemesterDto>();
-            return semester?.Id ?? Guid.Empty;
-        }
-
-        public async Task<Guid> GetFirstUnitIdAsync()
-        {
-            using var client = CreateClient();
-            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
-
-            var response = await client.GetAsync("/api/v1/units?page=1&pageSize=1");
-            response.EnsureSuccessStatusCode();
-
-            var units = await response.Content.ReadFromJsonAsync<PagedResult<UnitDto>>();
-            return units?.Items.FirstOrDefault()?.Id ?? Guid.Empty;
-        }
-
-        // DTOs for testing
-        public class DepartmentDto
-        {
-            public Guid Id { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public string Code { get; set; } = string.Empty;
-        }
-
-        public class SemesterDto
-        {
-            public Guid Id { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public string Code { get; set; } = string.Empty;
+            var token = Task.Run(EnsureAdminTokenAsync).GetAwaiter().GetResult();
+            return CreateClientWithTenant(token);
         }
     }
 }

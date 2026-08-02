@@ -1,10 +1,10 @@
-using MediatR;
 using FluentValidation;
-using SMS.Application.DTOs;
-using SMS.Application.Exceptions;
-using SMS.Domain.Entities;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Courses.Commands
 {
     public class CreateCourseCommand : IRequest<CourseDto>
@@ -95,7 +95,7 @@ namespace SMS.Application.Features.Courses.Commands
             await _courseRepository.AddAsync(course, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Course", "Create", course.Id, null, $"Course: {course.Code}");
+            await _auditService.LogAsync("Course", "Create", course.Id.ToString());
 
             _logger.LogInformation("Course created: {CourseCode}", course.Code);
 
@@ -111,8 +111,13 @@ namespace SMS.Application.Features.Courses.Commands
                 DepartmentId = course.DepartmentId,
                 DepartmentName = department.Name,
                 DepartmentCode = department.Code,
-                CreatedDate = course.CreatedDate
+                CreatedDate = course.CreatedDate ?? DateTime.UtcNow
             };
         }
     }
 }
+
+
+
+
+

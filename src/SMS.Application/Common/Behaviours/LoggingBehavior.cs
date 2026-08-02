@@ -1,8 +1,9 @@
-using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace SMS.Application.Common.Behaviors
+namespace SMS.Application.Common.Behaviours
 {
     public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
         where TRequest : IRequest<TResponse>
@@ -14,47 +15,17 @@ namespace SMS.Application.Common.Behaviors
             _logger = logger;
         }
 
-        public async Task<TResponse> Handle(
-            TRequest request,
-            RequestHandlerDelegate<TResponse> next,
-            CancellationToken cancellationToken)
+        public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
         {
             var requestName = typeof(TRequest).Name;
-            var requestId = Guid.NewGuid().ToString();
 
-            _logger.LogInformation(
-                "Processing request {RequestName} [RequestId: {RequestId}]",
-                requestName,
-                requestId);
+            _logger.LogInformation("Handling {RequestName}", requestName);
 
-            var stopwatch = Stopwatch.StartNew();
+            var response = await next();
 
-            try
-            {
-                var response = await next();
-                stopwatch.Stop();
+            _logger.LogInformation("Handled {RequestName}", requestName);
 
-                _logger.LogInformation(
-                    "Request {RequestName} completed in {ElapsedMilliseconds}ms [RequestId: {RequestId}]",
-                    requestName,
-                    stopwatch.ElapsedMilliseconds,
-                    requestId);
-
-                return response;
-            }
-            catch (Exception ex)
-            {
-                stopwatch.Stop();
-
-                _logger.LogError(
-                    ex,
-                    "Request {RequestName} failed after {ElapsedMilliseconds}ms [RequestId: {RequestId}]",
-                    requestName,
-                    stopwatch.ElapsedMilliseconds,
-                    requestId);
-
-                throw;
-            }
+            return response;
         }
     }
 }

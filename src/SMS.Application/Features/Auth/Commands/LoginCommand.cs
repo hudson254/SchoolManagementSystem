@@ -1,10 +1,16 @@
-using MediatR;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentValidation;
+using MediatR;
+using Microsoft.Extensions.Logging;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
-using SMS.Identity.Services;
+
 
 namespace SMS.Application.Features.Auth.Commands
 {
@@ -21,29 +27,27 @@ namespace SMS.Application.Features.Auth.Commands
         {
             RuleFor(x => x.Email)
                 .NotEmpty().WithMessage("Email is required")
-                .EmailAddress().WithMessage("Invalid email format")
-                .MaximumLength(100);
+                .EmailAddress().WithMessage("A valid email is required");
 
             RuleFor(x => x.Password)
-                .NotEmpty().WithMessage("Password is required")
-                .MinimumLength(6).WithMessage("Password must be at least 6 characters");
+                .NotEmpty().WithMessage("Password is required");
         }
     }
 
     public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResponseDto>
     {
-        private readonly IUserManagerService _userManager;
+        private readonly IUserManagerService _userManagerService;
         private readonly IJwtService _jwtService;
         private readonly IAuditService _auditService;
         private readonly ILogger<LoginCommandHandler> _logger;
 
         public LoginCommandHandler(
-            IUserManagerService userManager,
+            IUserManagerService userManagerService,
             IJwtService jwtService,
             IAuditService auditService,
             ILogger<LoginCommandHandler> logger)
         {
-            _userManager = userManager;
+            _userManagerService = userManagerService;
             _jwtService = jwtService;
             _auditService = auditService;
             _logger = logger;
@@ -51,60 +55,61 @@ namespace SMS.Application.Features.Auth.Commands
 
         public async Task<AuthResponseDto> Handle(LoginCommand request, CancellationToken cancellationToken)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
-
-            if (user == null)
+            try
             {
-                _logger.LogWarning("Login attempt failed: User not found - {Email}", request.Email);
-                throw new UnauthorizedException("Invalid email or password");
+                // Find user by email
+                var user = await _userManagerService.FindByEmailAsync(request.Email);
+                if (user == null)
+                {
+                    _logger.LogWarning($"Login attempt failed: User with email {request.Email} not found");
+                    throw new UnauthorizedException("Invalid email or password");
+                }
+
+                var typedUser = (User)user;
+
+                // Check password
+                var isPasswordValid = await _userManagerService.CheckPasswordAsync(typedUser, request.Password);
+                if (!isPasswordValid)
+                {
+                    _logger.LogWarning($"Login attempt failed: Invalid password for user {request.Email}");
+                    throw new UnauthorizedException("Invalid email or password");
+                }
+
+                // Check if user is active
+                if (!typedUser.IsActive)
+                {
+                    throw new UnauthorizedException("Account is locked. Please contact support.");
+                }
+
+                // Get user roles
+                var roles = await _userManagerService.GetRolesAsync(typedUser);
+                var rolesList = roles?.ToList() ?? new List<string>();
+
+                // Generate tokens
+                var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, rolesList);
+                var refreshToken = await _userManagerService.GenerateRefreshTokenAsync(typedUser.Id.ToString());
+
+                // Log successful login
+                await _auditService.LogAsync("Login", typedUser.Id.ToString(), $"User logged in successfully");
+
+                // Return response
+                return new AuthResponseDto
+                {
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken,
+                    ExpiresIn = 3600,
+                    TokenType = "Bearer",
+                    UserId = typedUser.Id.ToString(),
+                    Email = typedUser.Email,
+                    Username = typedUser.UserName,
+                    Roles = rolesList
+                };
             }
-
-            if (!await _userManager.CheckPasswordAsync(user, request.Password))
+            catch (Exception ex)
             {
-                _logger.LogWarning("Login attempt failed: Invalid password - {Email}", request.Email);
-                await _auditService.LogAsync("User", "LoginFailed", user.Id, null, $"Email: {request.Email}");
-                throw new UnauthorizedException("Invalid email or password");
+                _logger.LogError(ex, $"Error during login for user {request.Email}");
+                throw;
             }
-
-            if (!user.IsActive)
-            {
-                _logger.LogWarning("Login attempt failed: Account inactive - {Email}", request.Email);
-                throw new UnauthorizedException("Your account has been deactivated. Please contact support.");
-            }
-
-            if (!user.IsEmailVerified)
-            {
-                _logger.LogWarning("Login attempt failed: Email not verified - {Email}", request.Email);
-                throw new UnauthorizedException("Please verify your email address before logging in.");
-            }
-
-            var roles = await _userManager.GetRolesAsync(user);
-            var permissions = await _userManager.GetPermissionsAsync(user);
-
-            var accessToken = _jwtService.GenerateAccessToken(user, roles);
-            var refreshToken = _jwtService.GenerateRefreshToken();
-
-            user.UpdateRefreshToken(refreshToken, DateTime.UtcNow.AddDays(7));
-            await _userManager.UpdateUserAsync(user);
-
-            await _auditService.LogAsync("User", "Login", user.Id, null, $"Email: {request.Email}");
-
-            _logger.LogInformation("User logged in: {Email}", request.Email);
-
-            return new AuthResponseDto
-            {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                UserId = user.Id,
-                Email = user.Email ?? string.Empty,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Roles = roles.ToList(),
-                Permissions = permissions.ToList(),
-                TenantId = user.TenantId,
-                RequiresEmailVerification = false,
-                ExpiresIn = 3600
-            };
         }
     }
 }

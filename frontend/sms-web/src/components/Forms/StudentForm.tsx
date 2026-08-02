@@ -33,6 +33,7 @@ const studentSchema = z.object({
   emergencyContactName: z.string().optional(),
   emergencyContactPhone: z.string().optional(),
   emergencyContactRelation: z.string().optional(),
+  isEnrolled: z.boolean().default(true),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -69,6 +70,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
       emergencyContactName: '',
       emergencyContactPhone: '',
       emergencyContactRelation: '',
+      isEnrolled: true,
     },
   });
 
@@ -113,6 +115,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
         emergencyContactName: student.emergencyContactName || '',
         emergencyContactPhone: student.emergencyContactPhone || '',
         emergencyContactRelation: student.emergencyContactRelation || '',
+        isEnrolled: student.isEnrolled,
       });
     }
   }, [student, reset]);

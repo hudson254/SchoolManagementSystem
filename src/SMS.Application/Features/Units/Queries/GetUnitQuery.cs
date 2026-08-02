@@ -1,13 +1,15 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Interfaces;
+using SMS.Shared.DTOs;
 
 namespace SMS.Application.Features.Units.Queries
 {
     public class GetUnitQuery : IRequest<UnitDetailsDto>
     {
-        public Guid UnitId { get; set; }
+        public Guid Id { get; set; }
     }
 
     public class GetUnitQueryHandler : IRequestHandler<GetUnitQuery, UnitDetailsDto>
@@ -15,9 +17,7 @@ namespace SMS.Application.Features.Units.Queries
         private readonly IUnitRepository _unitRepository;
         private readonly ILogger<GetUnitQueryHandler> _logger;
 
-        public GetUnitQueryHandler(
-            IUnitRepository unitRepository,
-            ILogger<GetUnitQueryHandler> logger)
+        public GetUnitQueryHandler(IUnitRepository unitRepository, ILogger<GetUnitQueryHandler> logger)
         {
             _unitRepository = unitRepository;
             _logger = logger;
@@ -25,11 +25,10 @@ namespace SMS.Application.Features.Units.Queries
 
         public async Task<UnitDetailsDto> Handle(GetUnitQuery request, CancellationToken cancellationToken)
         {
-            var unit = await _unitRepository.GetUnitWithDetailsAsync(request.UnitId, cancellationToken);
-
+            var unit = await _unitRepository.GetUnitWithDetailsAsync(request.Id, cancellationToken);
             if (unit == null)
             {
-                throw new NotFoundException("Unit", request.UnitId);
+                throw new NotFoundException("Unit", request.Id);
             }
 
             return new UnitDetailsDto
@@ -42,29 +41,18 @@ namespace SMS.Application.Features.Units.Queries
                 ContactHours = unit.ContactHours,
                 IsActive = unit.IsActive,
                 CourseId = unit.CourseId,
-                CourseName = unit.Course.Name,
-                CourseCode = unit.Course.Code,
+                CourseName = unit.Course?.Name,
+                CourseCode = unit.Course?.Code,
+                Semester = unit.Semester,
+                SemesterName = unit.Semester.ToString(),
                 PrerequisiteUnitId = unit.PrerequisiteUnitId,
                 PrerequisiteCode = unit.Prerequisite?.Code,
                 PrerequisiteName = unit.Prerequisite?.Name,
                 LearningOutcomes = unit.LearningOutcomes,
                 AssessmentMethods = unit.AssessmentMethods,
                 RecommendedTextbooks = unit.RecommendedTextbooks,
-                TotalEnrollments = unit.Enrollments.Count,
-                TotalAllocations = unit.Allocations.Count,
-                TotalAssignments = unit.Assignments.Count,
-                TotalLectureNotes = unit.LectureNotes.Count,
-                AllocatedLecturers = unit.Allocations
-                    .Where(a => a.Lecturer != null)
-                    .Select(a => new LecturerSummaryDto
-                    {
-                        Id = a.Lecturer.Id,
-                        FullName = a.Lecturer.User.FullName,
-                        EmployeeNumber = a.Lecturer.EmployeeNumber,
-                        Specialization = a.Lecturer.Specialization,
-                        IsPrimary = a.IsPrimary
-                    }).ToList(),
-                CreatedDate = unit.CreatedDate
+                CreatedDate = unit.CreatedAt,
+                UpdatedDate = unit.UpdatedAt
             };
         }
     }

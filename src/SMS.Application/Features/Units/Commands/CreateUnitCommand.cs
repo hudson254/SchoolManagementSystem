@@ -1,5 +1,6 @@
-using MediatR;
 using FluentValidation;
+using MediatR;
+using Microsoft.Extensions.Logging;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
@@ -14,6 +15,7 @@ namespace SMS.Application.Features.Units.Commands
         public string? Description { get; set; }
         public int Credits { get; set; } = 3;
         public int ContactHours { get; set; } = 3;
+        public int Semester { get; set; } = 1;
         public Guid CourseId { get; set; }
         public Guid? PrerequisiteUnitId { get; set; }
         public string? LearningOutcomes { get; set; }
@@ -40,6 +42,9 @@ namespace SMS.Application.Features.Units.Commands
 
             RuleFor(x => x.ContactHours)
                 .GreaterThan(0).WithMessage("Contact hours must be greater than 0");
+
+            RuleFor(x => x.Semester)
+                .GreaterThan(0).WithMessage("Semester must be greater than 0");
 
             RuleFor(x => x.CourseId)
                 .NotEmpty().WithMessage("Course ID is required");
@@ -70,18 +75,21 @@ namespace SMS.Application.Features.Units.Commands
 
         public async Task<UnitDto> Handle(CreateUnitCommand request, CancellationToken cancellationToken)
         {
+            // Check if unit code already exists
             var existingUnit = await _unitRepository.GetByCodeAsync(request.Code, cancellationToken);
             if (existingUnit != null)
             {
                 throw new ConflictException("Unit", "Code", request.Code);
             }
 
+            // Validate course exists
             var course = await _courseRepository.GetByIdAsync(request.CourseId, cancellationToken);
             if (course == null)
             {
                 throw new NotFoundException("Course", request.CourseId);
             }
 
+            // Validate prerequisite unit exists if provided
             if (request.PrerequisiteUnitId.HasValue)
             {
                 var prerequisite = await _unitRepository.GetByIdAsync(request.PrerequisiteUnitId.Value, cancellationToken);
@@ -91,13 +99,15 @@ namespace SMS.Application.Features.Units.Commands
                 }
             }
 
-            var unit = new Unit
+            // Create the unit entity
+            var unit = new SMS.Domain.Entities.Unit
             {
                 Name = request.Name,
                 Code = request.Code,
                 Description = request.Description,
                 Credits = request.Credits,
                 ContactHours = request.ContactHours,
+                Semester = request.Semester,
                 CourseId = request.CourseId,
                 PrerequisiteUnitId = request.PrerequisiteUnitId,
                 LearningOutcomes = request.LearningOutcomes,
@@ -109,10 +119,12 @@ namespace SMS.Application.Features.Units.Commands
             await _unitRepository.AddAsync(unit, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Unit", "Create", unit.Id, null, $"Unit: {unit.Code}");
+            // Log the creation
+            await _auditService.LogAsync("CreateUnit", unit.Id.ToString(), $"Unit created: {unit.Code}");
 
             _logger.LogInformation("Unit created: {UnitCode}", unit.Code);
 
+            // Return the DTO
             return new UnitDto
             {
                 Id = unit.Id,
@@ -122,13 +134,12 @@ namespace SMS.Application.Features.Units.Commands
                 Credits = unit.Credits,
                 ContactHours = unit.ContactHours,
                 IsActive = unit.IsActive,
+                Semester = unit.Semester,
                 CourseId = unit.CourseId,
                 CourseName = course.Name,
                 CourseCode = course.Code,
                 PrerequisiteUnitId = unit.PrerequisiteUnitId,
-                PrerequisiteCode = unit.Prerequisite?.Code,
-                PrerequisiteName = unit.Prerequisite?.Name,
-                CreatedDate = unit.CreatedDate
+                CreatedDate = unit.CreatedAt
             };
         }
     }

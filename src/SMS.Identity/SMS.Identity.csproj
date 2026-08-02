@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -7,16 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.0" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.3.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
-    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="9.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.4.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.4.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SMS.Domain\SMS.Domain.csproj" />
-    <ProjectReference Include="..\SMS.Persistence\SMS.Persistence.csproj" />
+    <ProjectReference Include="..\SMS.Shared\SMS.Shared.csproj" />
   </ItemGroup>
-
 </Project>

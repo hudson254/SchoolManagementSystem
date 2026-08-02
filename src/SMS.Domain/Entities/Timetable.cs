@@ -1,35 +1,25 @@
-using System.ComponentModel.DataAnnotations;
 using SMS.Domain.Common;
+using System;
 
 namespace SMS.Domain.Entities
 {
-    public class Timetable : BaseEntity
+    public class Timetable : BaseEntity, ITenantAwareEntity
     {
-        [Required]
         public Guid ClassId { get; set; }
-
-        [Required]
-        public Guid SemesterId { get; set; }
-
-        [Required]
-        [MaxLength(20)]
-        public string DayOfWeek { get; set; } = string.Empty;
-
-        [Required]
+        public Guid UnitId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public Guid? RoomId { get; set; }
+        public DateTime Date { get; set; }
         public TimeSpan StartTime { get; set; }
-
-        [Required]
         public TimeSpan EndTime { get; set; }
-
-        [MaxLength(50)]
-        public string? Venue { get; set; }
-
-        [MaxLength(200)]
-        public string? Topic { get; set; }
-
+        public string DayOfWeek { get; set; }
+        public string RoomNumber { get; set; }
         public bool IsActive { get; set; } = true;
+        //public string TenantId { get; set; }
 
-        public virtual Class? Class { get; set; }
-        public virtual Semester? Semester { get; set; }
+        // Navigation properties
+        public virtual Unit Unit { get; set; }
+        public virtual Lecturer Lecturer { get; set; }
+        public virtual Room Room { get; set; }
     }
 }

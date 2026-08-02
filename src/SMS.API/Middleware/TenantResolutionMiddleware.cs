@@ -1,4 +1,4 @@
-using SMS.Infrastructure.MultiTenancy;
+using SMS.Domain.Interfaces;
 
 namespace SMS.API.Middleware
 {
@@ -13,12 +13,18 @@ namespace SMS.API.Middleware
             _logger = logger;
         }
 
-        public async Task InvokeAsync(HttpContext context, ITenantResolver tenantResolver)
+        public async Task InvokeAsync(HttpContext context, ITenantStore tenantStore)
         {
             try
             {
-                var tenantId = await tenantResolver.GetTenantIdAsync();
-                var tenant = await tenantResolver.GetTenantAsync();
+                // Resolve tenant ID from header or subdomain
+                var tenantId = "default";
+                if (context.Request.Headers.TryGetValue("X-Tenant-Id", out var headerTenantId))
+                {
+                    tenantId = headerTenantId.ToString();
+                }
+
+                var tenant = await tenantStore.GetTenantAsync(tenantId);
 
                 if (tenant == null)
                 {

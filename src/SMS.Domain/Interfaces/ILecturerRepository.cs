@@ -1,15 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using SMS.Domain.Entities;
 
 namespace SMS.Domain.Interfaces
 {
     public interface ILecturerRepository : IRepository<Lecturer>
     {
-        Task<Lecturer?> GetLecturerWithDetailsAsync(Guid id, CancellationToken cancellationToken = default);
-        Task<IEnumerable<Lecturer>> GetLecturersByUnitAsync(Guid unitId, CancellationToken cancellationToken = default);
-        Task<IEnumerable<Lecturer>> GetLecturersBySemesterAsync(Guid semesterId, CancellationToken cancellationToken = default);
-        Task<Lecturer?> GetLecturerByEmployeeNumberAsync(string employeeNumber, CancellationToken cancellationToken = default);
-        Task<IEnumerable<Lecturer>> GetVerifiedLecturersAsync(CancellationToken cancellationToken = default);
-        Task<IEnumerable<Lecturer>> GetUnverifiedLecturersAsync(CancellationToken cancellationToken = default);
-        Task<IEnumerable<Lecturer>> GetActiveLecturersAsync(CancellationToken cancellationToken = default);
+        Task<IEnumerable<Lecturer>> GetLecturersByDepartmentAsync(Guid departmentId);
+        Task<IEnumerable<Lecturer>> GetActiveLecturersAsync();
+        Task<Lecturer> GetLecturerByEmailAsync(string email);
+        Task<int> CountLecturersAsync(CancellationToken cancellationToken = default);
     }
 }

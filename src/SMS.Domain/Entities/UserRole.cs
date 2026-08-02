@@ -5,7 +5,7 @@ namespace SMS.Domain.Entities
     /// <summary>
     /// User-Role junction entity
     /// </summary>
-    public class UserRole : IdentityUserRole<Guid>
+    public class UserRole : IdentityUserRole<string>
     {
         /// <summary>
         /// Navigation property for user

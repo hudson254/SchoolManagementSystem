@@ -1,19 +1,16 @@
+using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SMS.Domain.Common
 {
-    public abstract class TenantAwareEntity : BaseEntity
+    public abstract class TenantAwareEntity : BaseEntity, ITenantAwareEntity
     {
-        [Required]
-        public Guid TenantId { get; set; }
+        // TenantId is inherited from BaseEntity (Guid)
+        // No need to redeclare it
 
-        protected TenantAwareEntity() : base()
-        {
-        }
-
-        protected TenantAwareEntity(Guid tenantId) : base()
-        {
-            TenantId = tenantId;
-        }
+        [Column("tenant_name")]
+        [MaxLength(100)]
+        public string? TenantName { get; set; }
     }
 }

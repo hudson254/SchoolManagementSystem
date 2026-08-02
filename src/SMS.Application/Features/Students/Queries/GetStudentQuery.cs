@@ -1,8 +1,10 @@
-using MediatR;
-using SMS.Application.DTOs;
-using SMS.Application.Exceptions;
+using FluentValidation;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Students.Queries
 {
     public class GetStudentQuery : IRequest<StudentDetailsDto>
@@ -39,7 +41,7 @@ namespace SMS.Application.Features.Students.Queries
                 StudentNumber = student.StudentNumber,
                 FirstName = student.User.FirstName,
                 LastName = student.User.LastName,
-                FullName = student.User.FullName,
+                // FullName is computed from FirstName/LastName
                 Email = student.User.Email ?? string.Empty,
                 PhoneNumber = student.User.PhoneNumber ?? string.Empty,
                 Organization = student.User.Organization,
@@ -56,7 +58,7 @@ namespace SMS.Application.Features.Students.Queries
                 EmergencyContactName = student.EmergencyContactName,
                 EmergencyContactPhone = student.EmergencyContactPhone,
                 EmergencyContactRelation = student.EmergencyContactRelation,
-                CurrentSemesterId = student.CurrentSemesterId,
+                CurrentSemesterId = student.CurrentSemesterId ?? Guid.Empty,
                 CurrentSemesterName = student.CurrentSemester?.Name,
                 CurrentSemesterNumber = student.CurrentSemester?.SemesterNumber ?? 0,
                 TotalEnrollments = student.Enrollments.Count,
@@ -77,18 +79,23 @@ namespace SMS.Application.Features.Students.Queries
                 Grades = student.Grades.Select(g => new GradeSummaryDto
                 {
                     Id = g.Id,
-                    UnitId = g.Enrollment.UnitId,
-                    UnitName = g.Enrollment.Unit.Name,
-                    UnitCode = g.Enrollment.Unit.Code,
-                    Credits = g.Enrollment.Unit.Credits,
+                    UnitId = (Guid?)(g.Enrollment?.UnitId ?? g.UnitId) ?? Guid.Empty,
+                    UnitName = g.Enrollment?.Unit?.Name ?? g.Unit?.Name ?? "",
+                    UnitCode = g.Enrollment?.Unit?.Code ?? g.Unit?.Code ?? "",
+                    Credits = g.Enrollment?.Unit?.Credits ?? g.Unit?.Credits ?? 0,
                     Grade = g.GradeValue,
                     Score = g.Score,
                     Remarks = g.Remarks,
-                    SemesterId = g.Enrollment.SemesterId,
-                    SemesterName = g.Enrollment.Semester.Name
+                    SemesterId = g.Enrollment?.SemesterId ?? g.SemesterId,
+                    SemesterName = g.Enrollment?.Semester?.Name ?? g.Semester?.Name ?? ""
                 }).ToList(),
-                CreatedDate = student.CreatedDate
+                CreatedDate = student.CreatedDate ?? DateTime.UtcNow
             };
         }
     }
 }
+
+
+
+
+

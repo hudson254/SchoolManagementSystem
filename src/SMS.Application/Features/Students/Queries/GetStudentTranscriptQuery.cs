@@ -1,8 +1,10 @@
-using MediatR;
-using SMS.Application.DTOs;
-using SMS.Application.Exceptions;
+using FluentValidation;
+using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
-
+using SMS.Multitenancy.Interfaces;
+using SMS.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using MediatR;
 namespace SMS.Application.Features.Students.Queries
 {
     public class GetStudentTranscriptQuery : IRequest<TranscriptDto>
@@ -34,29 +36,29 @@ namespace SMS.Application.Features.Students.Queries
                 throw new NotFoundException("Student", request.StudentId);
             }
 
-            var allGrades = await _gradeRepository.GetStudentGradesAsync(request.StudentId, null, null, cancellationToken);
+            var allGrades = await _gradeRepository.GetStudentGradesAsync(request.StudentId);
 
             var semesterGroups = allGrades
                 .Where(g => g.GradeValue != null)
-                .GroupBy(g => new { g.Enrollment.Semester.Id, g.Enrollment.Semester.Name, g.Enrollment.Semester.SemesterNumber });
+            .GroupBy(g => new { g.Semester?.Id, g.Semester?.Name, g.Semester?.SemesterNumber });
 
             var semesterTranscripts = semesterGroups.Select(g => new SemesterTranscriptDto
             {
                 SemesterName = g.Key.Name,
-                SemesterNumber = g.Key.SemesterNumber,
-                Credits = g.Sum(x => x.Enrollment.Unit.Credits),
+                SemesterNumber = g.Key.SemesterNumber ?? 0,
+                Credits = g.Sum(x => x.Unit?.Credits ?? 0),
                 GPA = CalculateGPA(g),
                 Grades = g.Select(x => new GradeSummaryDto
                 {
                     Id = x.Id,
-                    UnitId = x.Enrollment.UnitId,
-                    UnitName = x.Enrollment.Unit.Name,
-                    UnitCode = x.Enrollment.Unit.Code,
-                    Credits = x.Enrollment.Unit.Credits,
+                    UnitId = x.UnitId,
+                    UnitName = x.Unit?.Name,
+                    UnitCode = x.Unit?.Code,
+                    Credits = x.Enrollment?.Unit?.Credits ?? x.Unit?.Credits ?? 0,
                     Grade = x.GradeValue,
                     Score = x.Score,
-                    SemesterId = x.Enrollment.SemesterId,
-                    SemesterName = x.Enrollment.Semester.Name
+                    SemesterId = x.SemesterId ?? Guid.Empty,
+                    SemesterName = x.Semester?.Name
                 }).ToList()
             }).ToList();
 
@@ -65,14 +67,14 @@ namespace SMS.Application.Features.Students.Queries
                 .Select(g => new GradeSummaryDto
                 {
                     Id = g.Id,
-                    UnitId = g.Enrollment.UnitId,
-                    UnitName = g.Enrollment.Unit.Name,
-                    UnitCode = g.Enrollment.Unit.Code,
-                    Credits = g.Enrollment.Unit.Credits,
+                    UnitId = g.Enrollment != null ? (Guid?)(g.Enrollment.UnitId ?? g.UnitId) ?? Guid.Empty : (Guid?)g.UnitId ?? Guid.Empty,
+                    UnitName = (g.Enrollment?.Unit?.Name) ?? g.Unit?.Name ?? "",
+                    UnitCode = (g.Enrollment?.Unit?.Code) ?? g.Unit?.Code ?? "",
+                    Credits = (g.Enrollment?.Unit?.Credits) ?? g.Unit?.Credits ?? 0,
                     Grade = g.GradeValue,
                     Score = g.Score,
-                    SemesterId = g.Enrollment.SemesterId,
-                    SemesterName = g.Enrollment.Semester.Name
+                    SemesterId = g.Enrollment.SemesterId ?? Guid.Empty,
+                    SemesterName = g.Enrollment.Semester?.Name ?? g.Semester?.Name ?? ""
                 }).ToList();
 
             return new TranscriptDto
@@ -83,7 +85,7 @@ namespace SMS.Application.Features.Students.Queries
                 ProgrammeName = student.Programme?.Name ?? "Not Enrolled",
                 TotalCreditsEarned = allGrades
                     .Where(g => g.GradeValue != null && g.GradeValue != "F")
-                    .Sum(g => g.Enrollment.Unit.Credits),
+.Sum(g => g.Enrollment?.Unit?.Credits ?? g.Unit?.Credits ?? 0),
                 CumulativeGPA = CalculateCumulativeGPA(allGrades),
                 SemesterGPA = semesterTranscripts.Any() ? semesterTranscripts.Last().GPA : 0,
                 Semesters = semesterTranscripts,
@@ -97,10 +99,10 @@ namespace SMS.Application.Features.Students.Queries
             if (!gradedGrades.Any()) return 0;
 
             var totalPoints = gradedGrades.Sum(g =>
-                g.Enrollment.Unit.Credits *
-                Domain.Common.DomainConstants.GradeValues.GradePoints.GetValueOrDefault(g.GradeValue, 0));
+                (g.Unit?.Credits ?? (g.Enrollment?.Unit?.Credits ?? 0)) *
+                GetGradePoints(g.GradeValue));
 
-            var totalCredits = gradedGrades.Sum(g => g.Enrollment.Unit.Credits);
+            var totalCredits = gradedGrades.Sum(g => g.Unit?.Credits ?? (g.Enrollment?.Unit?.Credits ?? 0));
 
             return totalCredits > 0 ? totalPoints / totalCredits : 0;
         }
@@ -111,12 +113,37 @@ namespace SMS.Application.Features.Students.Queries
             if (!gradedGrades.Any()) return 0;
 
             var totalPoints = gradedGrades.Sum(g =>
-                g.Enrollment.Unit.Credits *
-                Domain.Common.DomainConstants.GradeValues.GradePoints.GetValueOrDefault(g.GradeValue, 0));
+                (g.Unit?.Credits ?? (g.Enrollment?.Unit?.Credits ?? 0)) *
+                GetGradePoints(g.GradeValue));
 
-            var totalCredits = gradedGrades.Sum(g => g.Enrollment.Unit.Credits);
+            var totalCredits = gradedGrades.Sum(g => g.Unit?.Credits ?? (g.Enrollment?.Unit?.Credits ?? 0));
 
             return totalCredits > 0 ? totalPoints / totalCredits : 0;
         }
+
+        private static int GetGradePoints(string? gradeValue)
+        {
+            return gradeValue switch
+            {
+                "A" => 12,
+                "A-" => 11,
+                "B+" => 10,
+                "B" => 9,
+                "B-" => 8,
+                "C+" => 7,
+                "C" => 6,
+                "C-" => 5,
+                "D+" => 4,
+                "D" => 3,
+                "D-" => 2,
+                "E" => 1,
+                "F" => 0,
+                _ => 0
+            };
+        }
     }
 }
+
+
+
+

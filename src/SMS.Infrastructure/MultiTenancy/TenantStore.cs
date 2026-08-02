@@ -1,110 +1,130 @@
+using SMS.Infrastructure.Options;
+using Microsoft.Extensions.Options;
+using System;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
+using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace SMS.Infrastructure.MultiTenancy
 {
     public class TenantStore : ITenantStore
     {
-        private readonly ApplicationDbContext _context;
         private readonly IMemoryCache _cache;
         private readonly ILogger<TenantStore> _logger;
-        private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(15);
+        private readonly ApplicationDbContext _context;
+        private const string TenantCacheKeyPrefix = "tenant_";
 
-        public TenantStore(
-            ApplicationDbContext context,
-            IMemoryCache cache,
-            ILogger<TenantStore> logger)
+        public TenantStore(IMemoryCache cache, ILogger<TenantStore> logger, ApplicationDbContext context)
         {
-            _context = context;
             _cache = cache;
             _logger = logger;
+            _context = context;
         }
 
-        public async Task<Tenant?> GetTenantByIdAsync(Guid tenantId)
+        public async Task<Tenant> GetTenantAsync(string tenantId)
         {
-            var cacheKey = $"tenant_id_{tenantId}";
-            if (_cache.TryGetValue(cacheKey, out Tenant? cachedTenant))
-                return cachedTenant;
-
-            var tenant = await _context.Tenants
-                .FirstOrDefaultAsync(t => t.Id == tenantId && t.IsActive);
-
-            if (tenant != null)
+            if (string.IsNullOrWhiteSpace(tenantId))
             {
-                _cache.Set(cacheKey, tenant, _cacheDuration);
-            }
-
-            return tenant;
-        }
-
-        public async Task<Tenant?> GetTenantBySubdomainAsync(string subdomain)
-        {
-            if (string.IsNullOrEmpty(subdomain))
+                _logger.LogWarning("GetTenantAsync called with null or empty tenantId");
                 return null;
+            }
 
-            var cacheKey = $"tenant_subdomain_{subdomain.ToLowerInvariant()}";
-            if (_cache.TryGetValue(cacheKey, out Tenant? cachedTenant))
+            var cacheKey = $"{TenantCacheKeyPrefix}{tenantId}";
+
+            // Try to get from cache first
+            if (_cache.TryGetValue(cacheKey, out Tenant cachedTenant))
+            {
+                _logger.LogDebug("Tenant {TenantId} retrieved from cache", tenantId);
                 return cachedTenant;
-
-            var tenant = await _context.Tenants
-                .FirstOrDefaultAsync(t => t.Subdomain == subdomain.ToLowerInvariant() && t.IsActive);
-
-            if (tenant != null)
-            {
-                _cache.Set(cacheKey, tenant, _cacheDuration);
             }
 
-            return tenant;
+            try
+            {
+                // Parse tenantId to Guid
+                if (!Guid.TryParse(tenantId, out var tenantGuid))
+                {
+                    _logger.LogWarning("Invalid tenant ID format: {TenantId}", tenantId);
+                    return null;
+                }
+
+                // Query database for tenant
+                var tenant = await _context.Set<Tenant>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.Id == tenantGuid && t.IsActive && !t.IsDeleted);
+
+                if (tenant == null)
+                {
+                    _logger.LogWarning("Tenant {TenantId} not found or inactive", tenantId);
+                    return null;
+                }
+
+                // Cache the tenant for 5 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5))
+                    .SetSlidingExpiration(TimeSpan.FromMinutes(2));
+
+                _cache.Set(cacheKey, tenant, cacheOptions);
+                _logger.LogInformation("Tenant {TenantId} ({TenantName}) loaded and cached", tenantId, tenant.Name);
+
+                return tenant;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving tenant {TenantId}", tenantId);
+                throw;
+            }
         }
 
-        public async Task<Tenant?> GetDefaultTenantAsync()
+        public async Task<bool> ValidateTenantAsync(string tenantId)
         {
-            var cacheKey = "tenant_default";
-            if (_cache.TryGetValue(cacheKey, out Tenant? cachedTenant))
-                return cachedTenant;
-
-            var tenant = await _context.Tenants
-                .FirstOrDefaultAsync(t => t.IsActive)
-                ?? await _context.Tenants.FirstOrDefaultAsync();
-
-            if (tenant != null)
+            if (string.IsNullOrWhiteSpace(tenantId))
             {
-                _cache.Set(cacheKey, tenant, _cacheDuration);
+                _logger.LogWarning("ValidateTenantAsync called with null or empty tenantId");
+                return false;
             }
 
-            return tenant;
-        }
+            var cacheKey = $"{TenantCacheKeyPrefix}valid_{tenantId}";
 
-        public async Task<IEnumerable<Tenant>> GetAllTenantsAsync()
-        {
-            return await _context.Tenants
-                .Where(t => t.IsActive)
-                .ToListAsync();
-        }
-
-        public async Task<Tenant> CreateTenantAsync(Tenant tenant)
-        {
-            await _context.Tenants.AddAsync(tenant);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Tenant created: {TenantName} ({TenantId})", tenant.Name, tenant.Id);
-            return tenant;
-        }
-
-        public async Task UpdateTenantAsync(Tenant tenant)
-        {
-            _context.Tenants.Update(tenant);
-            await _context.SaveChangesAsync();
-
-            // Clear cache
-            var cacheKey = $"tenant_id_{tenant.Id}";
-            _cache.Remove(cacheKey);
-            if (!string.IsNullOrEmpty(tenant.Subdomain))
+            // Try to get validation result from cache
+            if (_cache.TryGetValue(cacheKey, out bool isValid))
             {
-                _cache.Remove($"tenant_subdomain_{tenant.Subdomain.ToLowerInvariant()}");
+                return isValid;
             }
 
-            _logger.LogInformation("Tenant updated: {TenantName} ({TenantId})", tenant.Name, tenant.Id);
+            try
+            {
+                // Parse tenantId to Guid
+                if (!Guid.TryParse(tenantId, out var tenantGuid))
+                {
+                    _logger.LogWarning("Invalid tenant ID format for validation: {TenantId}", tenantId);
+                    return false;
+                }
+
+                // Check if tenant exists and is active
+                var exists = await _context.Set<Tenant>()
+                    .AsNoTracking()
+                    .AnyAsync(t => t.Id == tenantGuid && t.IsActive && !t.IsDeleted);
+
+                // Cache the validation result for 5 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5))
+                    .SetSlidingExpiration(TimeSpan.FromMinutes(2));
+
+                _cache.Set(cacheKey, exists, cacheOptions);
+                _logger.LogDebug("Tenant {TenantId} validation result: {IsValid}", tenantId, exists);
+
+                return exists;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating tenant {TenantId}", tenantId);
+                return false;
+            }
         }
     }
 }
+

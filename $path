@@ -1,0 +1,42 @@
+# SMS.Application Bulk Fix Script
+Write-Host "=== Starting SMS.Application Bulk Fix ===" -ForegroundColor Green
+
+# Fix 1: Add missing properties to UnitDetailsDto
+$content = Get-Content "src\SMS.Application\DTOs\UnitDetailsDto.cs" -Raw
+if ($content -notmatch "AssessmentMethods") {
+    $content = $content -replace "public class UnitDetailsDto", "public class UnitDetailsDto : UnitDto
+{
+    public string? AssessmentMethods { get; set; }
+    public string? RecommendedTextbooks { get; set; }
+    public string? LearningOutcomes { get; set; }
+    public DateTime? UpdatedDate { get; set; }
+    public string? InstructorName { get; set; }
+    public int EnrolledStudents { get; set; }
+    public List<AssignmentSummaryDto> Assignments { get; set; } = new List<AssignmentSummaryDto>();
+}"
+    Set-Content "src\SMS.Application\DTOs\UnitDetailsDto.cs" -Value $content
+    Write-Host "Fixed UnitDetailsDto" -ForegroundColor Yellow
+}
+
+# Fix 2: Add UserProfileDto
+$path = "src\SMS.Application\DTOs\UserProfileDto.cs"
+if (-not (Test-Path $path)) {
+@"
+namespace SMS.Application.DTOs
+{
+    public class UserProfileDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string FullName => $"{FirstName} {LastName}".Trim();
+        public string Email { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? LastLoginAt { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public List<string> Roles { get; set; } = new List<string>();
+    }
+}
