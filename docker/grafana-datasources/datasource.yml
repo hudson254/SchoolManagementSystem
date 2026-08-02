@@ -1,0 +1,17 @@
+# School Management System - Grafana datasource provisioning.
+# Mounted into the grafana service via:
+#   ./grafana-datasources:/etc/grafana/provisioning/datasources
+# Grafana auto-loads *.yml files from that directory at startup.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus-sms
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s

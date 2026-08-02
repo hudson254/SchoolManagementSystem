@@ -22,6 +22,25 @@ namespace SMS.API.Middleware
             context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
             context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
 
+            // HSTS (RISK-25): Strict-Transport-Security forces browsers to use
+            // HTTPS only. The header is emitted ONLY when the effective
+            // transport is provably HTTPS — either the request is directly
+            // HTTPS, or the app sits behind a TLS-terminating reverse proxy
+            // that forwards "X-Forwarded-Proto: https". This keeps local dev
+            // (plain HTTP to localhost) and TestServer calls free of the
+            // header, so clients are never instructed to upgrade from a
+            // non-existent HTTPS endpoint. includeSubDomains lets subdomains
+            // inherit the policy.
+            var forwardedProto = context.Request.Headers["X-Forwarded-Proto"].ToString();
+            var effectiveTransportIsHttps = context.Request.IsHttps
+                || forwardedProto.Contains("https", System.StringComparison.OrdinalIgnoreCase);
+
+            if (effectiveTransportIsHttps)
+            {
+                context.Response.Headers["Strict-Transport-Security"] =
+                    "max-age=31536000; includeSubDomains";
+            }
+
             // Add Content Security Policy (strict, no unsafe-inline/unsafe-eval)
             context.Response.Headers["Content-Security-Policy"] =
                 "default-src 'self'; " +

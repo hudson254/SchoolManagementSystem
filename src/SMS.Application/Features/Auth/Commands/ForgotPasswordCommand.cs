@@ -1,59 +1,75 @@
-using MediatR;
-using SMS.Domain.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Domain.Entities;
+using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.Auth.Commands
 {
+    /// <summary>
+    /// Handles the "forgot password" flow by creating a <see cref="PasswordResetRequest"/>
+    /// that an administrator can later fulfill. SMTP/email has been fully removed from
+    /// the system; password resets are now admin-mediated on the isolated LAN.
+    /// </summary>
     public class ForgotPasswordCommand : IRequest<bool>
     {
-        public string Email { get; set; }
+        public string Email { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Optional note from the requester (e.g., "locked out", "forgot password").
+        /// </summary>
+        public string? Note { get; set; }
     }
 
     public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordCommand, bool>
     {
         private readonly IUserManagerService _userManager;
-        private readonly IEmailService _emailService;
+        private readonly IPasswordResetRequestRepository _resetRequestRepository;
+        private readonly IAuditService _auditService;
         private readonly ILogger<ForgotPasswordCommandHandler> _logger;
 
         public ForgotPasswordCommandHandler(
             IUserManagerService userManager,
-            IEmailService emailService,
+            IPasswordResetRequestRepository resetRequestRepository,
+            IAuditService auditService,
             ILogger<ForgotPasswordCommandHandler> logger)
         {
             _userManager = userManager;
-            _emailService = emailService;
+            _resetRequestRepository = resetRequestRepository;
+            _auditService = auditService;
             _logger = logger;
         }
 
         public async Task<bool> Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
         {
+            // Find user by email (if present). We intentionally do NOT reveal
+            // whether the email exists, to prevent account enumeration.
+            string? userId = null;
             var user = await _userManager.GetUserByEmailAsync(request.Email);
-            if (user == null)
+            if (user != null)
             {
-                // Always return true to avoid user enumeration.
-                return true;
+                userId = user.Id;
             }
 
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var resetLink = $"https://localhost:5001/reset-password?token={token}&email={request.Email}";
+            // Create a password reset request for admin fulfillment.
+            var resetRequest = new PasswordResetRequest
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId, // null if user not found — prevents enumeration
+                RequestedEmail = request.Email,
+                Note = request.Note,
+                Status = PasswordResetRequestStatus.Pending
+            };
 
-            try
-            {
-                await _emailService.SendPasswordResetEmailAsync(request.Email, resetLink);
-            }
-            catch (Exception ex)
-            {
-                // Email delivery failures must NOT break the forgot-password flow.
-                // The endpoint always returns 204 regardless of SMTP availability
-                // (e.g., in test/development environments without an SMTP server).
-                _logger.LogWarning(ex, "Failed to send password reset email to {Email}", request.Email);
-            }
+            await _resetRequestRepository.AddAsync(resetRequest);
+
+            await _auditService.LogAsync("PasswordResetRequested", userId ?? "unknown", $"Password reset requested for {request.Email}");
+
+            _logger.LogInformation("Password reset request created for {Email} (request id: {RequestId})", request.Email, resetRequest.Id);
 
             return true;
         }
     }
 }
-

@@ -1,0 +1,17 @@
+# School Management System - Grafana dashboard provisioning provider.
+# Mounted into the grafana service via:
+#   ./grafana-dashboards:/etc/grafana/provisioning/dashboards
+# The provider loads dashboard JSON files from this same directory.
+apiVersion: 1
+
+providers:
+  - name: 'SMS Dashboards'
+    orgId: 1
+    folder: 'SMS'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

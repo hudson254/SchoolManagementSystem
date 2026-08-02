@@ -21,7 +21,6 @@ namespace SMS.Application.Features.Auth.Commands
         public string ConfirmPassword { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
-        public string Role { get; set; } = "User";
     }
 
     public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
@@ -50,6 +49,14 @@ namespace SMS.Application.Features.Auth.Commands
 
     public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthResponseDto>
     {
+        /// <summary>
+        /// The only role ever assigned during public self-registration.
+        /// Client-supplied role values are deliberately ignored to prevent
+        /// privilege escalation (previously an attacker could register
+        /// with Role="Administrator").
+        /// </summary>
+        public const string DefaultSelfRegistrationRole = "Student";
+
         private readonly IUserManagerService _userManagerService;
         private readonly IJwtService _jwtService;
         private readonly IAuditService _auditService;
@@ -82,12 +89,14 @@ namespace SMS.Application.Features.Auth.Commands
                 throw new ConflictException("User with this email already exists");
             }
 
-            // Create user
+            // Create user with the fixed low-privilege default role.
+            // The role is a server-side constant and never derived from request
+            // input, closing the role-escalation vulnerability.
             var user = await _userManagerService.CreateUserAsync(
                 request.Email,
                 request.Email,
                 request.Password,
-                request.Role);
+                DefaultSelfRegistrationRole);
 
             if (user == null)
             {
@@ -105,9 +114,9 @@ namespace SMS.Application.Features.Auth.Commands
             var refreshToken = await _userManagerService.GenerateRefreshTokenAsync(typedUser.Id.ToString());
 
             // Log successful registration
-            await _auditService.LogAsync("Register", typedUser.Id.ToString(), $"User registered successfully with role {request.Role}");
+            await _auditService.LogAsync("Register", typedUser.Id.ToString(), $"User registered successfully with role {DefaultSelfRegistrationRole}");
 
-            _logger.LogInformation("User registered successfully: {Email} with role {Role}", request.Email, request.Role);
+            _logger.LogInformation("User registered successfully: {Email} with role {Role}", request.Email, DefaultSelfRegistrationRole);
 
             // Return response
             return new AuthResponseDto

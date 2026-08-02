@@ -50,7 +50,7 @@ services:
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/localhost.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${SSL_PASSWORD:-password}
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD:-SecurePassword123!}"
-      JWT__Secret: ${JWT_SECRET:-dev-secret-key-min-64-characters-long-for-development-only}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-min-64-characters-long-for-development-only}
       JWT__Issuer: SMSAPI
       JWT__Audience: SMSWeb
     depends_on:

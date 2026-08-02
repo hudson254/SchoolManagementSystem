@@ -1,0 +1,36 @@
+# School Management System - Prometheus configuration.
+#
+# LIMITATION (documented, not hidden):
+# The SMS API does NOT currently expose a Prometheus metrics endpoint.
+# Findstr verification (this repair session) found no MapMetrics /
+# prometheus-net / OpenTelemetry metrics exporter in src/SMS.API, and
+# Program.cs only maps /health (AddHealthChecks).
+#
+# Scraping a non-existent /metrics endpoint would produce a permanently
+# failing scrape target. Instead, this config scrapes the API's ASP.NET Core
+# health-check endpoint (/health) as an infrastructure-level availability
+# signal. A future repair item that adds prometheus-net / OpenTelemetry can
+# replace the health-scrape target with the real /metrics endpoint by:
+#   1. adding the metrics middleware to the API (e.g. prometheus-net.AspNetCore)
+#   2. changing the scrape target below to:
+#        metrics_path: /metrics
+#   3. optionally restricting the port (e.g. 9184) via the compose file.
+#
+# Scrape interval is intentionally aligned with the compose healthcheck cadence.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # --- SMS API availability (infrastructure-level probe) ---
+  - job_name: "sms-api"
+    metrics_path: "/health"
+    scheme: http
+    static_configs:
+      - targets:
+          - "api:80" # compose service DNS name (internal network)
+        labels:
+          application: "sms-api"
+          environment: "production"
+          component: "aspnet-core"

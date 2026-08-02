@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
-using SMS.Domain.Interfaces;
 using SMS.Notifications.Hubs;
 using System;
 using System.Collections.Generic;
@@ -13,19 +12,13 @@ namespace SMS.Notifications.Services
     public class NotificationService : INotificationService
     {
         private readonly IHubContext<NotificationHub> _hubContext;
-        private readonly IEmailService _emailService;
-        private readonly ISmsService _smsService;
         private readonly ILogger<NotificationService> _logger;
 
         public NotificationService(
             IHubContext<NotificationHub> hubContext,
-            IEmailService emailService,
-            ISmsService smsService,
             ILogger<NotificationService> logger)
         {
             _hubContext = hubContext;
-            _emailService = emailService;
-            _smsService = smsService;
             _logger = logger;
         }
 
@@ -49,26 +42,24 @@ namespace SMS.Notifications.Services
             _logger.LogInformation("Notification sent to user {UserId}: {Title}", userId, title);
         }
 
-        public async Task SendEmailNotificationAsync(string userId, string email, string subject, string body)
+        /// <summary>
+        /// Email notifications are not supported — SMTP has been fully removed
+        /// from the system per owner requirement (isolated LAN deployment).
+        /// </summary>
+        public Task SendEmailNotificationAsync(string userId, string email, string subject, string body)
         {
-            try
-            {
-                await _emailService.SendEmailAsync(email, subject, body);
-                _logger.LogInformation("Email notification sent to {Email} for user {UserId}", email, userId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send email notification to {Email} for user {UserId}", email, userId);
-                throw;
-            }
+            _logger.LogWarning("Email notification requested but SMTP is disabled. User: {UserId}, Email: {Email}, Subject: {Subject}", userId, email, subject);
+            return Task.CompletedTask;
         }
 
         public async Task SendSmsNotificationAsync(string userId, string phoneNumber, string message)
         {
             try
             {
-                await _smsService.SendSmsAsync(phoneNumber, message);
-                _logger.LogInformation("SMS notification sent to {PhoneNumber} for user {UserId}", phoneNumber, userId);
+                // SMS service is currently a stub (logs only). Keep the call
+                // site intact in case a real implementation is added later.
+                // Re-activate by injecting ISmsService back into the ctor.
+                _logger.LogInformation("SMS notification to {PhoneNumber} for user {UserId}: {Message}", phoneNumber, userId, message);
             }
             catch (Exception ex)
             {
@@ -98,52 +89,39 @@ namespace SMS.Notifications.Services
             _logger.LogInformation("Role notification sent to role {Role}: {Title}", role, title);
         }
 
-        public async Task SendTemplatedEmailAsync(string userId, string email, string templateName, Dictionary<string, string> templateData)
+        /// <summary>
+        /// Templated email notifications are not supported — SMTP has been fully
+        /// removed from the system per owner requirement.
+        /// </summary>
+        public Task SendTemplatedEmailAsync(string userId, string email, string templateName, Dictionary<string, string> templateData)
         {
-            try
-            {
-                await _emailService.SendTemplateEmailAsync(email, templateName, templateData);
-                _logger.LogInformation("Templated email {Template} sent to {Email} for user {UserId}", templateName, email, userId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send templated email {Template} to {Email} for user {UserId}", templateName, email, userId);
-                throw;
-            }
+            _logger.LogWarning("Templated email notification requested but SMTP is disabled. User: {UserId}, Email: {Email}, Template: {Template}", userId, email, templateName);
+            return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Password reset notifications are no longer sent via email. Password
+        /// resets are now admin-mediated (see PasswordResetRequest entity).
+        /// </summary>
         public async Task SendPasswordResetNotificationAsync(string userId, string email, string resetLink)
         {
-            try
-            {
-                await _emailService.SendPasswordResetEmailAsync(email, resetLink);
+            // Email path removed. Send an in-app notification instead so the
+            // user sees the request status in the UI.
+            await SendNotificationAsync(userId, "Password Reset", "Your password reset request has been submitted. An administrator will review it shortly.", "Security");
 
-                await SendNotificationAsync(userId, "Password Reset", "A password reset link has been sent to your email.", "Security");
-
-                _logger.LogInformation("Password reset notification sent to user {UserId}", userId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send password reset notification to user {UserId}", userId);
-                throw;
-            }
+            _logger.LogInformation("Password reset notification (in-app only) sent to user {UserId}", userId);
         }
 
+        /// <summary>
+        /// Email verification notifications are not supported — SMTP has been
+        /// fully removed from the system per owner requirement.
+        /// </summary>
         public async Task SendVerificationNotificationAsync(string userId, string email, string verificationLink)
         {
-            try
-            {
-                await _emailService.SendVerificationEmailAsync(email, verificationLink);
+            // Email path removed. Send an in-app notification instead.
+            await SendNotificationAsync(userId, "Email Verification", "Email verification is not available on this deployment. Contact your administrator.", "Security");
 
-                await SendNotificationAsync(userId, "Email Verification", "A verification link has been sent to your email.", "Security");
-
-                _logger.LogInformation("Verification notification sent to user {UserId}", userId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send verification notification to user {UserId}", userId);
-                throw;
-            }
+            _logger.LogInformation("Verification notification (in-app only) sent to user {UserId}", userId);
         }
     }
 }

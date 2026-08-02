@@ -200,16 +200,22 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddApplication();
 
 // Register Infrastructure Options
-builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("SMTP"));
+// NOTE: SMTP/EmailOptions removed — email functionality fully disabled per
+// owner requirement. Password resets are now admin-mediated (Phase 2).
 builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection("FileStorage"));
 
 // Register services
 builder.Services.AddScoped<IUserManagerService, SMS.Infrastructure.Services.UserManagerService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+// The Application layer consumes SMS.Application.Common.Interfaces.ICurrentUserService
+// (a distinct re-export of the domain interface). Register it to the same concrete
+// implementation; previously only the domain variant was registered, which made the
+// API fail at startup (service validation) outside the Testing environment.
+builder.Services.AddScoped<SMS.Application.Common.Interfaces.ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<AuditHelper>();
-builder.Services.AddScoped<IEmailService, EmailService>();
+// IEmailService registration removed — email functionality fully disabled.
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IExcelGenerator, ExcelGenerator>();
 builder.Services.AddScoped<IPdfGenerator, PdfGenerator>();
@@ -223,6 +229,7 @@ builder.Services.AddScoped<ITenantStore, TenantStore>();
 builder.Services.AddHttpContextAccessor();
 
 // Register repositories
+builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IUnitRepository, UnitRepository>();
@@ -237,6 +244,8 @@ builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<ICalendarEventRepository, CalendarEventRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IReportVerificationRepository, ReportVerificationRepository>();
+builder.Services.AddScoped<IUnitAllocationRepository, UnitAllocationRepository>();
+builder.Services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
 
 // Register UnitOfWork
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -248,6 +257,11 @@ builder.Services.AddScoped<IWatermarkService, WatermarkService>();
 builder.Services.AddScoped<IReportTokenService, ReportTokenService>();
 builder.Services.AddScoped<IReportHashService, ReportHashService>();
 builder.Services.AddScoped<IReportAuthenticationService, ReportAuthenticationService>();
+
+// Register token revocation service (in-memory deny-list for access tokens).
+// Suitable for single-instance LAN deployment. Replace with a distributed
+// cache implementation if horizontal scaling is introduced.
+builder.Services.AddSingleton<ITokenRevocationService, InMemoryTokenRevocationService>();
 
 // Configure Authorization Policies
 builder.Services.AddAuthorization(options =>

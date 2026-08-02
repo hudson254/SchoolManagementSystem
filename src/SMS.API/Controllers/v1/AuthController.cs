@@ -61,7 +61,12 @@ namespace SMS.API.Controllers.v1
             var userId = User.FindFirst("sub")?.Value;
             if (!string.IsNullOrEmpty(userId))
             {
-                var command = new LogoutCommand { UserId = Guid.Parse(userId) };
+                // Extract the JWT identifier (jti) so the LogoutCommand can
+                // add the current access token to the deny-list, closing the
+                // window where a stolen access token remains valid after
+                // logout (RISK-05 fix).
+                var jti = User.FindFirst("jti")?.Value;
+                var command = new LogoutCommand { UserId = Guid.Parse(userId), AccessTokenJti = jti };
                 await Mediator.Send(command, cancellationToken);
             }
             return NoContent();

@@ -43,7 +43,11 @@ namespace SMS.Identity.Services
 
                 // Standard "role" claim name so [Authorize(Roles="...")]
                 // and User.IsInRole(...) work with RoleClaimType="role".
-                new Claim("role", "Student"),
+                // NOTE: No hardcoded role is injected here. Only the user's
+                // actual assigned roles (passed in the `roles` parameter) are
+                // emitted, preventing the previous privilege-escalation where
+                // every token (including admins/lecturers) received a "Student"
+                // claim.
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 

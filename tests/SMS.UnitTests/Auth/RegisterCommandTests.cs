@@ -38,8 +38,7 @@ namespace SMS.UnitTests.Auth
                 LastName = "Doe",
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
-                Role = "Student"
+                ConfirmPassword = "Test123!@#"
             };
 
             // Act
@@ -59,8 +58,7 @@ namespace SMS.UnitTests.Auth
                 LastName = "",
                 Email = "invalid-email",
                 Password = "weak",
-                ConfirmPassword = "different",
-                Role = "InvalidRole"
+                ConfirmPassword = "different"
             };
 
             // Act
@@ -84,8 +82,7 @@ namespace SMS.UnitTests.Auth
                 LastName = "Doe",
                 Email = "existing@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
-                Role = "Student"
+                ConfirmPassword = "Test123!@#"
             };
 
             var existingUser = new User { Email = "existing@example.com" };
@@ -106,7 +103,7 @@ namespace SMS.UnitTests.Auth
         }
 
         [Fact]
-        public async Task Handle_WithValidData_ShouldRegisterUser()
+        public async Task Handle_WithValidData_ShouldRegisterUserWithDefaultRole()
         {
             // Arrange
             var userId = Guid.NewGuid().ToString();
@@ -116,8 +113,7 @@ namespace SMS.UnitTests.Auth
                 LastName = "Doe",
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
-                Role = "Student"
+                ConfirmPassword = "Test123!@#"
             };
 
             _userManagerMock
@@ -125,7 +121,7 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync((User?)null);
 
             _userManagerMock
-                .Setup(x => x.CreateUserAsync(command.Email, command.Email, command.Password, command.Role))
+                .Setup(x => x.CreateUserAsync(command.Email, command.Email, command.Password, RegisterCommandHandler.DefaultSelfRegistrationRole))
                 .ReturnsAsync((string email, string username, string password, string role) => new User
                 {
                     Id = userId,
@@ -138,7 +134,7 @@ namespace SMS.UnitTests.Auth
 
             _userManagerMock
                 .Setup(x => x.GetRolesAsync(It.IsAny<User>()))
-                .ReturnsAsync(new List<string> { command.Role });
+                .ReturnsAsync(new List<string> { RegisterCommandHandler.DefaultSelfRegistrationRole });
 
             _jwtServiceMock
                 .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
@@ -162,9 +158,9 @@ namespace SMS.UnitTests.Auth
             result.AccessToken.Should().Be("test-access-token");
             result.RefreshToken.Should().Be("test-refresh-token");
             result.Email.Should().Be(command.Email);
-            result.Roles.Should().Contain(command.Role);
+            result.Roles.Should().Contain(RegisterCommandHandler.DefaultSelfRegistrationRole);
 
-            _userManagerMock.Verify(x => x.CreateUserAsync(command.Email, command.Email, command.Password, command.Role), Times.Once);
+            _userManagerMock.Verify(x => x.CreateUserAsync(command.Email, command.Email, command.Password, RegisterCommandHandler.DefaultSelfRegistrationRole), Times.Once);
             _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
         }
 
@@ -178,8 +174,7 @@ namespace SMS.UnitTests.Auth
                 LastName = "Doe",
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "DifferentPassword!",
-                Role = "Student"
+                ConfirmPassword = "DifferentPassword!"
             };
 
             var handler = new RegisterCommandHandler(
@@ -192,6 +187,78 @@ namespace SMS.UnitTests.Auth
             await Assert.ThrowsAsync<ValidationException>(
                 () => handler.Handle(command, CancellationToken.None));
         }
+
+        [Fact]
+        public async Task Handle_RegardlessOfRequestedRole_ShouldAlwaysAssignDefaultLowPrivilegeRole()
+        {
+            // Arrange
+            var userId = Guid.NewGuid().ToString();
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Doe",
+                Email = "jane.doe@example.com",
+                Password = "Test123!@#",
+                ConfirmPassword = "Test123!@#"
+            };
+
+            // NOTE: RegisterCommand no longer exposes a Role property, which is
+            // itself the fix. Even if a client sends "role": "Administrator" in
+            // the JSON body, model binding will ignore it because the property
+            // does not exist on the command. The handler must always create the
+            // user with the server-side default role only.
+
+            _userManagerMock
+                .Setup(x => x.FindByEmailAsync(command.Email))
+                .ReturnsAsync((User?)null);
+
+            string capturedRole = null;
+
+            _userManagerMock
+                .Setup(x => x.CreateUserAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((string email, string username, string password, string role) =>
+                {
+                    capturedRole = role;
+                    return new User
+                    {
+                        Id = userId,
+                        Email = email,
+                        UserName = username,
+                        FirstName = command.FirstName,
+                        LastName = command.LastName,
+                        IsActive = true
+                    };
+                });
+
+            _userManagerMock
+                .Setup(x => x.GetRolesAsync(It.IsAny<User>()))
+                .ReturnsAsync(new List<string> { RegisterCommandHandler.DefaultSelfRegistrationRole });
+
+            _jwtServiceMock
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Returns("test-access-token");
+
+            _userManagerMock
+                .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
+                .ReturnsAsync("test-refresh-token");
+
+            var handler = new RegisterCommandHandler(
+                _userManagerMock.Object,
+                _jwtServiceMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            capturedRole.Should().Be(RegisterCommandHandler.DefaultSelfRegistrationRole);
+            capturedRole.Should().NotBe("Administrator");
+            capturedRole.Should().NotBe("Moderator");
+            capturedRole.Should().NotBe("Lecturer");
+            capturedRole.Should().NotBe("Receptionist");
+            result.Roles.Should().Contain(RegisterCommandHandler.DefaultSelfRegistrationRole);
+            result.Roles.Should().NotContain("Administrator");
+        }
     }
 }
-

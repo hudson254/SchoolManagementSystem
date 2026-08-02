@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
-using SMS.Domain.Interfaces;
+using SMS.Application.Common.Interfaces;
 
 namespace SMS.Infrastructure.Services
 {
@@ -22,7 +22,7 @@ namespace SMS.Infrastructure.Services
 
         public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 
-        public IEnumerable<string> Roles => _httpContextAccessor.HttpContext?.User?.FindAll(ClaimTypes.Role) 
+        public IEnumerable<string> Roles => _httpContextAccessor.HttpContext?.User?.FindAll(ClaimTypes.Role)
             ?.Select(c => c.Value) ?? new List<string>();
     }
 }

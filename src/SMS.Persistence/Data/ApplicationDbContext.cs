@@ -60,6 +60,7 @@ namespace SMS.Persistence.Data
         public DbSet<UnitAllocation> UnitAllocations { get; set; }
         public new DbSet<UserRole> UserRoles { get; set; }
         public DbSet<ReportVerification> ReportVerifications { get; set; }
+        public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -281,11 +282,35 @@ namespace SMS.Persistence.Data
                 entity.HasQueryFilter(rv => !rv.IsDeleted);
             });
 
-            // Apply global tenant query filters
+            // Apply global tenant query filters.
+            //
+            // RISK-04 FIX: The previous implementation captured a Guid constant
+            // value (resolved from _tenantContext.TenantId) at model-build time.
+            // Since OnModelCreating is called once and the model is cached, the
+            // resolved Guid (which could be Guid.Empty if the tenant context was
+            // unset at first use) was permanently baked into the cached model
+            // for ALL subsequent requests, causing cross-tenant data leakage.
+            //
+            // The fix captures the DbContext instance itself (via `this`) in
+            // the expression tree, so the tenant Guid is resolved per-query via
+            // the CurrentTenantGuid property below. Because the DbContext is
+            // scoped per request, the filter is re-evaluated for each request
+            // with the correct tenant context.
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {
                 var tenantIdProperty = entityType.FindProperty("TenantId");
-                if (tenantIdProperty != null && tenantIdProperty.ClrType == typeof(Guid))
+
+                // Apply the tenant filter ONLY to entities that explicitly
+                // implement ITenantAwareEntity. SaveChangesAsync also only
+                // assigns TenantId to ITenantAwareEntity entities, so entities
+                // with a TenantId column that are NOT tenant-aware (e.g.
+                // PasswordResetRequest, AuditLog) would otherwise be saved with
+                // Guid.Empty and become invisible to every tenant-scoped
+                // query. This mismatch caused the
+                // GetPendingAsync_ReturnsOnlyPendingRequests integration test
+                // failure (Expected 2, Actual 0).
+                var isTenantAware = typeof(ITenantAwareEntity).IsAssignableFrom(entityType.ClrType);
+                if (tenantIdProperty != null && tenantIdProperty.ClrType == typeof(Guid) && isTenantAware)
                 {
                     if (entityType.ClrType == typeof(User) || entityType.ClrType == typeof(Role))
                         continue;
@@ -293,17 +318,37 @@ namespace SMS.Persistence.Data
                     var parameter = System.Linq.Expressions.Expression.Parameter(entityType.ClrType, "e");
                     var property = System.Linq.Expressions.Expression.Property(parameter, "TenantId");
 
-                    Guid tenantGuid = Guid.Empty;
-                    if (_tenantContext != null && Guid.TryParse(_tenantContext.TenantId, out var parsedGuid))
-                    {
-                        tenantGuid = parsedGuid;
-                    }
-
-                    var tenantIdValue = System.Linq.Expressions.Expression.Constant(tenantGuid);
-                    var condition = System.Linq.Expressions.Expression.Equal(property, tenantIdValue);
+                    // Capture `this` (the scoped DbContext instance) so
+                    // CurrentTenantGuid is evaluated at query-execution time,
+                    // not at model-build time.
+                    var thisExpr = System.Linq.Expressions.Expression.Constant(this);
+                    var tenantGuidProperty = System.Linq.Expressions.Expression.Property(thisExpr, nameof(CurrentTenantGuid));
+                    var condition = System.Linq.Expressions.Expression.Equal(property, tenantGuidProperty);
                     var lambda = System.Linq.Expressions.Expression.Lambda(condition, parameter);
                     modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Resolves the current tenant Guid from the scoped ITenantContext at
+        /// query-execution time. Used by the global tenant query filter
+        /// expression so the filter is evaluated per-request rather than being
+        /// baked into the cached model at startup (RISK-04 fix).
+        ///
+        /// If the tenant context is unavailable or the TenantId cannot be
+        /// parsed, this returns Guid.Empty. Callers that require tenant
+        /// isolation should verify the returned value is not Guid.Empty before
+        /// executing tenant-scoped queries.
+        /// </summary>
+        public Guid CurrentTenantGuid
+        {
+            get
+            {
+                if (_tenantContext == null || string.IsNullOrWhiteSpace(_tenantContext.TenantId))
+                    return Guid.Empty;
+
+                return Guid.TryParse(_tenantContext.TenantId, out var guid) ? guid : Guid.Empty;
             }
         }
 

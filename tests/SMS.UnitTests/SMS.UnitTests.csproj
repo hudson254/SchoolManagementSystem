@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\SMS.Application\SMS.Application.csproj" />
     <ProjectReference Include="..\..\src\SMS.Domain\SMS.Domain.csproj" />
     <ProjectReference Include="..\..\src\SMS.Persistence\SMS.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\SMS.Identity\SMS.Identity.csproj" />
   </ItemGroup>
 
 </Project>

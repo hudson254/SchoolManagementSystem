@@ -45,15 +45,10 @@ services:
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/certificate.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${SSL_PASSWORD}
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD}"
-      JWT__Secret: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
       JWT__Issuer: ${JWT_ISSUER:-SMSAPI}
       JWT__Audience: ${JWT_AUDIENCE:-SMSWeb}
       JWT__ExpiryMinutes: ${JWT_EXPIRY:-60}
-      SMTP__Host: ${SMTP_HOST}
-      SMTP__Port: ${SMTP_PORT:-587}
-      SMTP__Username: ${SMTP_USERNAME}
-      SMTP__Password: ${SMTP_PASSWORD}
-      SMTP__From: ${SMTP_FROM}
       TZ: Africa/Nairobi
     depends_on:
       postgres:

@@ -165,7 +165,10 @@ namespace SMS.Application.Features.Students.Commands
             }
 
             // Shuffle to avoid a predictable prefix pattern.
-            RandomNumberGenerator.Shuffle(chars);
+            // Type argument specified explicitly: char[] -> Span<char> is an
+            // implicit conversion, which the C# compiler does not use for
+            // generic type inference (CS0411 otherwise).
+            RandomNumberGenerator.Shuffle<char>(chars);
             return new string(chars);
         }
     }

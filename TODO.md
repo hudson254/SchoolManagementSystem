@@ -1,51 +1,14 @@
-# Production Readiness Remediation - TODO Tracker
+# RISK-06 Repair — Implementation Steps
 
-## Current Status: In Progress
-
-### Step 1: Fix EF Core Shadow FK Properties
-- [ ] Fix `Student→Programme` relationship (`.WithMany(p => p.Students)`) to remove `ProgrammeId1`
-- [ ] Fix `AccommodationAssignment→Student` duplicate relationship to remove `StudentId1`
-- [ ] Configure `UserRole` navigations to use existing `UserId`/`RoleId` FKs to remove `UserId1`/`RoleId1`
-- [ ] Resolve global query filter warning on User/UserRole navigation
-- [ ] Regenerate EF Core migration to match corrected model
-
-### Step 2: Disable SMTP Services Completely
-- [ ] Add `Enabled` flag to `EmailOptions` (default false)
-- [ ] Make `EmailService` a no-op with warning log when SMTP disabled
-- [ ] Set `SMTP.Enabled=false` in all appsettings files
-- [ ] Remove SMTP env configuration from Docker compose / Dockerfile
-- [ ] Update docs referencing SMTP activation
-
-### Step 3: Delete Obsolete Stub File
-- [ ] Delete `src/SMS.Application/Features/_ControllerStubs.cs` (verified empty, stubs migrated)
-
-### Step 4: Frontend Fixes
-- [ ] Create missing `src/test/setup.ts` for Vitest
-- [ ] Fix React 19 / @types/react version mismatch
-- [ ] Verify frontend TypeScript build
-
-### Step 5: Docker & Deployment Fixes
-- [ ] Create missing `init-db.sql` for postgres init
-- [ ] Create missing `nginx-frontend.conf`
-- [ ] Create missing `prometheus.yml`, grafana provisioning files
-- [ ] Create `Dockerfile.backup` if referenced
-- [ ] Verify docker-compose.prod.yml consistency
-
-### Step 6: Performance & Security
-- [ ] Add Response Compression middleware
-- [ ] Add Kestrel HTTPS config validation / .env template
-- [ ] Verify rate limiting, security headers
-
-### Step 7: Full Verification
-- [ ] Clean build (delete bin/obj, restore, rebuild) - 0 errors
-- [ ] Run Unit Tests - all pass
-- [ ] Run API Tests - all pass
-- [ ] Run Integration Tests - all pass
-- [ ] Frontend build passes
-
-### Step 8: Documentation & Reports
-- [ ] Update REPAIR_PROGRESS.md
-- [ ] Update production readiness checklist
-- [ ] Write final Production Readiness Audit Report
-- [ ] Produce deliverables report (issues, fixes, files modified)
-
+- [x] 1. Establish as-found checkpoint (build + full test suite) — done: build 0 errors; UnitTests 85/85, ApiTests 28/28, IntegrationTests 21/21
+- [x] 2. Review remaining Docker/deployment files — findings: seed-data.sql empty (app seeds via `seed-data` command); no Prometheus metrics endpoint in API; Dockerfile.nginx copies nginx-frontend.conf → conf.d; nginx.conf owns 80/443 servers; no pgcrypto/uuid extensions needed
+- [x] 3. Create docker/init-db.sql (no CREATE DATABASE/TABLE/seed — single source rule: app seed-data command; pgcrypto + Africa/Nairobi TZ)
+- [x] 4. Create docker/nginx-frontend.conf (server block only; preserves /api, /hub, /swagger, /health proxying + SPA fallback + websocket)
+- [x] 5. Create docker/prometheus.yml (API has NO metrics endpoint → /health infrastructure probe, documented)
+- [x] 6. Create docker/grafana-datasources/datasource.yml (uid prometheus-sms, http://prometheus:9090, isDefault)
+- [x] 7. Create docker/grafana-dashboards/dashboard-provider.yml + sms-infrastructure.json (non-empty dir, loads without warnings)
+- [x] 8. Validate all bind mounts across all 3 compose files — all referenced files/dirs now present; 0 broken mounts
+- [x] 9. Validate compose files — Docker CLI v29.6.1 present but daemon offline (npipe unavailable); static validation substituted; limitation documented in REPAIR_PROGRESS.md Blockers log
+- [x] 10. Re-run dotnet build → Build succeeded in 16.9s, 0 errors
+- [x] 11. Update REPAIR_PROGRESS.md (RISK-06 → Fixed + changelog entry + files touched)
+- [x] 12. Session summary changelog entry appended (10/31 Fixed ~32%, 0 In Progress, 21 Not Started; next item RISK-08)
