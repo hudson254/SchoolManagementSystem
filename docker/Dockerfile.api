@@ -1,0 +1,43 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy csproj files and restore dependencies
+COPY ["src/SMS.API/SMS.API.csproj", "SMS.API/"]
+COPY ["src/SMS.Application/SMS.Application.csproj", "SMS.Application/"]
+COPY ["src/SMS.Domain/SMS.Domain.csproj", "SMS.Domain/"]
+COPY ["src/SMS.Infrastructure/SMS.Infrastructure.csproj", "SMS.Infrastructure/"]
+COPY ["src/SMS.Persistence/SMS.Persistence.csproj", "SMS.Persistence/"]
+COPY ["src/SMS.Shared/SMS.Shared.csproj", "SMS.Shared/"]
+COPY ["src/SMS.Identity/SMS.Identity.csproj", "SMS.Identity/"]
+COPY ["src/SMS.Multitenancy/SMS.Multitenancy.csproj", "SMS.Multitenancy/"]
+COPY ["src/SMS.Notifications/SMS.Notifications.csproj", "SMS.Notifications/"]
+COPY ["src/SMS.Reporting/SMS.Reporting.csproj", "SMS.Reporting/"]
+
+RUN dotnet restore "SMS.API/SMS.API.csproj"
+
+# Copy all source code
+COPY src/ .
+
+# Publish the application
+WORKDIR "/src/SMS.API"
+RUN dotnet publish "SMS.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+EXPOSE 80
+EXPOSE 443
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Copy published application
+COPY --from=build /app/publish .
+
+# Set environment variables
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_URLS=https://+:443;http://+:80
+
+# Entry point
+ENTRYPOINT ["dotnet", "SMS.API.dll"]

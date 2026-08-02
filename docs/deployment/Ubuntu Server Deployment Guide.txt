@@ -1,0 +1,61 @@
+
+---
+
+# PHASE 3: DEPLOYMENT GUIDE
+
+## Document 5: Ubuntu Server Deployment Guide
+
+```markdown
+# School Management System
+## Ubuntu Server Deployment Guide
+
+**Version:** 1.0.0  
+**Last Updated:** July 2024  
+**Document ID:** SMS-DEP-001
+
+---
+
+## Table of Contents
+
+1. Introduction
+2. Server Preparation
+3. Software Installation
+4. Database Configuration
+5. Application Deployment
+6. Nginx Configuration
+7. Production Validation
+8. Troubleshooting
+
+---
+
+## 1. Introduction
+
+This guide provides step-by-step instructions for deploying the School Management System on Ubuntu Server 22.04 LTS.
+
+### 1.1 Hardware Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| CPU | 8 Cores | 16+ Cores |
+| RAM | 16 GB | 32+ GB |
+| Storage | 500 GB SSD | 1+ TB SSD |
+| Network | 1 Gbps | 10 Gbps |
+
+### 1.2 Software Requirements
+
+| Software | Version |
+|----------|---------|
+| Ubuntu Server | 22.04 LTS |
+| Docker | 24.0+ |
+| Docker Compose | 2.20+ |
+| Git | 2.40+ |
+| OpenSSL | 3.0+ |
+
+---
+
+## 2. Server Preparation
+
+### 2.1 System Update
+
+```bash
+sudo apt update && sudo apt upgrade -y

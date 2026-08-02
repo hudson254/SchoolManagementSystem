@@ -1,0 +1,5 @@
+<Project>
+  <Target Name="CopyCustomContent" AfterTargets="AfterBuild">
+    <Copy SourceFiles="appsettings.json" DestinationFolder="$(OutDir)" Condition="Exists('appsettings.json')" />
+  </Target>
+</Project>

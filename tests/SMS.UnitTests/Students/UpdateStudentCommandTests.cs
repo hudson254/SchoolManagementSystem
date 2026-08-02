@@ -1,0 +1,166 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentAssertions;
+using FluentValidation.TestHelper;
+using Moq;
+using SMS.Application.Exceptions;
+using SMS.Application.Features.Students.Commands;
+using SMS.Domain.Entities;
+using SMS.Domain.Interfaces;
+using SMS.Identity.Services;
+using Xunit;
+
+namespace SMS.UnitTests.Students
+{
+    public class UpdateStudentCommandTests
+    {
+        private readonly UpdateStudentCommandValidator _validator;
+        private readonly Mock<IStudentRepository> _studentRepositoryMock;
+        private readonly Mock<IUserManagerService> _userManagerMock;
+        private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+        private readonly Mock<IAuditService> _auditServiceMock;
+
+        public UpdateStudentCommandTests()
+        {
+            _validator = new UpdateStudentCommandValidator();
+            _studentRepositoryMock = new Mock<IStudentRepository>();
+            _userManagerMock = new Mock<IUserManagerService>();
+            _unitOfWorkMock = new Mock<IUnitOfWork>();
+            _auditServiceMock = new Mock<IAuditService>();
+        }
+
+        [Fact]
+        public void ValidCommand_ShouldNotHaveValidationErrors()
+        {
+            // Arrange
+            var command = new UpdateStudentCommand
+            {
+                Id = Guid.NewGuid(),
+                FirstName = "John",
+                LastName = "Doe",
+                PhoneNumber = "+254712345678",
+                DateOfBirth = new DateTime(2000, 1, 1),
+                IsEnrolled = true
+            };
+
+            // Act
+            var result = _validator.TestValidate(command);
+
+            // Assert
+            result.ShouldNotHaveAnyValidationErrors();
+        }
+
+        [Fact]
+        public void InvalidCommand_ShouldHaveValidationErrors()
+        {
+            // Arrange
+            var command = new UpdateStudentCommand
+            {
+                Id = Guid.Empty,
+                FirstName = "",
+                LastName = "",
+                PhoneNumber = "",
+                DateOfBirth = DateTime.UtcNow
+            };
+
+            // Act
+            var result = _validator.TestValidate(command);
+
+            // Assert
+            result.ShouldHaveValidationErrorFor(x => x.Id);
+            result.ShouldHaveValidationErrorFor(x => x.FirstName);
+            result.ShouldHaveValidationErrorFor(x => x.LastName);
+            result.ShouldHaveValidationErrorFor(x => x.PhoneNumber);
+            result.ShouldHaveValidationErrorFor(x => x.DateOfBirth);
+        }
+
+        [Fact]
+        public async Task Handle_WithNonExistentStudent_ShouldThrowNotFoundException()
+        {
+            // Arrange
+            var command = new UpdateStudentCommand
+            {
+                Id = Guid.NewGuid(),
+                FirstName = "John",
+                LastName = "Doe",
+                PhoneNumber = "+254712345678",
+                DateOfBirth = new DateTime(2000, 1, 1),
+                IsEnrolled = true
+            };
+
+            _studentRepositoryMock
+                .Setup(x => x.GetStudentWithDetailsAsync(command.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Student?)null);
+
+            var handler = new UpdateStudentCommandHandler(
+                _studentRepositoryMock.Object,
+                _userManagerMock.Object,
+                _unitOfWorkMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<ILogger<UpdateStudentCommandHandler>>());
+
+            // Act & Assert
+            await Assert.ThrowsAsync<NotFoundException>(
+                () => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Handle_WithValidData_ShouldUpdateStudent()
+        {
+            // Arrange
+            var studentId = Guid.NewGuid();
+            var userId = Guid.NewGuid();
+            var command = new UpdateStudentCommand
+            {
+                Id = studentId,
+                FirstName = "John",
+                LastName = "Updated",
+                PhoneNumber = "+254712345678",
+                DateOfBirth = new DateTime(2000, 1, 1),
+                IsEnrolled = true
+            };
+
+            var existingStudent = new Student
+            {
+                Id = studentId,
+                UserId = userId,
+                StudentNumber = "STU-2024-0001",
+                User = new User
+                {
+                    Id = userId,
+                    FirstName = "John",
+                    LastName = "Doe",
+                    Email = "john.doe@example.com"
+                }
+            };
+
+            _studentRepositoryMock
+                .Setup(x => x.GetStudentWithDetailsAsync(command.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(existingStudent);
+
+            _userManagerMock
+                .Setup(x => x.UpdateUserAsync(It.IsAny<User>()))
+                .Returns(Task.CompletedTask);
+
+            var handler = new UpdateStudentCommandHandler(
+                _studentRepositoryMock.Object,
+                _userManagerMock.Object,
+                _unitOfWorkMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<ILogger<UpdateStudentCommandHandler>>());
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.FirstName.Should().Be(command.FirstName);
+            result.LastName.Should().Be(command.LastName);
+            
+            _studentRepositoryMock.Verify(x => x.Update(It.IsAny<Student>()), Times.Once);
+            _userManagerMock.Verify(x => x.UpdateUserAsync(It.IsAny<User>()), Times.Once);
+            _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+    }
+}
