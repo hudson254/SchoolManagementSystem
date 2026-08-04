@@ -84,12 +84,35 @@ The admin dashboard displays:
 - User's data remains intact
 - Can be reactivated later
 
-### Resetting User Passwords
+### Resetting User Passwords (Admin-Mediated — RISK-21)
 
-1. Find the user in the list
-2. Click **More** (three dots icon)
-3. Select **Reset Password**
-4. The system will send a password reset email to the user
+> **LAN deployment note:** Email/SMTP has been fully removed from the system.
+> Password recovery on the isolated LAN is **admin-mediated** — there is no
+> self-service email reset link. A user who cannot sign in submits a request
+> (via `POST /api/v1/auth/forgot-password`), and an **Administrator** fulfills
+> it from the admin panel.
+
+**Step 1 — User submits a request:**
+1. On the login screen, the user clicks **"Forgot password?"**
+2. They enter the email address registered on their account.
+3. The system creates a **pending password reset request** (the response is
+   identical whether or not the email exists, to prevent account enumeration).
+
+**Step 2 — Administrator reviews pending requests:**
+1. Navigate to **Password Resets** in the admin section (**Administrator** role required).
+2. The list shows pending requests with the requester's email, optional note,
+   and request date.
+3. API equivalent: `GET /api/v1/admin/password-resets/pending`.
+
+**Step 3 — Administrator fulfills or rejects:**
+- **Fulfill** — Assigns the user a new temporary password (the user can change
+  it on their next sign-in).
+  - API equivalent: `POST /api/v1/admin/password-resets/{requestId}/fulfill`.
+- **Reject** — Marks the request as rejected (e.g. unverified identity).
+  - API equivalent: `POST /api/v1/admin/password-resets/{requestId}/reject`.
+
+All four admin password-reset endpoints require the **Administrator** role;
+anonymous and non-admin access returns `401 Unauthorized`.
 
 ## Role Management
 

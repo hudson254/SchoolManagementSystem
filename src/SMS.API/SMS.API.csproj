@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.3">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -24,5 +24,7 @@
     <ProjectReference Include="..\SMS.Infrastructure\SMS.Infrastructure.csproj" />
     <ProjectReference Include="..\SMS.Persistence\SMS.Persistence.csproj" />
     <ProjectReference Include="..\SMS.Identity\SMS.Identity.csproj" />
+    <ProjectReference Include="..\SMS.Notifications\SMS.Notifications.csproj" />
+    <ProjectReference Include="..\SMS.Reporting\SMS.Reporting.csproj" />
   </ItemGroup>
 </Project>

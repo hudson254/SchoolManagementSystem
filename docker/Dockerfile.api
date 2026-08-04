@@ -27,7 +27,6 @@ RUN dotnet publish "SMS.API.csproj" -c Release -o /app/publish /p:UseAppHost=fal
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 EXPOSE 80
-EXPOSE 443
 
 # Install curl for health checks
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -36,8 +35,17 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 
 # Set environment variables
+# The API runs HTTP-only behind an nginx reverse proxy that terminates TLS.
+# Listening on HTTPS here would require a certificate that may not be
+# available at deploy time; if Kestrel cannot load it, the entire process
+# crashes (including the HTTP endpoint) and nginx returns 502.
 ENV ASPNETCORE_ENVIRONMENT=Production
-ENV ASPNETCORE_URLS=https://+:443;http://+:80
+ENV ASPNETCORE_URLS=http://+:80
+
+# Health check — nginx/frontend depend on the API being ready to serve
+# before they start proxying (avoids transient 502 during startup).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl --silent --fail http://localhost/health || exit 1
 
 # Entry point
 ENTRYPOINT ["dotnet", "SMS.API.dll"]

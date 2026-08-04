@@ -19,6 +19,8 @@ namespace SMS.UnitTests.Auth
         private readonly Mock<IUserManagerService> _userManagerMock;
         private readonly Mock<IJwtService> _jwtServiceMock;
         private readonly Mock<IAuditService> _auditServiceMock;
+        private readonly Mock<ILoginHistoryRepository> _loginHistoryMock;
+        private readonly Mock<IUnitOfWork> _unitOfWorkMock;
 
         public LoginCommandTests()
         {
@@ -26,6 +28,19 @@ namespace SMS.UnitTests.Auth
             _userManagerMock = new Mock<IUserManagerService>();
             _jwtServiceMock = new Mock<IJwtService>();
             _auditServiceMock = new Mock<IAuditService>();
+            _loginHistoryMock = new Mock<ILoginHistoryRepository>();
+            _unitOfWorkMock = new Mock<IUnitOfWork>();
+        }
+
+        private LoginCommandHandler CreateHandler()
+        {
+            return new LoginCommandHandler(
+                _userManagerMock.Object,
+                _jwtServiceMock.Object,
+                _auditServiceMock.Object,
+                _loginHistoryMock.Object,
+                _unitOfWorkMock.Object,
+                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
         }
 
         [Fact]
@@ -71,14 +86,15 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.FindByEmailAsync(command.Email))
                 .ReturnsAsync((User?)null);
 
-            var handler = new LoginCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
+            var handler = CreateHandler();
 
             await Assert.ThrowsAsync<UnauthorizedException>(
                 () => handler.Handle(command, CancellationToken.None));
+
+            // RISK-27: failed login (user not found) is recorded
+            _loginHistoryMock.Verify(
+                x => x.AddAsync(It.Is<LoginHistory>(h => !h.IsSuccessful && h.FailureReason == "User not found"), It.IsAny<CancellationToken>()),
+                Times.Once);
         }
 
         [Fact]
@@ -109,14 +125,15 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.CheckPasswordAsync(user, command.Password))
                 .ReturnsAsync(false);
 
-            var handler = new LoginCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
+            var handler = CreateHandler();
 
             await Assert.ThrowsAsync<UnauthorizedException>(
                 () => handler.Handle(command, CancellationToken.None));
+
+            // RISK-27: failed login (invalid password) is recorded with the user id
+            _loginHistoryMock.Verify(
+                x => x.AddAsync(It.Is<LoginHistory>(h => !h.IsSuccessful && h.FailureReason == "Invalid password" && h.UserId == user.Id), It.IsAny<CancellationToken>()),
+                Times.Once);
         }
 
         [Fact]
@@ -147,14 +164,15 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.CheckPasswordAsync(user, command.Password))
                 .ReturnsAsync(true);
 
-            var handler = new LoginCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
+            var handler = CreateHandler();
 
             await Assert.ThrowsAsync<UnauthorizedException>(
                 () => handler.Handle(command, CancellationToken.None));
+
+            // RISK-27: failed login (account locked) is recorded
+            _loginHistoryMock.Verify(
+                x => x.AddAsync(It.Is<LoginHistory>(h => !h.IsSuccessful && h.FailureReason == "Account locked"), It.IsAny<CancellationToken>()),
+                Times.Once);
         }
 
         [Fact]
@@ -201,11 +219,7 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
                 .ReturnsAsync("test-refresh-token");
 
-            var handler = new LoginCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>());
+            var handler = CreateHandler();
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -217,7 +231,12 @@ namespace SMS.UnitTests.Auth
             result.Roles.Should().Contain("Student");
 
             _auditServiceMock.Verify(x => x.LogAsync("Login", userId, "User logged in successfully"), Times.Once);
+
+            // RISK-27: successful login is persisted
+            _loginHistoryMock.Verify(
+                x => x.AddAsync(It.Is<LoginHistory>(h => h.IsSuccessful && h.UserId == userId), It.IsAny<CancellationToken>()),
+                Times.Once);
+            _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
     }
 }
-

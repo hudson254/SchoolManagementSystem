@@ -1,20 +1,33 @@
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SMS.Domain.Interfaces;
 using SMS.Infrastructure.Options;
-using System;
-using System.Threading.Tasks;
+using SMS.Infrastructure.Services;
 
 namespace SMS.Notifications.Services
 {
+    /// <summary>
+    /// Real SMS delivery service using a configurable HTTP-based SMS provider.
+    /// Replaces the previous stub that only logged messages.
+    /// </summary>
     public class SmsService : ISmsService
     {
         private readonly SmsOptions _options;
+        private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<SmsService> _logger;
 
-        public SmsService(IOptions<SmsOptions> options, ILogger<SmsService> logger)
+        public SmsService(
+            IOptions<SmsOptions> options,
+            IHttpClientFactory httpClientFactory,
+            ILogger<SmsService> logger)
         {
             _options = options.Value;
+            _httpClientFactory = httpClientFactory;
             _logger = logger;
         }
 
@@ -32,29 +45,33 @@ namespace SMS.Notifications.Services
                 return false;
             }
 
+            if (!_options.Enabled)
+            {
+                _logger.LogWarning("SMS service is disabled. SMS NOT sent to {PhoneNumber}", phoneNumber);
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(_options.AccountSid) ||
+                string.IsNullOrEmpty(_options.AuthToken) ||
+                string.IsNullOrEmpty(_options.FromNumber) ||
+                string.IsNullOrEmpty(_options.BaseUrl))
+            {
+                _logger.LogWarning("SMS service not configured (missing AccountSid/AuthToken/FromNumber/BaseUrl). SMS NOT sent to {PhoneNumber}", phoneNumber);
+                return false;
+            }
+
             try
             {
-                if (!_options.Enabled)
-                {
-                    _logger.LogInformation("SMS service is disabled. Would send to {PhoneNumber}: {Message}", phoneNumber, message);
-                    return true;
-                }
-
-                if (string.IsNullOrEmpty(_options.AccountSid) || string.IsNullOrEmpty(_options.AuthToken))
-                {
-                    _logger.LogWarning("SMS service not configured (missing AccountSid or AuthToken). Logging SMS to {PhoneNumber}: {Message}", phoneNumber, message);
-                    return true;
-                }
-
-                // In production, replace with actual SMS provider integration:
-                // var client = new TwilioRestClient(_options.AccountSid, _options.AuthToken);
-                // var result = await client.SendMessageAsync(_options.FromNumber, phoneNumber, message);
-                // return result.Success;
-
-                await Task.Delay(100); // Simulate async SMS sending
-
-                _logger.LogInformation("SMS sent to {PhoneNumber}: {Message}", phoneNumber, message);
-                return true;
+                return await RetryPolicyHelper.ExecuteExternalAsync(
+                    async () =>
+                    {
+                        var client = _httpClientFactory.CreateClient("SmsClient");
+                        var requestUri = BuildRequestUri(phoneNumber, message);
+                        var response = await client.PostAsync(requestUri, null);
+                        response.EnsureSuccessStatusCode();
+                        return true;
+                    },
+                    _logger);
             }
             catch (Exception ex)
             {
@@ -86,6 +103,15 @@ namespace SMS.Notifications.Services
             _logger.LogInformation("Bulk SMS completed: {SuccessCount} succeeded, {FailCount} failed", successCount, failCount);
             return failCount == 0;
         }
+
+        private Uri BuildRequestUri(string phoneNumber, string message)
+        {
+            // Twilio-style URL: {BaseUrl}/{AccountSid}/Messages.json with form-encoded body
+            var baseUrl = _options.BaseUrl.TrimEnd('/');
+            var url = $"{baseUrl}/{_options.AccountSid}/Messages.json";
+            var builder = new UriBuilder(url);
+            builder.Query = $"To={Uri.EscapeDataString(phoneNumber)}&From={Uri.EscapeDataString(_options.FromNumber)}&Body={Uri.EscapeDataString(message)}";
+            return builder.Uri;
+        }
     }
 }
-

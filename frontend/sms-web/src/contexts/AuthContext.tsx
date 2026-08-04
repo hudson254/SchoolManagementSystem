@@ -52,15 +52,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUser = useCallback(async () => {
     try {
-      const token = storage.getAccessToken();
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
+      // RISK-08: With httpOnly-cookie authentication, we simply call the
+      // /auth/me endpoint; the backend reads the access_token cookie and
+      // resolves the user. No token is read from browser storage.
       const response = await apiClient.get('/auth/me');
       setUser(response.data);
+      storage.setUser(response.data);
     } catch (error) {
+      // 401 means no valid session cookie — silently clear any cached user.
       console.error('Failed to load user:', error);
       storage.clearTokens();
       setUser(null);
@@ -81,10 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rememberMe
       });
 
-      const { accessToken, refreshToken, ...userData } = response.data;
-
-      storage.setTokens(accessToken, refreshToken);
-      setUser(userData);
+      // Tokens are set as httpOnly cookies by the backend; the body only
+      // carries the non-token user profile fields.
+      setUser(response.data);
+      storage.setUser(response.data);
 
       navigate('/dashboard');
     } catch (error) {
@@ -96,10 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (data: RegisterData) => {
     try {
       const response = await apiClient.post('/auth/register', data);
-      const { accessToken, refreshToken, ...userData } = response.data;
 
-      storage.setTokens(accessToken, refreshToken);
-      setUser(userData);
+      // Tokens are set as httpOnly cookies by the backend.
+      setUser(response.data);
+      storage.setUser(response.data);
 
       navigate('/dashboard');
     } catch (error) {
@@ -109,6 +108,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    // POST /auth/logout clears the httpOnly auth cookies server-side and
+    // revokes the tokens (RISK-05). Fire-and-forget; the local session is
+    // cleared immediately regardless of network outcome.
+    apiClient.post('/auth/logout').catch((error) => {
+      console.error('Logout API call failed:', error);
+    });
+
     storage.clearTokens();
     setUser(null);
     navigate('/login');
@@ -116,19 +122,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshToken = async (): Promise<string> => {
     try {
-      const refreshToken = storage.getRefreshToken();
-      if (!refreshToken) {
-        throw new Error('No refresh token available');
+      // The backend reads the refresh_token cookie, validates it, rotates it,
+      // and sets new httpOnly cookies. Nothing to send in the body.
+      const response = await apiClient.post('/auth/refresh-token');
+
+      const token = response.data?.accessToken || '';
+      if (!token) {
+        throw new Error('No access token returned from refresh');
       }
 
-      const response = await apiClient.post('/auth/refresh-token', {
-        refreshToken
-      });
-
-      const { accessToken, refreshToken: newRefreshToken } = response.data;
-      storage.setTokens(accessToken, newRefreshToken);
-
-      return accessToken;
+      return token;
     } catch (error) {
       console.error('Token refresh failed:', error);
       storage.clearTokens();

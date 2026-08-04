@@ -1,32 +1,37 @@
-const ACCESS_TOKEN_KEY = 'access_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
+// RISK-08: Authentication tokens are NO LONGER stored in browser storage.
+// They are stored in httpOnly, SameSite cookies set by the backend
+// (AuthController). JavaScript cannot read them, which eliminates the
+// localStorage XSS exfiltration vector.
+//
+// This module now only persists non-sensitive user profile data (the same
+// data the /auth/me endpoint returns) for instant UI rendering. The source
+// of truth for the authenticated user is always the backend.
+
 const USER_KEY = 'user';
 
 export const storage = {
+  // Tokens are handled entirely by httpOnly cookies — nothing to read here.
   getAccessToken: (): string | null => {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
+    return null;
   },
 
-  setAccessToken: (token: string): void => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  setAccessToken: (_token: string): void => {
+    // No-op — tokens live in httpOnly cookies.
   },
 
   getRefreshToken: (): string | null => {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    return null;
   },
 
-  setRefreshToken: (token: string): void => {
-    localStorage.setItem(REFRESH_TOKEN_KEY, token);
+  setRefreshToken: (_token: string): void => {
+    // No-op — tokens live in httpOnly cookies.
   },
 
-  setTokens: (accessToken: string, refreshToken: string): void => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  setTokens: (_accessToken: string, _refreshToken: string): void => {
+    // No-op — tokens live in httpOnly cookies.
   },
 
   clearTokens: (): void => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
   },
 

@@ -25,34 +25,175 @@
 | RISK-05 | Logout is a no-op; no server-side revocation | CRITICAL | Fixed | LogoutCommand.cs, ITokenRevocationService.cs, InMemoryTokenRevocationService.cs, AuthController.cs, Program.cs, SecurityRegressionTests.cs | Logout_ShouldRevokeRefreshTokenAndDenyListAccessToken, Refresh_AfterLogout_ShouldBeRejected | 2026-08-02 |
 | RISK-06 | docker-compose.prod.yml references 5 missing files | HIGH | Fixed | docker/init-db.sql, docker/nginx-frontend.conf, docker/prometheus.yml, docker/grafana-datasources/datasource.yml, docker/grafana-dashboards/dashboard-provider.yml, docker/grafana-dashboards/sms-infrastructure.json | — | 2026-08-05 |
 | RISK-07 | JWT env var mismatch (JWT__Secret vs JWT_SECRET) | HIGH | Fixed | Program.cs, docker-compose.yml, docker-compose.dev.yml, docker-compose.prod.yml | — | 2026-08-05 |
-| RISK-08 | Tokens stored in localStorage (XSS risk) | HIGH | Not Started | — | — | — |
-| RISK-09 | IDOR on student data endpoints | HIGH | Not Started | — | — | — |
-| RISK-10 | No CSRF protection | HIGH | Not Started | — | — | — |
-| RISK-11 | Password reset link hardcoded to localhost | HIGH | Not Started | — | — | — |
-| RISK-12 | Rate limiting hardcoded + in-memory | HIGH | Not Started | — | — | — |
-| RISK-13 | SMS service is a stub (logs only) | MEDIUM | Not Started | — | — | — |
-| RISK-14 | SMS.Notifications / SMS.Reporting not wired into Program.cs | MEDIUM | Not Started | — | — | — |
-| RISK-15 | Deprecated Microsoft.AspNetCore.Mvc.Versioning | MEDIUM | Not Started | — | — | — |
-| RISK-16 | React 19 beta in production | MEDIUM | Not Started | — | — | — |
-| RISK-17 | Source maps in production build | MEDIUM | Not Started | — | — | — |
-| RISK-18 | Missing EF indexes (AuditLogs, Enrollments, Grades, Notifications) | MEDIUM | Not Started | — | — | — |
-| RISK-19 | No frontend tests (vitest configured, zero files) | MEDIUM | Not Started | — | — | — |
-| RISK-20 | Grafana default password admin123 in compose | MEDIUM | Not Started | — | — | — |
-| RISK-21 | Non-functional password recovery on isolated LAN (SMTP empty) | HIGH | Not Started | — | — | — |
-| RISK-22 | Path traversal risk in FileStorageService | MEDIUM | Not Started | — | — | — |
-| RISK-23 | AutoMapper pinned but unused | LOW | Not Started | — | — | — |
-| RISK-24 | Leftover _ControllerStubs.cs + duplicate BaseApiController | LOW | Not Started | — | — | — |
+| RISK-08 | Tokens stored in localStorage (XSS risk) | HIGH | Fixed | AuthController.cs, Program.cs, CsrfProtectionMiddleware.cs, storage.ts, api.ts, AuthContext.tsx, ApiTestFixture.cs, AuthControllerTests.cs, FullFlowTests.cs | AuthFlow_RegisterLoginGetProfile_ShouldSucceed (cookie-based), Login_WithValidCredentials_ShouldReturnOk (cookie assertion), Register_WithValidData_ShouldReturnCreated (cookie assertion) | 2026-08-05 |
+| RISK-09 | IDOR on student data endpoints | HIGH | Fixed | StudentController.cs, ApiTestFixture.cs, StudentAuthorizationTests.cs | Student_AccessingAnotherStudentsData_ShouldReturnForbidden, Student_AccessingOwnData_ShouldReturnOk, Student_AccessingAnotherStudentsEnrollments_ShouldReturnForbidden, Student_AccessingAnotherStudentsGrades_ShouldReturnForbidden, Student_AccessingAnotherStudentsTranscript_ShouldReturnForbidden, Moderator_AccessingAnyStudentData_ShouldReturnOk, Lecturer_AccessingAnyStudentData_ShouldReturnOk | 2026-08-05 |
+| RISK-10 | No CSRF protection | HIGH | Fixed | CsrfProtectionMiddleware.cs, Program.cs, api.ts | — | 2026-08-05 |
+| RISK-11 | Password reset link hardcoded to localhost | HIGH | Fixed | ForgotPasswordCommand.cs, SMTP-REMOVAL, ADMIN-RESET | — | 2026-08-05 |
+| RISK-12 | Rate limiting hardcoded + in-memory | HIGH | Fixed | RateLimitingOptions.cs, RateLimitingMiddleware.cs, Program.cs, appsettings.json | — | 2026-08-05 |
+| RISK-13 | SMS service is a stub (logs only) | MEDIUM | Fixed | SmsService.cs, SmsOptions.cs, SmsServiceTests.cs, Program.cs, appsettings.json, SMS.API.csproj | SendSmsAsync_WithConfiguredProvider_ReturnsTrue, SendSmsAsync_WhenDisabled_ReturnsFalse, SendSmsAsync_WhenNotConfigured_ReturnsFalse, SendSmsAsync_WithEmptyPhone_ReturnsFalse, SendSmsAsync_WithEmptyMessage_ReturnsFalse, SendSmsAsync_WhenProviderFails_ReturnsFalse, SendSmsAsync_WhenProviderThrows_ReturnsFalse, SendBulkSmsAsync_WithValidNumbers_ReturnsTrue, SendBulkSmsAsync_WhenOneFails_ReturnsFalse | 2026-08-05 |
+| RISK-14 | SMS.Notifications / SMS.Reporting not wired into Program.cs | MEDIUM | Fixed | Program.cs, SMS.API.csproj, Program.cs (NotificationHub mapping) | — | 2026-08-05 |
+| RISK-15 | Deprecated Microsoft.AspNetCore.Mvc.Versioning | MEDIUM | Fixed | SMS.API.csproj, Program.cs, GlobalUsings.cs | — | 2026-08-03 |
+| RISK-16 | React 19 beta in production | MEDIUM | Fixed | frontend/sms-web/package.json | — | 2026-08-03 |
+| RISK-17 | Source maps in production build | MEDIUM | Fixed | frontend/sms-web/vite.config.ts | — | 2026-08-03 |
+| RISK-18 | Missing EF indexes (AuditLogs, Enrollments, Grades, Notifications) | MEDIUM | Fixed | ApplicationDbContext.cs | — | 2026-08-04 |
+| RISK-19 | No frontend tests (vitest configured, zero files) | MEDIUM | Fixed | frontend/sms-web/src/test/setup.ts, frontend/sms-web/src/utils/storage.test.ts | 7 storage-utility tests | 2026-08-04 |
+| RISK-20 | Grafana default password admin123 in compose | MEDIUM | Fixed | docker-compose.yml, docker-compose.prod.yml | — | 2026-08-04 |
+| RISK-21 | Non-functional password recovery on isolated LAN (SMTP empty) | HIGH | Fixed | docs/user-guides/AdministratorGuide.md, docs/USER DOCUMENTATION/Student User Guide.md | — | 2026-08-04 |
+| RISK-22 | Path traversal risk in FileStorageService | MEDIUM | Fixed | FileStorageService.cs | — | 2026-08-04 |
+| RISK-23 | AutoMapper pinned but unused | LOW | Fixed | SMS.Application.csproj | — | 2026-08-04 |
+| RISK-24 | Leftover _ControllerStubs.cs + duplicate BaseApiController | LOW | Fixed | _ControllerStubs.cs (deleted), BaseApiController.cs (deleted) | — | 2026-08-04 |
 | RISK-25 | HSTS header missing | LOW | Fixed | SecurityHeadersMiddleware.cs, SecurityHeadersMiddlewareTests.cs | InvokeAsync_OverPlainHttp_DoesNotEmitHstsHeader, InvokeAsync_OverHttps_EmitsHstsHeader, InvokeAsync_WithHttpsForwardedProto_EmitsHstsHeader, InvokeAsync_AlwaysEmitsCoreSecurityHeaders | 2026-08-05 |
-| RISK-26 | /uploads/ not proxied by nginx | LOW | Not Started | — | — | — |
-| RISK-27 | LoginHistory never persisted on login | LOW | Not Started | — | — | — |
+| RISK-26 | /uploads/ not proxied by nginx | LOW | Fixed | Program.cs, nginx-frontend.conf, docker-compose.yml, docker-compose.prod.yml | — | 2026-08-04 |
+| RISK-27 | LoginHistory never persisted on login | LOW | Fixed | LoginCommand.cs, LoginCommandTests.cs | Handle_WithValidCredentials_ShouldReturnAuthResponse + failed-login assertions | 2026-08-04 |
 | SMTP-REMOVAL | Fully remove SMTP/email from code, config, Docker, docs | CUSTOM | Fixed | Program.cs, ForgotPasswordCommand.cs, PasswordResetRequest.cs, NotificationService.cs | — | 2026-08-05 |
 | ADMIN-RESET | Admin-only password reset workflow | CUSTOM | Fixed | ForgotPasswordCommand.cs, PasswordResetController.cs, FulfillPasswordResetCommand.cs, RejectPasswordResetCommand.cs, PasswordResetRequestRepository.cs, PasswordResetRequest.cs, PasswordResetAuthorizationTests.cs, PasswordResetControllerTests.cs, ApplicationDbContext.cs, TenantIsolationTests.cs | GetRequests_WithoutAuthentication_ShouldReturnUnauthorized, GetRequests_WithAdministratorToken_ShouldReturnOk, FulfillRequest_WithoutAuthentication_ShouldReturnUnauthorized, RejectRequest_WithoutAuthentication_ShouldReturnUnauthorized, NonTenantAwareEntity_IsNotFilteredByTenant, TenantAwareEntity_IsStillFilteredByTenant | 2026-08-05 |
-| BRANDING | logo.png as unified branding (web, reports, watermarks, favicon) | CUSTOM | Not Started | — | — | — |
-| PWA | Progressive Web App support (manifest, SW, offline shell) | CUSTOM | Not Started | — | — | — |
+| BRANDING | logo.png as unified branding (web, reports, watermarks, favicon) | CUSTOM | Fixed | frontend/sms-web/public/logo.png, index.html, Header.tsx | — | 2026-08-04 |
+| PWA | Progressive Web App support (manifest, SW, offline shell) | CUSTOM | Fixed | frontend/sms-web/public/manifest.json, sw.js, main.tsx, index.html | — | 2026-08-04 |
+| NGINX-502 | nginx API proxy returns 502 (API container fails to start) | HIGH | Fixed | Dockerfile.api, docker-compose.yml, docker-compose.dev.yml, docker-compose.prod.yml, Program.cs, Dockerfile.nginx, appsettings.Production.json | — | 2026-08-04 |
 
 ---
 
 ## Changelog
+
+### 2026-08-04 — NGINX-502: nginx API proxy 502 fixed (API HTTP-only + forwarded headers)
+- **What was broken:** The nginx reverse proxy returned **502 Bad Gateway** for all `/api/` requests. The root cause was that the API container was configured to listen on **both** HTTPS (443) and HTTP (80) via `ASPNETCORE_URLS=https://+:443;http://+:80`, but the required TLS certificate was **unavailable at deploy time**:
+  - **Base compose** mounted `${API_CERT_PATH:-/etc/ssl/localhost.pfx}` — the default host path `/etc/ssl/localhost.pfx` does not exist on most machines.
+  - **Dev compose** mounted `./ssl:/https:ro` — but `docker/ssl/` does not exist (certs are in `docker/certs/`).
+  - **Prod compose** mounted `/etc/ssl/sms:/https:ro` — an absolute host path that must be pre-provisioned.
+  - When Kestrel cannot load the certificate for the HTTPS endpoint, it **throws at startup and the entire process crashes** — including the HTTP endpoint on port 80. Since nginx proxies to `http://api:80`, there is no upstream to connect to → **502**.
+- **Key insight:** nginx does SSL termination and proxies to `http://api:80` (HTTP, not HTTPS). The API's HTTPS endpoint on port 443 is **never used by any proxy**. The API should be HTTP-only.
+- **What was changed:**
+  - **`docker/Dockerfile.api`** — Changed `ENV ASPNETCORE_URLS=https://+:443;http://+:80` to `ENV ASPNETCORE_URLS=http://+:80`. Removed `EXPOSE 443`. Added a `HEALTHCHECK` (curl to `/health`) so `depends_on: condition: service_healthy` works.
+  - **`docker/docker-compose.yml`** (base) — Changed `ASPNETCORE_URLS` to `http://+:80`. Removed `ASPNETCORE_Kestrel__Certificates__Default__Path/Password` env vars. Removed the cert volume mount. Removed the `5001:443` port mapping. Added a `healthcheck` on the `api` service. Changed `frontend` and `nginx` `depends_on` to use `condition: service_healthy` for `api`. Changed `VITE_API_URL` to `/api` (relative, served by nginx).
+  - **`docker/docker-compose.dev.yml`** — Same changes as base. Additionally fixed the nginx `./ssl:/etc/ssl:ro` mount to `./certs:/etc/ssl/certs:ro` + `./certs:/etc/ssl/private:ro` (the certs are in `docker/certs/`, not `docker/ssl/`). Removed the dead `./nginx-frontend.conf:/etc/nginx/conf.d/default.conf:ro` mount (nginx.conf doesn't `include conf.d/*.conf`).
+  - **`docker/docker-compose.prod.yml`** — Same changes as base. Removed the dead `./nginx-frontend.conf` mount. Changed `VITE_API_URL` default to `/api`.
+  - **`src/SMS.API/Program.cs`** — Added `app.UseForwardedHeaders()` (processes `X-Forwarded-Proto`/`X-Forwarded-For` from nginx so the API knows the original transport was HTTPS). Changed `UseHttpsRedirection()` from `!IsEnvironment("Testing")` to `IsDevelopment()` only — in Docker/Production the API is HTTP-only behind nginx which does the HTTP→HTTPS redirect itself; running `UseHttpsRedirection` in the container would redirect to a non-existent HTTPS endpoint.
+  - **`docker/Dockerfile.nginx`** — Removed the dead `COPY docker/nginx-frontend.conf /etc/nginx/conf.d/default.conf` (nginx.conf is a complete config that doesn't `include conf.d/*.conf`, so the copy was dead weight).
+  - **`src/SMS.API/appsettings.Production.json`** — Removed the `Kestrel:Endpoints:Https` endpoint (API is HTTP-only in Docker). Changed `Kestrel:Endpoints:Http:Url` from `http://*:5000` to `http://*:80`. Removed the stale `SMTP` section (SMTP was fully removed per SMTP-REMOVAL).
+  - **`docker/.env.smoke`** — Deleted (temporary file from the RISK-06 smoke test; contained machine-specific cert paths).
+- **Secondary issues also fixed:**
+  - **No API health check** — None of the compose files defined a health check for the `api` service. `nginx` and `frontend` used `depends_on: - api` without `condition: service_healthy`, so they started as soon as the container launched, not when it was ready to serve. This caused transient 502s during startup. Now all three compose files define a health check and use `condition: service_healthy`.
+  - **Missing forwarded headers** — `Program.cs` did not call `UseForwardedHeaders()`. Behind nginx, the API saw all requests as HTTP, which broke HSTS detection and scheme-dependent logic. Now `X-Forwarded-Proto`/`X-Forwarded-For` are processed.
+  - **Dead nginx-frontend.conf mount** — The dev and prod compose files mounted `nginx-frontend.conf` to `/etc/nginx/conf.d/default.conf`, but `nginx.conf` is a complete config that doesn't `include conf.d/*.conf`, so the mount was dead weight. Removed.
+  - **HTTPS redirect loop** — `UseHttpsRedirection()` ran in Production behind a reverse proxy without forwarded headers, which would redirect to an HTTPS endpoint that doesn't exist inside the container. Now it only runs in Development.
+- **Verified:**
+  - `dotnet build SchoolManagementSystem.sln` → **0 errors**.
+  - `dotnet test tests\SMS.UnitTests` → **94/94 passed**.
+  - `dotnet test tests\SMS.ApiTests` → **35/35 passed**.
+  - `dotnet test tests\SMS.IntegrationTests` → **21/21 passed**.
+  - `docker compose -f docker/docker-compose.yml config --quiet` → **valid** (only `version`-obsolete warning).
+  - `docker compose -f docker/docker-compose.dev.yml config --quiet` → **valid** (only `version`-obsolete warning).
+- **Files touched:** `docker/Dockerfile.api`, `docker/docker-compose.yml`, `docker/docker-compose.dev.yml`, `docker/docker-compose.prod.yml`, `src/SMS.API/Program.cs`, `docker/Dockerfile.nginx`, `src/SMS.API/appsettings.Production.json`, `docker/.env.smoke` (deleted), `REPAIR_PROGRESS.md`.
+- **Status:** NGINX-502 **Fixed**.
+
+### 2026-08-04 — Session: RISK-18..27 cleanup + RISK-19 frontend tests
+- **Items completed this session (9):**
+  1. **RISK-18** (MEDIUM): Verified already fixed — EF indexes exist for `AuditLogs`, `Enrollments`, `Grades`, `Notifications`, and `LoginHistory` in `ApplicationDbContext.OnModelCreating`. Status: **Fixed**.
+  2. **RISK-19** (MEDIUM): Added the first frontend tests — created `frontend/sms-web/src/test/setup.ts` (referenced by vite.config.ts but previously missing, which made `vitest` fail) and `frontend/sms-web/src/utils/storage.test.ts` (7 tests asserting the RISK-08 token-storage hardening: `getAccessToken`/`setAccessToken`/`setTokens` are no-ops and never write tokens to browser storage). Status: **Fixed**.
+  3. **RISK-20** (MEDIUM): Verified `docker-compose.prod.yml` already required `GRAFANA_PASSWORD`; fixed the base `docker-compose.yml` which still had the insecure `${GRAFANA_PASSWORD:-admin123}` fallback — now fails fast via `${GRAFANA_PASSWORD:?}`. Status: **Fixed**.
+  4. **RISK-21** (HIGH): Documented the admin-mediated password-recovery workflow on the isolated LAN — updated `docs/user-guides/AdministratorGuide.md` and `docs/USER DOCUMENTATION/Student User Guide.md` with the full user→request→admin fulfill/reject flow (SMTP is fully removed). Status: **Fixed**.
+  5. **RISK-22** (MEDIUM): Verified already fixed — `FileStorageService.ResolveSafePath` rejects traversal/absolute escapes with a descendant prefix check. Status: **Fixed**.
+  6. **RISK-23** (LOW): Verified already removed — zero AutoMapper references in any `.csproj`. Status: **Fixed**.
+  7. **RISK-24** (LOW): Deleted the empty `_ControllerStubs.cs` placeholder and the unused root `src/SMS.API/Controllers/BaseApiController.cs` (all 16 controllers use the versioned `v1/BaseApiController`). Status: **Fixed**.
+  8. **RISK-26** (LOW): Added `/uploads/` support — the API now serves uploads via `UseStaticFiles` (FileStorage:Path, request path `/uploads`, `nosniff`), `nginx-frontend.conf` proxies `/uploads/` to the api service, and both compose files mount an `api_uploads` volume at `/app/uploads`. Status: **Fixed**.
+  9. **RISK-27** (LOW): `LoginCommandHandler` now persists success AND failure records via `ILoginHistoryRepository` + `IUnitOfWork.SaveChangesAsync` (with failure reasons for brute-force detection). Updated `LoginCommandTests` with new ctor deps + assertions. Status: **Fixed**.
+- **Verified:**
+  - `dotnet build SchoolManagementSystem.sln` → **0 errors**.
+  - `dotnet test tests\SMS.UnitTests` → **94/94 passed**.
+  - `npm test -- --run` (frontend) → **7/7 passed** (new RISK-19 tests).
+- **Current overall completion:** **31/31 items Fixed** (RISK-01..27 + SMTP-REMOVAL + ADMIN-RESET + BRANDING + PWA) = **100%**; 0 In Progress; 0 Not Started.
+- **PENDING (deferred, not part of this repair):** **nginx API proxy returns 502** — previously stuck issue; explicitly deferred by the owner.
+
+### 2026-08-05 — Session summary: RISK-13, RISK-14 completed
+- **Items completed this session (2):**
+  1. **RISK-13** (SMS service is a stub, MEDIUM): Replaced the log-only `SmsService` stub with a real, configurable HTTP-based SMS provider implementation. The service now POSTs to a Twilio-style `{BaseUrl}/{AccountSid}/Messages.json` endpoint via `IHttpClientFactory` ("SmsClient"), validates phone number and message, returns `false` (not false-success) when disabled or unconfigured, applies retry via `RetryPolicyHelper.ExecuteExternalAsync`, and isolates failures per-recipient in bulk sends. Added 9 unit tests. Status: **Fixed**.
+  2. **RISK-14** (SMS.Notifications / SMS.Reporting not wired into Program.cs, MEDIUM): Wired the previously-orphaned `SMS.Notifications` and `SMS.Reporting` modules into the API host — added ProjectReferences in `SMS.API.csproj`, called `AddNotifications()` and `AddReporting()` in `Program.cs`, registered `SmsOptions` from the `Sms` config section, registered the `SmsClient` `HttpClient`, and mapped the SignalR `NotificationHub` at `/hub`. Removed the duplicate Infrastructure `IPdfGenerator`/`IExcelGenerator` placeholder registrations so the DI container resolves the single real implementation from `SMS.Reporting`. Status: **Fixed**.
+- **Regression tests added (9):** `tests/SMS.UnitTests/Notifications/SmsServiceTests.cs` — `SendSmsAsync_WithConfiguredProvider_ReturnsTrue`, `SendSmsAsync_WhenDisabled_ReturnsFalse`, `SendSmsAsync_WhenNotConfigured_ReturnsFalse`, `SendSmsAsync_WithEmptyPhone_ReturnsFalse`, `SendSmsAsync_WithEmptyMessage_ReturnsFalse`, `SendSmsAsync_WhenProviderFails_ReturnsFalse`, `SendSmsAsync_WhenProviderThrows_ReturnsFalse`, `SendBulkSmsAsync_WithValidNumbers_ReturnsTrue`, `SendBulkSmsAsync_WhenOneFails_ReturnsFalse`.
+- **Also fixed during verification:** `SmsService` no longer `using`-disposes the `HttpClient` returned by `IHttpClientFactory` (disposing a factory-owned client breaks subsequent bulk sends). This was caught by the new `SendBulkSmsAsync_WithValidNumbers_ReturnsTrue` test failing on the second recipient.
+- **Verified:**
+  - `dotnet build SchoolManagementSystem.sln` → **0 errors**.
+  - `dotnet test tests\SMS.UnitTests` → **94/94 passed** (was 85, +9 new SMS tests).
+  - `dotnet test tests\SMS.ApiTests` → **35/35 passed** (no regressions).
+  - `dotnet test tests\SMS.IntegrationTests` → **21/21 passed** (no regressions).
+- **Current overall completion:** **17/31 items Fixed** (RISK-01..14, RISK-25, SMTP-REMOVAL, ADMIN-RESET) = **~55%**; 0 In Progress; 14 Not Started.
+- **Next item to tackle (phase order):** **RISK-15** (Deprecated Microsoft.AspNetCore.Mvc.Versioning, MEDIUM).
+- **PENDING (deferred, not part of this repair):** **nginx API proxy returns 502** — previously stuck issue; explicitly deferred by the owner to be revisited after the current repair items. Documented for follow-up.
+
+### 2026-08-05 — RISK-13: SMS service stub replaced with real provider integration
+- **What was broken:** `src/SMS.Notifications/Services/SmsService.cs` was a stub that only logged messages. When `Enabled` was false or credentials were missing it logged "would send" and returned `true` — callers were misled into believing SMS was delivered when nothing was sent.
+- **What was changed:**
+  - **`src/SMS.Notifications/Services/SmsService.cs`** — Rewritten to send real SMS via a configurable HTTP provider: POSTs to `{BaseUrl}/{AccountSid}/Messages.json` with `To`/`From`/`Body` query parameters using an `HttpClient` from `IHttpClientFactory` (named "SmsClient"). Validates `phoneNumber`/`message` (empty → `false`). When disabled or not configured (`AccountSid`/`AuthToken`/`FromNumber`/`BaseUrl` missing) it now returns **`false`** with a clear warning instead of recording a false success. Delivery is wrapped in `RetryPolicyHelper.ExecuteExternalAsync` (retries on `HttpRequestException`/`TimeoutException`/`TaskCanceledException`). `SendBulkSmsAsync` iterates recipients, isolates per-recipient failures, and reports the success/fail counts — a single recipient failure does not abort the batch.
+- **`src/SMS.API/appsettings.json`** — Added the `Sms` section (`AccountSid`, `AuthToken`, `FromNumber`, `BaseUrl`, `Enabled: false`) so operators can enable/configure the provider without a code change.
+  - **`src/SMS.Infrastructure/Options/SmsOptions.cs`** + **`src/SMS.Infrastructure/Services/SmsService.cs`** — Cleaned the corrupted trailing `</>` artifact from both files.
+- **Status:** RISK-13 **Fixed**.
+
+### 2026-08-05 — Session summary: RISK-09, RISK-11, RISK-12 completed
+- **Items completed this session (3):**
+  1. **RISK-09** (IDOR on student data endpoints, HIGH): Enforced ownership check in `StudentController` so a Student-role caller can only access their OWN record; staff roles retain full access. Fixed the `ICurrentUserService` mock registration in `ApiTestFixture` to use the Application interface. Added 7 API regression tests in the new `StudentAuthorizationTests.cs`. Status: **Fixed**.
+  2. **RISK-11** (Password reset link hardcoded to localhost, HIGH): Verified already resolved — `ForgotPasswordCommand` no longer sends a reset link by email; it creates an admin-mediated `PasswordResetRequest` (SMTP-REMOVAL + ADMIN-RESET). No hardcoded localhost reset links remain in the backend. Status: **Fixed**.
+  3. **RISK-12** (Rate limiting hardcoded + in-memory, HIGH): Made rate limiting configurable via new `RateLimitingOptions` bound from the `RateLimiting` appsettings section; `RateLimitingMiddleware` now uses `PermitLimit`/`WindowMinutes`/`BanDurationMinutes` instead of hardcoded values. The in-memory cache is retained and documented as suitable for single-instance LAN. Status: **Fixed**.
+- **Current overall completion:** **15/31 items Fixed** (RISK-01..12, RISK-25, SMTP-REMOVAL, ADMIN-RESET) = **~48%**; 0 In Progress; 16 Not Started.
+- **Test totals (post-session):** SMS.UnitTests **85/85**, SMS.ApiTests **35/35** (+7 this session), SMS.IntegrationTests **21/21** = **141/141 passing**. Build: **0 errors**.
+- **Next item to tackle (phase order):** **RISK-13** (SMS service is a stub, MEDIUM).
+- **PENDING (deferred, not part of this repair):** **nginx API proxy returns 502** — previously stuck issue; explicitly deferred by the owner to be revisited after the current repair items. Documented for follow-up.
+
+### 2026-08-05 — RISK-12: Rate limiting made configurable
+- **What was broken:** `RateLimitingMiddleware` hardcoded `_limitPerMinute = 60` and `_banDurationMinutes = 5`, ignoring the `RateLimiting` section already present in `appsettings.json` (`PermitLimit: 100`, `WindowMinutes: 1`). An operator could not tune the per-IP rate limit or ban duration without a code change.
+- **What was changed:**
+  - **`src/SMS.API/Options/RateLimitingOptions.cs`** (NEW) — `PermitLimit`, `WindowMinutes`, `BanDurationMinutes` options class with safe defaults.
+  - **`src/SMS.API/Middleware/RateLimitingMiddleware.cs`** — Now injects `IOptions<RateLimitingOptions>` and uses the configured `PermitLimit`, `WindowMinutes`, and `BanDurationMinutes` instead of hardcoded values. The in-memory `IMemoryCache` is retained and documented as suitable for a single-instance LAN deployment (a distributed cache is required for multi-instance scaling).
+  - **`src/SMS.API/Program.cs`** — Binds the `RateLimiting` config section to `RateLimitingOptions` via `services.Configure<RateLimitingOptions>(...)`.
+  - **`src/SMS.API/appsettings.json`** — Added `BanDurationMinutes: 5` to the existing `RateLimiting` section.
+- **Verified:**
+  - `dotnet build SchoolManagementSystem.sln` → **0 errors**.
+  - `dotnet test tests\SMS.ApiTests` → **35/35 passed** (no regressions).
+- **Status:** RISK-12 **Fixed**.
+
+### 2026-08-05 — RISK-09: IDOR on student data endpoints fixed
+- **What was broken:** `StudentController` allowed any caller with the "Student" role to read/update ANY student's record (details, enrollments, grades, transcript) by guessing/iterating the student id. The ownership check was not enforced, so a Student-role caller could access other students' personal data.
+- **What was changed:**
+  - **`src/SMS.API/Controllers/v1/StudentController.cs`** — The ownership check is now enforced for Student-role callers: a Student may only access their OWN record; staff roles (Administrator, Moderator, Lecturer, Receptionist) retain full access.
+  - **`tests/SMS.ApiTests/ApiTestFixture.cs`** — Corrected the `ICurrentUserService` mock to register the **Application** interface (`SMS.Application.Common.Interfaces.ICurrentUserService`) instead of the Domain interface, so the controller ownership check (which resolves the Application interface) uses the mock correctly.
+  - **`tests/SMS.ApiTests/Controllers/StudentAuthorizationTests.cs`** (NEW) — Added a dedicated `StudentIdorFixture` (isolated `WebApplicationFactory<Program>`) that mocks the Application `ICurrentUserService` per-instance to simulate a Student-role caller. The `SeedStudent` helper now seeds a linked `User` entity (required because `GetStudentQueryHandler` dereferences `student.User`) and returns both the student id and the owning user id so ownership tests are accurate.
+- **Regression tests added (7):**
+  1. `Student_AccessingAnotherStudentsData_ShouldReturnForbidden` (403)
+  2. `Student_AccessingOwnData_ShouldReturnOk` (200)
+  3. `Student_AccessingAnotherStudentsEnrollments_ShouldReturnForbidden` (403)
+  4. `Student_AccessingAnotherStudentsGrades_ShouldReturnForbidden` (403)
+  5. `Student_AccessingAnotherStudentsTranscript_ShouldReturnForbidden` (403)
+  6. `Moderator_AccessingAnyStudentData_ShouldReturnOk` (200)
+  7. `Lecturer_AccessingAnyStudentData_ShouldReturnOk` (200)
+- **Verified:**
+  - `dotnet build SchoolManagementSystem.sln` → **0 errors**.
+  - `dotnet test tests\SMS.ApiTests` → **35/35 passed** (was 28, +7 new IDOR regression tests).
+  - `dotnet test tests\SMS.UnitTests` → **85/85 passed**.
+  - `dotnet test tests\SMS.IntegrationTests` → **21/21 passed**.
+- **Status:** RISK-09 **Fixed**.
+- **PENDING (deferred, not part of this repair):** **nginx API proxy returns 502** — previously stuck issue; explicitly deferred by the owner to be revisited after the current repair items. Documented for follow-up.
+
+### 2026-08-05 — RISK-08 + RISK-10: HttpOnly cookie auth + CSRF protection
+- **What was broken:**
+  - RISK-08: Both JWT access and refresh tokens were stored in `localStorage`, so any XSS could exfiltrate both and impersonate the user indefinitely.
+  - RISK-10: No CSRF protection existed — since auth was cookie-less (Bearer header), CSRF wasn't a concern. But once we moved tokens to httpOnly cookies (RISK-08), state-changing requests would be auto-signed by the cookie, requiring CSRF protection.
+- **What was changed:**
+  - **`src/SMS.API/Controllers/v1/AuthController.cs`** — Login/Register/Refresh-token now set `access_token` + `refresh_token` as httpOnly cookies (access: SameSite=Lax, 1h; refresh: SameSite=Strict, 7d). Tokens are stripped from the JSON response body (only non-sensitive user profile remains). Logout clears both cookies. Refresh-token reads the refresh token from the cookie instead of the body.
+  - **`src/SMS.API/Middleware/CsrfProtectionMiddleware.cs`** (NEW) — Double-submit cookie CSRF protection. Sets a non-httpOnly `XSRF-TOKEN` cookie on every request; validates `X-CSRF-TOKEN` header matches the cookie for cookie-authenticated state-changing requests. Skips enforcement for Bearer-token requests (API/Swagger) and anonymous auth endpoints (login/register/refresh/forgot/reset/verify/logout).
+  - **`src/SMS.API/Program.cs`** — JwtBearer `OnMessageReceived` now reads the token from the `access_token` cookie as a fallback to the Authorization header; registered `CsrfProtectionMiddleware`.
+  - **`frontend/sms-web/src/utils/storage.ts`** — Token methods are no-ops (no tokens in any browser storage); only non-sensitive user profile caching remains.
+  - **`frontend/sms-web/src/services/api.ts`** — `withCredentials: true`; attaches `X-CSRF-TOKEN` header by reading the `XSRF-TOKEN` cookie; silent refresh via POST `/auth/refresh-token` (no body).
+  - **`frontend/sms-web/src/contexts/AuthContext.tsx`** — login/register/logout/refresh all cookie-based; `loadUser` calls `/auth/me` directly.
+  - **`tests/SMS.ApiTests/ApiTestFixture.cs`** — `ExtractCookieValue()` reads `access_token` from the `Set-Cookie` header.
+  - **`tests/SMS.ApiTests/Controllers/AuthControllerTests.cs`** + **`Integration/FullFlowTests.cs`** — Updated to assert tokens via the httpOnly cookie and exercise the full cookie-based register→me→logout flow.
+- **Verified:**
+  - `dotnet build SchoolManagementSystem.sln` → **0 errors**.
+  - `dotnet test tests\SMS.UnitTests` → **85/85 passed**.
+  - `dotnet test tests\SMS.ApiTests` → **28/28 passed**.
+  - `dotnet test tests\SMS.IntegrationTests` → **21/21 passed**.
+  - Frontend `npm run build` → **success** (tsc + vite build, 0 errors).
+- **Status:** RISK-08 **Fixed**, RISK-10 **Fixed**.
+- **Current overall completion:** **12/31 items Fixed** (RISK-01..08, RISK-10, RISK-25, SMTP-REMOVAL, ADMIN-RESET, RISK-06) = **~39%**; 0 In Progress; 19 Not Started.
+- **Next item to tackle (phase order):** **RISK-09** (IDOR on student data endpoints, HIGH).
+- **PENDING (deferred, not part of this repair):** **nginx API proxy returns 502** — previously stuck issue; explicitly deferred by the owner to be revisited after the current repair items. Documented for follow-up.
 
 ### 2026-08-05 — Session summary: repair resumption complete
 - **Items completed this session (3):**

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +25,10 @@ using SMS.Infrastructure.Options;
 using SMS.Persistence.Data;
 using SMS.Persistence.Repositories;
 using SMS.API.Middleware;
+using SMS.API.Options;
+using SMS.Notifications;
+using SMS.Notifications.Hubs;
+using SMS.Reporting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,6 +57,10 @@ builder.Services.AddControllers(options =>
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddMemoryCache();
+
+// Configure RateLimiting options (bound from the "RateLimiting" config section)
+builder.Services.Configure<RateLimitingOptions>(
+    builder.Configuration.GetSection("RateLimiting"));
 
 // Configure session support (required for audit session tracking)
 builder.Services.AddDistributedMemoryCache();
@@ -103,12 +112,25 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Configure API Versioning
+// Configure API Versioning.
+// RISK-15: Microsoft.AspNetCore.Mvc.Versioning (the "Microsoft.*" package) is
+// deprecated. Versioning is now provided by the Asp.Versioning family
+// (Asp.Versioning.Mvc.ApiExplorer), which uses the Asp.Versioning namespace
+// and adds the ApiExplorer plumbing required for Swagger to discover versioned
+// endpoints (AddApiVersioning().AddApiExplorer()).
 builder.Services.AddApiVersioning(options =>
 {
-    options.DefaultApiVersion = new Microsoft.AspNetCore.Mvc.ApiVersion(1, 0);
+    options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
+})
+.AddApiExplorer(options =>
+{
+    // Group endpoints by API version so Swagger can render one document per
+    // version (e.g. v1). Without this, versioned endpoints are not exposed
+    // through the IApiDescriptionProvider pipeline.
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
 });
 
 // Configure Health Checks
@@ -174,6 +196,26 @@ builder.Services.AddAuthentication(options =>
     options.MapInboundClaims = false;
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.SaveToken = true;
+
+    // RISK-08: tokens are stored in httpOnly cookies (set by AuthController).
+    // The JWT is read from the access_token cookie by default; the
+    // Authorization header is still honored first for non-browser clients
+    // (e.g. API tests, Swagger, scripts).
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Headers["Authorization"].ToString();
+            if (string.IsNullOrEmpty(accessToken) &&
+                context.Request.Cookies.TryGetValue("access_token", out var cookieToken) &&
+                !string.IsNullOrEmpty(cookieToken))
+            {
+                context.Token = cookieToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
@@ -203,6 +245,10 @@ builder.Services.AddApplication();
 // NOTE: SMTP/EmailOptions removed — email functionality fully disabled per
 // owner requirement. Password resets are now admin-mediated (Phase 2).
 builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection("FileStorage"));
+builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection("Sms"));
+
+// Register HttpClient for SMS service (RISK-13)
+builder.Services.AddHttpClient("SmsClient");
 
 // Register services
 builder.Services.AddScoped<IUserManagerService, SMS.Infrastructure.Services.UserManagerService>();
@@ -217,8 +263,9 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<AuditHelper>();
 // IEmailService registration removed — email functionality fully disabled.
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
-builder.Services.AddScoped<IExcelGenerator, ExcelGenerator>();
-builder.Services.AddScoped<IPdfGenerator, PdfGenerator>();
+// NOTE: IPdfGenerator/IExcelGenerator are registered by SMS.Reporting (AddReporting)
+// which provides the real QuestPDF/EPPlus implementations. The Infrastructure
+// placeholders (PdfGenerator/ExcelGenerator) are removed to avoid duplicate registrations.
 builder.Services.AddScoped<SMS.Multitenancy.Interfaces.ITenantResolver, TenantResolver>();
 builder.Services.AddScoped<SMS.Infrastructure.MultiTenancy.TenantContext>();
 builder.Services.AddScoped<SMS.Domain.Interfaces.ITenantContext>(sp =>
@@ -263,6 +310,10 @@ builder.Services.AddScoped<IReportAuthenticationService, ReportAuthenticationSer
 // cache implementation if horizontal scaling is introduced.
 builder.Services.AddSingleton<ITokenRevocationService, InMemoryTokenRevocationService>();
 
+// Register SMS.Notifications and SMS.Reporting (RISK-14)
+builder.Services.AddNotifications();
+builder.Services.AddReporting();
+
 // Configure Authorization Policies
 builder.Services.AddAuthorization(options =>
 {
@@ -280,11 +331,30 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// Process X-Forwarded-* headers from the nginx reverse proxy.
+// The API runs HTTP-only behind nginx which terminates TLS and forwards
+// X-Forwarded-Proto/X-Forwarded-For. Without this, the API sees all requests
+// as HTTP, which breaks HSTS detection (SecurityHeadersMiddleware) and
+// scheme-dependent logic. In Docker, nginx's IP is dynamic (Docker-assigned),
+// so we clear the known networks/proxies to trust forwarded headers from any
+// source on the internal Docker network. The API port is not directly exposed
+// to untrusted networks in production (nginx is the only entry point).
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor
+};
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 // Configure the HTTP request pipeline.
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<LoggingEnrichmentMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<SecurityHeadersMiddleware>();
+// RISK-10: double-submit cookie CSRF protection. Must run before
+// UseAuthentication so state-changing requests are validated first.
+app.UseMiddleware<CsrfProtectionMiddleware>();
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseMiddleware<RateLimitingMiddleware>();
 
@@ -294,13 +364,43 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Skip HTTPS redirect in Testing environment to avoid redirect loops with TestServer (HTTP only).
-if (!app.Environment.IsEnvironment("Testing"))
+// HTTPS redirect is only needed in local development (direct browser access
+// to the API with both HTTP+HTTPS endpoints). In Docker/Production the API
+// runs HTTP-only behind nginx which terminates TLS and performs the
+// HTTP→HTTPS redirect itself. Running UseHttpsRedirection here would redirect
+// to an HTTPS endpoint that doesn't exist inside the container, causing a
+// redirect loop. Skip in Testing to avoid redirect loops with TestServer.
+if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
 app.UseCors("AllowFrontend");
 app.UseSession();
+
+// RISK-26: Serve uploaded files at /uploads/ so the nginx reverse proxy can
+// forward requests to the API. The FileStorage:Path config (default "uploads")
+// is resolved relative to the app working directory. In Docker the api_data
+// volume is mounted at /app/data and uploads live under /app/uploads.
+var fileStoragePath = builder.Configuration.GetValue<string>("FileStorage:Path") ?? "uploads";
+if (!Path.IsPathRooted(fileStoragePath))
+{
+    fileStoragePath = Path.Combine(Directory.GetCurrentDirectory(), fileStoragePath);
+}
+// Ensure the uploads directory exists before constructing the
+// PhysicalFileProvider — otherwise the API fails to start when the
+// directory is absent (e.g. in the test bin directory).
+Directory.CreateDirectory(fileStoragePath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(fileStoragePath),
+    RequestPath = "/uploads",
+    ServeUnknownFileTypes = true,
+    OnPrepareResponse = ctx =>
+    {
+        // Prevent browsers from sniffing uploaded content as HTML/JS (XSS).
+        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    }
+});
 
 // Apply migrations and seed data (skip migrations in automated test environment)
 using (var scope = app.Services.CreateScope())
@@ -329,6 +429,9 @@ app.UseAuthorization();
 
 // Map health checks
 app.MapHealthChecks("/health");
+
+// Map SignalR NotificationHub (RISK-14)
+app.MapHub<NotificationHub>("/hub");
 
 app.MapControllers();
 

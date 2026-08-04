@@ -249,6 +249,53 @@ namespace SMS.Persistence.Data
                 entity.HasQueryFilter(r => !r.IsDeleted);
             });
 
+            // Configure Enrollment entity indexes (RISK-18)
+            modelBuilder.Entity<Enrollment>(entity =>
+            {
+                entity.HasIndex(e => e.StudentId);
+                entity.HasIndex(e => e.CourseId);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => new { e.StudentId, e.CourseId });
+                entity.HasIndex(e => e.EnrollmentDate);
+            });
+
+            // Configure Grade entity indexes (RISK-18)
+            modelBuilder.Entity<Grade>(entity =>
+            {
+                entity.HasIndex(g => g.StudentId);
+                entity.HasIndex(g => g.UnitId);
+                entity.HasIndex(g => new { g.StudentId, g.UnitId });
+                entity.HasIndex(g => g.SemesterId);
+            });
+
+            // Configure Notification entity indexes (RISK-18)
+            modelBuilder.Entity<Notification>(entity =>
+            {
+                entity.HasIndex(n => n.UserId);
+                entity.HasIndex(n => new { n.UserId, n.IsRead });
+                entity.HasIndex(n => n.Type);
+                entity.HasIndex(n => n.CreatedDate);
+            });
+
+            // Configure LoginHistory entity indexes (RISK-18)
+            modelBuilder.Entity<LoginHistory>(entity =>
+            {
+                entity.HasIndex(h => h.UserId);
+                entity.HasIndex(h => new { h.UserId, h.LoginTime });
+                entity.HasIndex(h => h.LoginTime);
+                entity.HasIndex(h => new { h.IsSuccessful, h.LoginTime });
+            });
+
+            // Configure AuditLog entity indexes (RISK-18)
+            modelBuilder.Entity<AuditLog>(entity =>
+            {
+                entity.HasIndex(a => a.Timestamp);
+                entity.HasIndex(a => a.UserId);
+                entity.HasIndex(a => a.Action);
+                entity.HasIndex(a => a.EntityName);
+                entity.HasIndex(a => new { a.UserId, a.Timestamp });
+            });
+
             // Configure ReportVerification entity
             modelBuilder.Entity<ReportVerification>(entity =>
             {

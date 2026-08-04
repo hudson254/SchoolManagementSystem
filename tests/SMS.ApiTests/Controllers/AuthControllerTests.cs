@@ -16,6 +16,26 @@ namespace SMS.ApiTests.Controllers
             _fixture = fixture;
         }
 
+        /// <summary>
+        /// RISK-08: tokens are no longer returned in the JSON body — they are
+        /// set as httpOnly Set-Cookie headers. Extract the access_token cookie
+        /// value for assertions.
+        /// </summary>
+        private static string GetAccessTokenCookie(HttpResponseMessage response)
+        {
+            if (response.Headers.TryGetValues("Set-Cookie", out var values))
+            {
+                foreach (var header in values)
+                {
+                    var firstPart = header.Split(';')[0].Trim();
+                    var eq = firstPart.IndexOf('=');
+                    if (eq > 0 && firstPart.Substring(0, eq).Trim() == "access_token")
+                        return firstPart.Substring(eq + 1).Trim();
+                }
+            }
+            return string.Empty;
+        }
+
         [Fact]
         public async Task Login_WithValidCredentials_ShouldReturnOk()
         {
@@ -35,8 +55,9 @@ namespace SMS.ApiTests.Controllers
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             var result = await response.Content.ReadFromJsonAsync<AuthResponseDto>();
             result.Should().NotBeNull();
-            result!.AccessToken.Should().NotBeNullOrEmpty();
-            result.Email.Should().Be(loginRequest.email);
+            result!.Email.Should().Be(loginRequest.email);
+            // Token is in the httpOnly cookie, not the body.
+            GetAccessTokenCookie(response).Should().NotBeNullOrEmpty();
         }
 
         [Fact]
@@ -101,8 +122,9 @@ namespace SMS.ApiTests.Controllers
             response.StatusCode.Should().Be(HttpStatusCode.Created);
             var result = await response.Content.ReadFromJsonAsync<AuthResponseDto>();
             result.Should().NotBeNull();
-            result!.AccessToken.Should().NotBeNullOrEmpty();
-            result.Email.Should().Be(registerRequest.email);
+            result!.Email.Should().Be(registerRequest.email);
+            // Token is in the httpOnly cookie, not the body.
+            GetAccessTokenCookie(response).Should().NotBeNullOrEmpty();
         }
 
         [Fact]

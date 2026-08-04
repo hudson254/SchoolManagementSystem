@@ -39,11 +39,12 @@ namespace SMS.ApiTests.Integration
             registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
             var registerResult = await registerResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
             registerResult.Should().NotBeNull();
-            registerResult!.AccessToken.Should().NotBeNullOrEmpty();
+            registerResult!.Email.Should().Be(email);
 
-            client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", registerResult.AccessToken);
-
+            // RISK-08: the register response sets the access_token as an
+            // httpOnly cookie on this client. The /auth/me request below
+            // automatically carries it (cookie auth), so no Authorization
+            // header is needed.
             var meResponse = await client.GetAsync("/api/v1/auth/me");
             meResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 

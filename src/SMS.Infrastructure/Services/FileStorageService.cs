@@ -19,6 +19,40 @@ namespace SMS.Infrastructure.Services
             _logger = logger;
         }
 
+        /// <summary>
+        /// Resolves a user-supplied relative path to a fully-qualified path
+        /// guaranteed to stay within the configured base directory.
+        ///
+        /// RISK-22 FIX: Rejects path-traversal attempts ("../", "..\") and
+        /// absolute paths that would escape the storage root. The resolved
+        /// base path is normalized (full path) and the target is required to
+        /// be a descendant of it, so "..\..\secret.txt" and
+        /// "C:\Windows\system.ini" cannot be read/written/deleted.
+        /// </summary>
+        private string ResolveSafePath(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+                throw new ArgumentException("Path must not be empty.", nameof(relativePath));
+
+            var basePath = Path.GetFullPath(_options.Path ?? "uploads");
+
+            // Normalize separators to the platform separator, then resolve.
+            var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(Path.Combine(basePath, normalized));
+
+            // The resolved path must be inside the base directory. A prefix
+            // check with the trailing separator prevents "uploads-evil" from
+            // being accepted as a sibling to "uploads".
+            var basePrefix = basePath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!fullPath.StartsWith(basePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException(
+                    $"Path '{relativePath}' resolves outside the configured storage directory.");
+            }
+
+            return fullPath;
+        }
+
         public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string container = null)
         {
             try
@@ -26,12 +60,19 @@ namespace SMS.Infrastructure.Services
                 var basePath = _options.Path ?? "uploads";
                 var containerPath = string.IsNullOrEmpty(container) ? basePath : Path.Combine(basePath, container);
 
+                // Validate the container path stays inside the storage root.
+                ResolveSafePath(containerPath);
+
                 if (!Directory.Exists(containerPath))
                 {
                     Directory.CreateDirectory(containerPath);
                 }
 
-                var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+                var safeFileName = Path.GetFileName(fileName);
+                if (string.IsNullOrEmpty(safeFileName))
+                    throw new ArgumentException("File name must not be empty.", nameof(fileName));
+
+                var uniqueFileName = $"{Guid.NewGuid()}_{safeFileName}";
                 var filePath = Path.Combine(containerPath, uniqueFileName);
 
                 using (var fileStreamOutput = new FileStream(filePath, FileMode.Create))
@@ -39,7 +80,7 @@ namespace SMS.Infrastructure.Services
                     await fileStream.CopyToAsync(fileStreamOutput);
                 }
 
-                _logger.LogInformation("File uploaded: {FileName} to {Container}", fileName, container ?? "root");
+                _logger.LogInformation("File uploaded: {FileName} to {Container}", safeFileName, container ?? "root");
                 return Path.Combine(container ?? "", uniqueFileName).Replace('\\', '/');
             }
             catch (Exception ex)
@@ -53,8 +94,7 @@ namespace SMS.Infrastructure.Services
         {
             try
             {
-                var basePath = _options.Path ?? "uploads";
-                var fullPath = Path.Combine(basePath, filePath.Replace('/', '\\'));
+                var fullPath = ResolveSafePath(filePath);
 
                 if (!File.Exists(fullPath))
                 {
@@ -81,8 +121,7 @@ namespace SMS.Infrastructure.Services
         {
             try
             {
-                var basePath = _options.Path ?? "uploads";
-                var fullPath = Path.Combine(basePath, filePath.Replace('/', '\\'));
+                var fullPath = ResolveSafePath(filePath);
 
                 if (File.Exists(fullPath))
                 {

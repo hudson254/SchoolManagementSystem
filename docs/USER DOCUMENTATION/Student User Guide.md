@@ -98,14 +98,18 @@ The School Management System is designed to provide students with a central plat
 
 ### 2.3 Password Reset
 
-If you forget your password:
+If you forget your password, the system uses an **admin-mediated** workflow
+(on the isolated LAN there is no email delivery):
 
 **Step 1:** Click **"Forgot Password?"** on the login page.  
 **Step 2:** Enter your registered email address.  
-**Step 3:** Click **"Send Reset Link"**.  
-**Step 4:** Check your email for a password reset link.  
-**Step 5:** Click the link and enter your new password.  
-**Step 6:** Confirm your new password and click **"Reset Password"**.
+**Step 3:** Click **"Submit Request"** — a pending password-reset request is
+created for an administrator. (The response is the same whether or not the
+email exists, to protect account privacy.)  
+**Step 4:** Contact your system administrator or ICT office and ask them to
+fulfill your request — they will generate a temporary password for you.  
+**Step 5:** Sign in with the temporary password, then change it from your
+profile (**Change Password**) on your next sign-in.
 
 ### 2.4 Dashboard Overview
 

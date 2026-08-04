@@ -1,8 +1,11 @@
 FROM nginx:alpine
 
-# Copy nginx configuration
+# Copy nginx configuration.
+# nginx.conf is a complete config (events{} + http{}) with its own server
+# blocks for SSL termination and reverse-proxying to the api/frontend
+# containers. It does NOT include /etc/nginx/conf.d/*.conf, so
+# nginx-frontend.conf is NOT copied here (it would be dead weight).
 COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/nginx-frontend.conf /etc/nginx/conf.d/default.conf
 
 # Create SSL directory
 RUN mkdir -p /etc/ssl/certs /etc/ssl/private

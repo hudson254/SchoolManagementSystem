@@ -28,7 +28,11 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // RISK-17: source maps expose the original TypeScript source in the
+    // production bundle. They are only useful for local debugging, so they
+    // are disabled for production builds. Dev/preview sourcemaps remain
+    // available through the Vite dev server.
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks(id: string) {

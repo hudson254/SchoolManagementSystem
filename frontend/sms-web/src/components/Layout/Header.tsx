@@ -145,9 +145,17 @@ export const Header: React.FC = () => {
         gap: 2,
       }}
     >
-      <Typography variant="h6" fontWeight={600} noWrap>
-        School Management System
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          component="img"
+          src="/logo.png"
+          alt="School Management System logo"
+          sx={{ height: 32, width: 'auto', objectFit: 'contain' }}
+        />
+        <Typography variant="h6" fontWeight={600} noWrap>
+          School Management System
+        </Typography>
+      </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, maxWidth: 400 }}>
         <TextField

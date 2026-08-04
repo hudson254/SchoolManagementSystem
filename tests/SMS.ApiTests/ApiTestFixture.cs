@@ -73,9 +73,13 @@ namespace SMS.ApiTests
                 // and throw "Scheme already exists: Identity.Application" at host startup.
                 // The EF stores registered by Program.cs will resolve to the InMemory ApplicationDbContext above.
 
-                // Mock ICurrentUserService (some business logic depends on it)
-                RemoveServiceDescriptors(typeof(ICurrentUserService), services);
-                var mockCurrentUser = new Mock<ICurrentUserService>();
+                // Mock ICurrentUserService — the controller resolves the
+                // APPLICATION interface (SMS.Application.Common.Interfaces),
+                // NOT the Domain one. Register the mock for the Application
+                // interface so the StudentController ownership check uses it.
+                var appCurrentUserServiceType = typeof(SMS.Application.Common.Interfaces.ICurrentUserService);
+                RemoveServiceDescriptors(appCurrentUserServiceType, services);
+                var mockCurrentUser = new Mock<SMS.Application.Common.Interfaces.ICurrentUserService>();
                 mockCurrentUser.Setup(x => x.UserId).Returns("test-user-id");
                 mockCurrentUser.Setup(x => x.Email).Returns("test@test.com");
                 mockCurrentUser.Setup(x => x.Username).Returns("testuser");
@@ -258,6 +262,28 @@ namespace SMS.ApiTests
             return client;
         }
 
+        /// <summary>
+        /// RISK-08: login/register/refresh no longer return tokens in the JSON
+        /// body — they are set as httpOnly Set-Cookie headers. Extract the
+        /// access_token cookie value from the Set-Cookie response header so
+        /// tests keep authenticating via the existing Bearer-token interface.
+        /// </summary>
+        private static string ExtractCookieValue(HttpResponseMessage response, string cookieName)
+        {
+            if (response.Headers.TryGetValues("Set-Cookie", out var values))
+            {
+                foreach (var header in values)
+                {
+                    // Header shape: access_token=eyJ...; path=/; HttpOnly; SameSite=Lax
+                    var firstPart = header.Split(';')[0].Trim();
+                    var eq = firstPart.IndexOf('=');
+                    if (eq > 0 && firstPart.Substring(0, eq).Trim() == cookieName)
+                        return firstPart.Substring(eq + 1).Trim();
+                }
+            }
+            return string.Empty;
+        }
+
         private async Task<string> EnsureAdminTokenAsync()
         {
             if (!string.IsNullOrWhiteSpace(_cachedAdminToken))
@@ -273,8 +299,8 @@ namespace SMS.ApiTests
                 var response = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
                 response.EnsureSuccessStatusCode();
 
-                var result = await response.Content.ReadFromJsonAsync<SMS.Application.DTOs.AuthResponseDto>();
-                _cachedAdminToken = result?.AccessToken ?? string.Empty;
+                // Tokens now arrive via Set-Cookie (httpOnly cookies) — no body.
+                _cachedAdminToken = ExtractCookieValue(response, "access_token");
             }
             finally
             {
@@ -299,8 +325,7 @@ namespace SMS.ApiTests
                 var response = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
                 response.EnsureSuccessStatusCode();
 
-                var result = await response.Content.ReadFromJsonAsync<SMS.Application.DTOs.AuthResponseDto>();
-                return result?.AccessToken ?? string.Empty;
+                return ExtractCookieValue(response, "access_token");
             }
             finally
             {
