@@ -23,6 +23,9 @@ const Students = loadPage(() => import('./pages/Students'), 'Students');
 const StudentDetail = loadPage(() => import('./pages/StudentDetail'), 'StudentDetail');
 const Lecturers = loadPage(() => import('./pages/Lecturers'), 'Lecturers');
 const Courses = loadPage(() => import('./pages/Courses'), 'Courses');
+const CourseOfferings = loadPage(() => import('./pages/CourseOfferings'), 'CourseOfferings');
+const CourseOfferingDetail = loadPage(() => import('./pages/CourseOfferingDetail'), 'CourseOfferingDetail');
+const CourseOfferingFormPage = loadPage(() => import('./pages/CourseOfferingFormPage'), 'CourseOfferingFormPage');
 const Units = loadPage(() => import('./pages/Units'), 'Units');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
@@ -76,6 +79,10 @@ function App() {
                         <Route path="students/:id" element={<StudentDetail />} />
                         <Route path="lecturers" element={<Lecturers />} />
                         <Route path="courses" element={<Courses />} />
+                        <Route path="course-offerings" element={<CourseOfferings />} />
+                        <Route path="course-offerings/new" element={<CourseOfferingFormPage />} />
+                        <Route path="course-offerings/:id" element={<CourseOfferingDetail />} />
+                        <Route path="course-offerings/:id/edit" element={<CourseOfferingFormPage />} />
                         <Route path="units" element={<Units />} />
                         <Route path="timetable" element={<Timetable />} />
                         <Route path="accommodation" element={<Accommodation />} />

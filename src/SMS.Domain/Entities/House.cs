@@ -1,4 +1,5 @@
 using SMS.Domain.Common;
+using SMS.Domain.Enums;
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -39,9 +40,14 @@ namespace SMS.Domain.Entities
         public bool IsOccupied { get; set; }
 
         /// <summary>
-        /// The student currently occupying this house (if any).
+        /// The occupant currently occupying this house (student or lecturer).
         /// </summary>
         public Guid? OccupantId { get; set; }
+
+        /// <summary>
+        /// The type of occupant (Student or Lecturer).
+        /// </summary>
+        public OccupantType? OccupantType { get; set; }
 
         /// <summary>
         /// Whether the house is enabled/disabled for use.
@@ -78,6 +84,7 @@ namespace SMS.Domain.Entities
         // Navigation properties
         public virtual Lane Lane { get; set; }
         public virtual Student Occupant { get; set; }
+        public virtual Lecturer LecturerOccupant { get; set; }
         public virtual Semester Semester { get; set; }
         public virtual ICollection<Accommodation> Accommodations { get; set; } = new List<Accommodation>();
         public virtual ICollection<AccommodationAssignment> AccommodationAssignments { get; set; } = new List<AccommodationAssignment>();

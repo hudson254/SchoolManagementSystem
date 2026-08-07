@@ -14,6 +14,7 @@ namespace SMS.Domain.Entities
         [Required]
         public Guid SemesterId { get; set; }
 
+        public Guid? CourseOfferingId { get; set; }
         public DateTime AllocationDate { get; set; } = DateTime.UtcNow;
 
         [MaxLength(20)]
@@ -27,5 +28,6 @@ namespace SMS.Domain.Entities
         public virtual Lecturer? Lecturer { get; set; }
         public virtual Unit? Unit { get; set; }
         public virtual Semester? Semester { get; set; }
+        public virtual CourseOffering? CourseOffering { get; set; }
     }
 }

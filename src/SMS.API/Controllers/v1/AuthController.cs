@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SMS.Application.DTOs;
 using SMS.Application.Features.Auth.Commands;
 using SMS.Application.Features.Auth.Queries;
+using SMS.Application.Features.Courses.Queries;
 
 namespace SMS.API.Controllers.v1
 {
@@ -240,6 +241,28 @@ namespace SMS.API.Controllers.v1
             var command = new VerifyEmailCommand { UserId = userId, Token = token };
             await Mediator.Send(command, cancellationToken);
             return Ok(new { Message = "Email verified successfully" });
+        }
+
+        [HttpGet("active-courses")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(IEnumerable<CourseDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetActiveCourses(CancellationToken cancellationToken)
+        {
+            var query = new GetActiveCoursesForRegistrationQuery();
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpGet("username-availability")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(UsernameAvailabilityDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> CheckUsernameAvailability(
+            [FromQuery] string username,
+            CancellationToken cancellationToken)
+        {
+            var query = new CheckUsernameAvailabilityQuery { Username = username };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
         }
 
         [HttpGet("me")]

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { normalizeError } from '../utils/errors';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000');
@@ -47,6 +48,7 @@ class ApiClient {
     // Response interceptor — on a 401 (expired access token), attempt a
     // silent cookie-based refresh. The backend rotates the refresh token
     // and sets new httpOnly cookies. If refresh fails, redirect to login.
+    // All errors are normalized to user-friendly messages before rejection.
     this.client.interceptors.response.use(
       (response: AxiosResponse) => response,
       async (error) => {
@@ -67,11 +69,13 @@ class ApiClient {
           } catch (refreshError) {
             // Token refresh failed — clear user session and go to login.
             window.location.href = '/login';
-            return Promise.reject(refreshError);
+            return Promise.reject(normalizeError(refreshError));
           }
         }
 
-        return Promise.reject(error);
+        // Normalize the error to a user-friendly, safe message.
+        // Never exposes stack traces, SQL, file paths, or internal details.
+        return Promise.reject(normalizeError(error));
       }
     );
   }

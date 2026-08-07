@@ -56,14 +56,31 @@ namespace SMS.API.Middleware
             var scrubbedQuery = ScrubSensitiveQueryParams(context.Request.Query
                 .ToDictionary(q => q.Key, q => q.Value.ToString()));
 
+            // Extract user/role/tenant/session context for enrichment
+            var userId = context.User?.FindFirst("sub")?.Value;
+            var username = context.User?.Identity?.Name;
+            var userRole = context.User?.FindFirst("role")?.Value;
+            var tenantId = context.Items["TenantId"]?.ToString();
+            var sessionId = context.Features.Get<Microsoft.AspNetCore.Http.Features.ISessionFeature>()?.Session?.Id;
+            var userAgent = context.Request.Headers["User-Agent"].FirstOrDefault() ?? "Unknown";
+            var (device, browser, os) = ParseUserAgent(userAgent);
+
             using (_logger.BeginScope(new Dictionary<string, object>
             {
                 ["CorrelationId"] = correlationId,
                 ["RequestMethod"] = context.Request.Method,
                 ["RequestPath"] = context.Request.Path,
                 ["RequestQueryString"] = context.Request.QueryString.ToString(),
-                ["UserAgent"] = context.Request.Headers["User-Agent"].FirstOrDefault() ?? "Unknown",
-                ["RemoteIp"] = context.Connection.RemoteIpAddress?.ToString() ?? "Unknown"
+                ["UserAgent"] = userAgent,
+                ["RemoteIp"] = context.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                ["UserId"] = userId ?? "Anonymous",
+                ["Username"] = username ?? "Anonymous",
+                ["UserRole"] = userRole ?? "None",
+                ["TenantId"] = tenantId ?? "None",
+                ["SessionId"] = sessionId ?? "None",
+                ["Device"] = device,
+                ["Browser"] = browser,
+                ["OperatingSystem"] = os
             }))
             {
                 try
@@ -81,6 +98,58 @@ namespace SMS.API.Middleware
                         stopwatch.ElapsedMilliseconds);
                 }
             }
+        }
+
+        /// <summary>
+        /// Parses the User-Agent header into device, browser, and OS components.
+        /// </summary>
+        private static (string device, string browser, string os) ParseUserAgent(string userAgent)
+        {
+            if (string.IsNullOrWhiteSpace(userAgent))
+                return ("Unknown", "Unknown", "Unknown");
+
+            var ua = userAgent.ToLowerInvariant();
+
+            // Device detection
+            string device;
+            if (ua.Contains("mobile") || ua.Contains("android") || ua.Contains("iphone"))
+                device = "Mobile";
+            else if (ua.Contains("tablet") || ua.Contains("ipad"))
+                device = "Tablet";
+            else
+                device = "Desktop";
+
+            // Browser detection
+            string browser;
+            if (ua.Contains("edg/"))
+                browser = "Edge";
+            else if (ua.Contains("chrome/"))
+                browser = "Chrome";
+            else if (ua.Contains("firefox/"))
+                browser = "Firefox";
+            else if (ua.Contains("safari/"))
+                browser = "Safari";
+            else if (ua.Contains("opera/") || ua.Contains("opr/"))
+                browser = "Opera";
+            else
+                browser = "Unknown";
+
+            // OS detection
+            string os;
+            if (ua.Contains("windows"))
+                os = "Windows";
+            else if (ua.Contains("android"))
+                os = "Android";
+            else if (ua.Contains("iphone") || ua.Contains("ipad") || ua.Contains("ios"))
+                os = "iOS";
+            else if (ua.Contains("mac os"))
+                os = "macOS";
+            else if (ua.Contains("linux"))
+                os = "Linux";
+            else
+                os = "Unknown";
+
+            return (device, browser, os);
         }
 
         /// <summary>

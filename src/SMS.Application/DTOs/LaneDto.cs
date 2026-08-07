@@ -1,3 +1,4 @@
+using SMS.Domain.Enums;
 using System;
 
 namespace SMS.Application.DTOs
@@ -36,8 +37,10 @@ namespace SMS.Application.DTOs
         public bool IsEnabled { get; set; }
         public bool IsAvailable { get; set; }
         public Guid? OccupantId { get; set; }
+        public OccupantType? OccupantType { get; set; }
         public string? OccupantName { get; set; }
         public string? StudentNumber { get; set; }
+        public string? EmployeeNumber { get; set; }
         public Guid? SemesterId { get; set; }
         public string? Notes { get; set; }
         public DateTime? OccupiedDate { get; set; }
@@ -185,6 +188,43 @@ namespace SMS.Application.DTOs
         public Guid StudentId { get; set; }
         public string StudentName { get; set; } = string.Empty;
         public string StudentNumber { get; set; } = string.Empty;
+        public Guid? HouseId { get; set; }
+        public string? HouseNumber { get; set; }
+        public string? LaneName { get; set; }
+        public string? AssignmentStatus { get; set; }
+        public DateTime? AssignedDate { get; set; }
+        public DateTime? MoveInDate { get; set; }
+        public DateTime? MoveOutDate { get; set; }
+        public string? Remarks { get; set; }
+    }
+
+    /// <summary>
+    /// Report DTO for lecturer accommodation list.
+    /// </summary>
+    public class LecturerAccommodationDto
+    {
+        public Guid LecturerId { get; set; }
+        public string LecturerName { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public Guid? HouseId { get; set; }
+        public string? HouseNumber { get; set; }
+        public string? LaneName { get; set; }
+        public string? AssignmentStatus { get; set; }
+        public DateTime? AssignedDate { get; set; }
+        public DateTime? MoveInDate { get; set; }
+        public DateTime? MoveOutDate { get; set; }
+        public string? Remarks { get; set; }
+    }
+
+    /// <summary>
+    /// Generic report DTO for any occupant accommodation list.
+    /// </summary>
+    public class OccupantAccommodationDto
+    {
+        public Guid OccupantId { get; set; }
+        public OccupantType OccupantType { get; set; } = OccupantType.Student;
+        public string OccupantName { get; set; } = string.Empty;
+        public string? Identifier { get; set; }
         public Guid? HouseId { get; set; }
         public string? HouseNumber { get; set; }
         public string? LaneName { get; set; }

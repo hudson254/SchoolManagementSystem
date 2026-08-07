@@ -13,6 +13,8 @@ export interface Lane {
   updatedDate?: string;
 }
 
+export type OccupantType = 'Student' | 'Lecturer';
+
 export interface House {
   id: string;
   laneId: string;
@@ -24,8 +26,10 @@ export interface House {
   isEnabled: boolean;
   isAvailable: boolean;
   occupantId?: string;
+  occupantType?: OccupantType;
   occupantName?: string;
   studentNumber?: string;
+  employeeNumber?: string;
   semesterId?: string;
   notes?: string;
   occupiedDate?: string;
@@ -81,7 +85,9 @@ export interface CreateHouseRequest {
 }
 
 export interface AssignHouseRequest {
-  studentId: string;
+  studentId?: string;
+  lecturerId?: string;
+  occupantType: OccupantType;
   houseId: string;
   semesterId: string;
   moveInDate?: string;
@@ -89,7 +95,9 @@ export interface AssignHouseRequest {
 }
 
 export interface ReassignHouseRequest {
-  studentId: string;
+  studentId?: string;
+  lecturerId?: string;
+  occupantType: OccupantType;
   newHouseId: string;
   remarks?: string;
 }
@@ -131,6 +139,20 @@ export interface StudentAccommodation {
   studentId: string;
   studentName: string;
   studentNumber: string;
+  houseId?: string;
+  houseNumber?: string;
+  laneName?: string;
+  assignmentStatus?: string;
+  assignedDate?: string;
+  moveInDate?: string;
+  moveOutDate?: string;
+  remarks?: string;
+}
+
+export interface LecturerAccommodation {
+  lecturerId: string;
+  lecturerName: string;
+  employeeNumber: string;
   houseId?: string;
   houseNumber?: string;
   laneName?: string;

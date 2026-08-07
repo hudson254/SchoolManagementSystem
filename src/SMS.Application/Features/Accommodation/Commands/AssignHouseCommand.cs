@@ -2,13 +2,16 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.Accommodation.Commands
 {
     public class AssignHouseCommand : IRequest<Guid>
     {
-        public Guid StudentId { get; set; }
+        public Guid? StudentId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public OccupantType OccupantType { get; set; } = OccupantType.Student;
         public Guid HouseId { get; set; }
         public Guid SemesterId { get; set; }
         public DateTime? MoveInDate { get; set; }
@@ -19,9 +22,12 @@ namespace SMS.Application.Features.Accommodation.Commands
     {
         public AssignHouseCommandValidator()
         {
-            RuleFor(x => x.StudentId).NotEmpty();
             RuleFor(x => x.HouseId).NotEmpty();
             RuleFor(x => x.SemesterId).NotEmpty();
+            RuleFor(x => x).Must(x =>
+                (x.OccupantType == OccupantType.Student && x.StudentId.HasValue) ||
+                (x.OccupantType == OccupantType.Lecturer && x.LecturerId.HasValue))
+                .WithMessage("Either StudentId or LecturerId must be provided based on OccupantType");
         }
     }
 
@@ -57,15 +63,20 @@ namespace SMS.Application.Features.Accommodation.Commands
             if (!house.IsAvailable || !house.IsEnabled)
                 throw new SMS.Application.Exceptions.ValidationException($"House {house.HouseNumber} is not available for assignment");
 
-            // Check if student already has an active assignment
-            var existingAssignment = await _repository.GetAssignmentByStudentAsync(request.StudentId, cancellationToken);
+            // Check if occupant already has an active assignment
+            var existingAssignment = await _repository.GetAssignmentByOccupantAsync(
+                request.OccupantType == OccupantType.Student ? request.StudentId!.Value : request.LecturerId!.Value,
+                request.OccupantType,
+                cancellationToken);
             if (existingAssignment != null && existingAssignment.Status == "Active")
-                throw new SMS.Application.Exceptions.ValidationException("Student already has an active accommodation assignment");
+                throw new SMS.Application.Exceptions.ValidationException("Occupant already has an active accommodation assignment");
 
             // Create assignment
             var assignment = new AccommodationAssignment
             {
-                StudentId = request.StudentId,
+                StudentId = request.OccupantType == OccupantType.Student ? request.StudentId : null,
+                LecturerId = request.OccupantType == OccupantType.Lecturer ? request.LecturerId : null,
+                OccupantType = request.OccupantType,
                 HouseId = request.HouseId,
                 LaneId = house.LaneId,
                 SemesterId = request.SemesterId,
@@ -80,7 +91,8 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             // Update house status
             house.IsOccupied = true;
-            house.OccupantId = request.StudentId;
+            house.OccupantId = request.OccupantType == OccupantType.Student ? request.StudentId : request.LecturerId;
+            house.OccupantType = request.OccupantType;
             house.Status = HouseStatus.Occupied;
             house.OccupiedDate = DateTime.UtcNow;
             house.SemesterId = request.SemesterId;
@@ -88,10 +100,11 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            var occupantId = request.OccupantType == OccupantType.Student ? request.StudentId!.Value : request.LecturerId!.Value;
             await _auditService.LogAsync("Assign", "House",
-                $"Assigned student {request.StudentId} to house {house.HouseNumber} (LaneId: {house.LaneId})");
+                $"Assigned {request.OccupantType} {occupantId} to house {house.HouseNumber} (LaneId: {house.LaneId})");
 
-            _logger.LogInformation("House {HouseNumber} assigned to student {StudentId}", house.HouseNumber, request.StudentId);
+            _logger.LogInformation("House {HouseNumber} assigned to {OccupantType} {OccupantId}", house.HouseNumber, request.OccupantType, occupantId);
             return assignment.Id;
         }
     }

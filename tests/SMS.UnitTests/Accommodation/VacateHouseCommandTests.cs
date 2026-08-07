@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SMS.Application.Features.Accommodation.Commands;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 using Xunit;
 
@@ -44,19 +45,21 @@ namespace SMS.UnitTests.Accommodation
                 HouseNumber = "001",
                 IsOccupied = true,
                 OccupantId = occupantId,
+                OccupantType = OccupantType.Student,
                 Status = HouseStatus.Occupied
             };
 
             var assignment = new AccommodationAssignment
             {
                 StudentId = occupantId,
+                OccupantType = OccupantType.Student,
                 HouseId = houseId,
                 Status = "Active"
             };
 
             _repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(house);
-            _repositoryMock.Setup(r => r.GetAssignmentByStudentAsync(occupantId, It.IsAny<CancellationToken>()))
+            _repositoryMock.Setup(r => r.GetAssignmentByOccupantAsync(occupantId, OccupantType.Student, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(assignment);
 
             // Act

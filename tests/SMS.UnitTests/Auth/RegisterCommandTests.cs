@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using FluentValidation.TestHelper;
 using Moq;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.Exceptions;
 using SMS.Application.Features.Auth.Commands;
 using SMS.Domain.Entities;
@@ -19,6 +20,15 @@ namespace SMS.UnitTests.Auth
         private readonly Mock<IUserManagerService> _userManagerMock;
         private readonly Mock<IJwtService> _jwtServiceMock;
         private readonly Mock<IAuditService> _auditServiceMock;
+        private readonly Mock<IUsernameGenerator> _usernameGeneratorMock;
+        private readonly Mock<IStudentRepository> _studentRepositoryMock;
+        private readonly Mock<ILecturerRepository> _lecturerRepositoryMock;
+        private readonly Mock<ICourseRepository> _courseRepositoryMock;
+        private readonly Mock<IUnitRepository> _unitRepositoryMock;
+        private readonly Mock<IUnitAllocationRepository> _unitAllocationRepositoryMock;
+        private readonly Mock<SMS.Multitenancy.Interfaces.ITenantContext> _tenantContextMock;
+        private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+        private readonly Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler> _logger;
 
         public RegisterCommandTests()
         {
@@ -26,10 +36,38 @@ namespace SMS.UnitTests.Auth
             _userManagerMock = new Mock<IUserManagerService>();
             _jwtServiceMock = new Mock<IJwtService>();
             _auditServiceMock = new Mock<IAuditService>();
+            _usernameGeneratorMock = new Mock<IUsernameGenerator>();
+            _studentRepositoryMock = new Mock<IStudentRepository>();
+            _lecturerRepositoryMock = new Mock<ILecturerRepository>();
+            _courseRepositoryMock = new Mock<ICourseRepository>();
+            _unitRepositoryMock = new Mock<IUnitRepository>();
+            _unitAllocationRepositoryMock = new Mock<IUnitAllocationRepository>();
+            _tenantContextMock = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
+            _unitOfWorkMock = new Mock<IUnitOfWork>();
+            _logger = Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>();
+
+            _tenantContextMock.Setup(x => x.TenantId).Returns(Guid.NewGuid().ToString());
+        }
+
+        private RegisterCommandHandler CreateHandler()
+        {
+            return new RegisterCommandHandler(
+                _userManagerMock.Object,
+                _jwtServiceMock.Object,
+                _auditServiceMock.Object,
+                _logger,
+                _usernameGeneratorMock.Object,
+                _studentRepositoryMock.Object,
+                _lecturerRepositoryMock.Object,
+                _courseRepositoryMock.Object,
+                _unitRepositoryMock.Object,
+                _unitAllocationRepositoryMock.Object,
+                _tenantContextMock.Object,
+                _unitOfWorkMock.Object);
         }
 
         [Fact]
-        public void ValidCommand_ShouldNotHaveValidationErrors()
+        public void ValidStudentCommand_ShouldNotHaveValidationErrors()
         {
             // Arrange
             var command = new RegisterCommand
@@ -37,8 +75,36 @@ namespace SMS.UnitTests.Auth
                 FirstName = "John",
                 LastName = "Doe",
                 Email = "john.doe@example.com",
-                Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#"
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Student",
+                Organization = "Test University",
+                PhoneNumber = "+254700000000",
+                CourseId = Guid.NewGuid()
+            };
+
+            // Act
+            var result = _validator.TestValidate(command);
+
+            // Assert
+            result.ShouldNotHaveAnyValidationErrors();
+        }
+
+        [Fact]
+        public void ValidLecturerCommand_ShouldNotHaveValidationErrors()
+        {
+            // Arrange
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Lecturer",
+                Organization = "Test University",
+                PhoneNumber = "+254711111111",
+                Specialization = "Computer Science"
             };
 
             // Act
@@ -58,7 +124,9 @@ namespace SMS.UnitTests.Auth
                 LastName = "",
                 Email = "invalid-email",
                 Password = "weak",
-                ConfirmPassword = "different"
+                ConfirmPassword = "different",
+                Role = "Administrator",
+                Organization = ""
             };
 
             // Act
@@ -70,6 +138,8 @@ namespace SMS.UnitTests.Auth
             result.ShouldHaveValidationErrorFor(x => x.Email);
             result.ShouldHaveValidationErrorFor(x => x.Password);
             result.ShouldHaveValidationErrorFor(x => x.ConfirmPassword);
+            result.ShouldHaveValidationErrorFor(x => x.Role);
+            result.ShouldHaveValidationErrorFor(x => x.Organization);
         }
 
         [Fact]
@@ -82,7 +152,10 @@ namespace SMS.UnitTests.Auth
                 LastName = "Doe",
                 Email = "existing@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#"
+                ConfirmPassword = "Test123!@#",
+                Role = "Student",
+                Organization = "Test University",
+                CourseId = Guid.NewGuid()
             };
 
             var existingUser = new User { Email = "existing@example.com" };
@@ -91,11 +164,7 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.FindByEmailAsync(command.Email))
                 .ReturnsAsync(existingUser);
 
-            var handler = new RegisterCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
+            var handler = CreateHandler();
 
             // Act & Assert
             await Assert.ThrowsAsync<ConflictException>(
@@ -103,26 +172,44 @@ namespace SMS.UnitTests.Auth
         }
 
         [Fact]
-        public async Task Handle_WithValidData_ShouldRegisterUserWithDefaultRole()
+        public async Task Handle_WithValidStudentData_ShouldRegisterUserWithStudentRole()
         {
             // Arrange
             var userId = Guid.NewGuid().ToString();
+            var courseId = Guid.NewGuid();
             var command = new RegisterCommand
             {
                 FirstName = "John",
                 LastName = "Doe",
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#"
+                ConfirmPassword = "Test123!@#",
+                Role = "Student",
+                Organization = "Test University",
+                PhoneNumber = "+254700000000",
+                CourseId = courseId
+            };
+
+            var course = new Course
+            {
+                Id = courseId,
+                Name = "Computer Science",
+                Code = "CS101",
+                IsActive = true,
+                ProgrammeId = Guid.NewGuid()
             };
 
             _userManagerMock
                 .Setup(x => x.FindByEmailAsync(command.Email))
                 .ReturnsAsync((User?)null);
 
+            _usernameGeneratorMock
+                .Setup(x => x.GenerateUsernameAsync(command.FirstName, command.LastName))
+                .ReturnsAsync("john.doe");
+
             _userManagerMock
-                .Setup(x => x.CreateUserAsync(command.Email, command.Email, command.Password, RegisterCommandHandler.DefaultSelfRegistrationRole))
-                .ReturnsAsync((string email, string username, string password, string role) => new User
+                .Setup(x => x.CreateUserAsync("john.doe", command.Email, command.Password, command.Role))
+                .ReturnsAsync((string username, string email, string password, string role) => new User
                 {
                     Id = userId,
                     Email = email,
@@ -134,7 +221,7 @@ namespace SMS.UnitTests.Auth
 
             _userManagerMock
                 .Setup(x => x.GetRolesAsync(It.IsAny<User>()))
-                .ReturnsAsync(new List<string> { RegisterCommandHandler.DefaultSelfRegistrationRole });
+                .ReturnsAsync(new List<string> { "Student" });
 
             _jwtServiceMock
                 .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
@@ -144,11 +231,15 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
                 .ReturnsAsync("test-refresh-token");
 
-            var handler = new RegisterCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
+            _courseRepositoryMock
+                .Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(course);
+
+            _unitRepositoryMock
+                .Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Unit>());
+
+            var handler = CreateHandler();
 
             // Act
             var result = await handler.Handle(command, CancellationToken.None);
@@ -158,9 +249,9 @@ namespace SMS.UnitTests.Auth
             result.AccessToken.Should().Be("test-access-token");
             result.RefreshToken.Should().Be("test-refresh-token");
             result.Email.Should().Be(command.Email);
-            result.Roles.Should().Contain(RegisterCommandHandler.DefaultSelfRegistrationRole);
+            result.Roles.Should().Contain("Student");
 
-            _userManagerMock.Verify(x => x.CreateUserAsync(command.Email, command.Email, command.Password, RegisterCommandHandler.DefaultSelfRegistrationRole), Times.Once);
+            _userManagerMock.Verify(x => x.CreateUserAsync("john.doe", command.Email, command.Password, "Student"), Times.Once);
             _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
         }
 
@@ -174,14 +265,12 @@ namespace SMS.UnitTests.Auth
                 LastName = "Doe",
                 Email = "john.doe@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "DifferentPassword!"
+                ConfirmPassword = "DifferentPassword!",
+                Role = "Student",
+                Organization = "Test University"
             };
 
-            var handler = new RegisterCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
+            var handler = CreateHandler();
 
             // Act & Assert
             await Assert.ThrowsAsync<ValidationException>(
@@ -189,50 +278,68 @@ namespace SMS.UnitTests.Auth
         }
 
         [Fact]
-        public async Task Handle_RegardlessOfRequestedRole_ShouldAlwaysAssignDefaultLowPrivilegeRole()
+        public async Task Handle_WithInvalidRole_ShouldThrowValidationException()
         {
             // Arrange
-            var userId = Guid.NewGuid().ToString();
             var command = new RegisterCommand
             {
                 FirstName = "Jane",
                 LastName = "Doe",
                 Email = "jane.doe@example.com",
                 Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#"
+                ConfirmPassword = "Test123!@#",
+                Role = "Administrator",
+                Organization = "Test University"
             };
 
-            // NOTE: RegisterCommand no longer exposes a Role property, which is
-            // itself the fix. Even if a client sends "role": "Administrator" in
-            // the JSON body, model binding will ignore it because the property
-            // does not exist on the command. The handler must always create the
-            // user with the server-side default role only.
+            var handler = CreateHandler();
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(
+                () => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Handle_WithValidLecturerData_ShouldRegisterUserWithLecturerRole()
+        {
+            // Arrange
+            var userId = Guid.NewGuid().ToString();
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@example.com",
+                Password = "Test123!@#",
+                ConfirmPassword = "Test123!@#",
+                Role = "Lecturer",
+                Organization = "Test University",
+                PhoneNumber = "+254711111111",
+                Specialization = "Computer Science"
+            };
 
             _userManagerMock
                 .Setup(x => x.FindByEmailAsync(command.Email))
                 .ReturnsAsync((User?)null);
 
-            string capturedRole = null;
+            _usernameGeneratorMock
+                .Setup(x => x.GenerateUsernameAsync(command.FirstName, command.LastName))
+                .ReturnsAsync("jane.smith");
 
             _userManagerMock
-                .Setup(x => x.CreateUserAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync((string email, string username, string password, string role) =>
+                .Setup(x => x.CreateUserAsync("jane.smith", command.Email, command.Password, "Lecturer"))
+                .ReturnsAsync((string username, string email, string password, string role) => new User
                 {
-                    capturedRole = role;
-                    return new User
-                    {
-                        Id = userId,
-                        Email = email,
-                        UserName = username,
-                        FirstName = command.FirstName,
-                        LastName = command.LastName,
-                        IsActive = true
-                    };
+                    Id = userId,
+                    Email = email,
+                    UserName = username,
+                    FirstName = command.FirstName,
+                    LastName = command.LastName,
+                    IsActive = true
                 });
 
             _userManagerMock
                 .Setup(x => x.GetRolesAsync(It.IsAny<User>()))
-                .ReturnsAsync(new List<string> { RegisterCommandHandler.DefaultSelfRegistrationRole });
+                .ReturnsAsync(new List<string> { "Lecturer" });
 
             _jwtServiceMock
                 .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
@@ -242,23 +349,20 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
                 .ReturnsAsync("test-refresh-token");
 
-            var handler = new RegisterCommandHandler(
-                _userManagerMock.Object,
-                _jwtServiceMock.Object,
-                _auditServiceMock.Object,
-                Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>());
+            var handler = CreateHandler();
 
             // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
             // Assert
-            capturedRole.Should().Be(RegisterCommandHandler.DefaultSelfRegistrationRole);
-            capturedRole.Should().NotBe("Administrator");
-            capturedRole.Should().NotBe("Moderator");
-            capturedRole.Should().NotBe("Lecturer");
-            capturedRole.Should().NotBe("Receptionist");
-            result.Roles.Should().Contain(RegisterCommandHandler.DefaultSelfRegistrationRole);
-            result.Roles.Should().NotContain("Administrator");
+            result.Should().NotBeNull();
+            result.AccessToken.Should().Be("test-access-token");
+            result.RefreshToken.Should().Be("test-refresh-token");
+            result.Email.Should().Be(command.Email);
+            result.Roles.Should().Contain("Lecturer");
+
+            _userManagerMock.Verify(x => x.CreateUserAsync("jane.smith", command.Email, command.Password, "Lecturer"), Times.Once);
+            _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
         }
     }
 }

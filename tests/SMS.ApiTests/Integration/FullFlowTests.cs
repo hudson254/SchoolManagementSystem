@@ -28,11 +28,12 @@ namespace SMS.ApiTests.Integration
                 firstName = "Flow",
                 lastName = "Student",
                 email,
-                password = "Test123!@#",
-                confirmPassword = "Test123!@#",
+                password = "Test123!@#Abc",
+                confirmPassword = "Test123!@#Abc",
                 phoneNumber = "+254712345678",
                 organization = "Flow Test",
-                role = "Student"
+                role = "Student",
+                courseId = ApiTestFixture.TestCourseId
             };
 
             var registerResponse = await client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);

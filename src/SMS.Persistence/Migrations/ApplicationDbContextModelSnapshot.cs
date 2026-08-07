@@ -314,6 +314,9 @@ namespace SMS.Persistence.Migrations
                     b.Property<Guid>("LaneId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LecturerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text")
                         .HasColumnName("modified_by");
@@ -321,6 +324,9 @@ namespace SMS.Persistence.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_date");
+
+                    b.Property<int>("OccupantType")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("RoomId")
                         .HasColumnType("uuid");
@@ -336,7 +342,7 @@ namespace SMS.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<Guid>("StudentId")
+                    b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("TenantId")
@@ -355,6 +361,8 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("HouseId");
 
                     b.HasIndex("LaneId");
+
+                    b.HasIndex("LecturerId");
 
                     b.HasIndex("RoomId");
 
@@ -410,6 +418,12 @@ namespace SMS.Persistence.Migrations
                     b.Property<Guid>("LaneId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LecturerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LecturerId1")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text")
                         .HasColumnName("modified_by");
@@ -423,6 +437,9 @@ namespace SMS.Persistence.Migrations
 
                     b.Property<DateTime?>("MoveOutDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OccupantType")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Remarks")
                         .HasColumnType("text");
@@ -444,7 +461,7 @@ namespace SMS.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<Guid>("StudentId")
+                    b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("StudentId1")
@@ -466,6 +483,11 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("HouseId");
 
                     b.HasIndex("LaneId");
+
+                    b.HasIndex("LecturerId")
+                        .IsUnique();
+
+                    b.HasIndex("LecturerId1");
 
                     b.HasIndex("RoomId");
 
@@ -494,6 +516,9 @@ namespace SMS.Persistence.Migrations
 
                     b.Property<DateTime?>("ClosingDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CourseOfferingId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -598,6 +623,8 @@ namespace SMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CourseOfferingId");
+
                     b.HasIndex("LecturerId");
 
                     b.HasIndex("SemesterId");
@@ -605,6 +632,109 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("UnitId");
 
                     b.ToTable("Assignments");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.AssignmentIssueReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AssignmentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("CourseOfferingEnrollmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CourseOfferingLecturerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ReporterUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ResolvedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseOfferingEnrollmentId");
+
+                    b.HasIndex("CourseOfferingId");
+
+                    b.HasIndex("CourseOfferingLecturerId");
+
+                    b.ToTable("assignment_issue_reports");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.AssignmentSubmission", b =>
@@ -726,6 +856,9 @@ namespace SMS.Persistence.Migrations
                     b.Property<Guid>("ClassId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -798,6 +931,8 @@ namespace SMS.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClassId");
+
+                    b.HasIndex("CourseOfferingId");
 
                     b.HasIndex("StudentEnrollmentId");
 
@@ -915,7 +1050,15 @@ namespace SMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Action");
+
+                    b.HasIndex("EntityName");
+
+                    b.HasIndex("Timestamp");
+
                     b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Timestamp");
 
                     b.ToTable("AuditLogs");
                 });
@@ -1498,6 +1641,422 @@ namespace SMS.Persistence.Migrations
                     b.ToTable("Courses");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOffering", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Intake")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OfferingCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("RegistrationEndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RegistrationStartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("SemesterId");
+
+                    b.ToTable("course_offerings");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOfferingEnrollment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConfirmationStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ConfirmedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<DateTime?>("DropDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EnrollmentDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseOfferingId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("course_offering_enrollments");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOfferingLecturer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AssignmentDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ConfirmationStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ConfirmedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LecturerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("RemovedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseOfferingId");
+
+                    b.HasIndex("LecturerId");
+
+                    b.ToTable("course_offering_lecturers");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOfferingUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AssessmentMethods")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("AssessmentWeighting")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ContactHours")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<int>("Credits")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LearningOutcomes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid?>("UnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseOfferingId");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("course_offering_units");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Department", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1589,6 +2148,9 @@ namespace SMS.Persistence.Migrations
                     b.Property<Guid>("CourseId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1667,11 +2229,19 @@ namespace SMS.Persistence.Migrations
 
                     b.HasIndex("CourseId");
 
+                    b.HasIndex("CourseOfferingId");
+
+                    b.HasIndex("EnrollmentDate");
+
                     b.HasIndex("SemesterId");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("StudentId");
 
                     b.HasIndex("UnitId");
+
+                    b.HasIndex("StudentId", "CourseId");
 
                     b.ToTable("Enrollments");
                 });
@@ -1682,6 +2252,9 @@ namespace SMS.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<Guid?>("CourseOfferingId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1771,6 +2344,8 @@ namespace SMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CourseOfferingId");
+
                     b.HasIndex("EnrollmentId");
 
                     b.HasIndex("SemesterId");
@@ -1780,6 +2355,8 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("StudentId");
 
                     b.HasIndex("UnitId");
+
+                    b.HasIndex("StudentId", "UnitId");
 
                     b.ToTable("Grades");
                 });
@@ -1853,6 +2430,9 @@ namespace SMS.Persistence.Migrations
 
                     b.Property<Guid?>("OccupantId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("OccupantType")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("OccupiedDate")
                         .HasColumnType("timestamp with time zone");
@@ -2267,7 +2847,13 @@ namespace SMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LoginTime");
+
                     b.HasIndex("UserId");
+
+                    b.HasIndex("IsSuccessful", "LoginTime");
+
+                    b.HasIndex("UserId", "LoginTime");
 
                     b.ToTable("LoginHistories");
                 });
@@ -2354,9 +2940,101 @@ namespace SMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedDate");
+
+                    b.HasIndex("Type");
+
                     b.HasIndex("UserId");
 
+                    b.HasIndex("UserId", "IsRead");
+
                     b.ToTable("Notifications");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.PasswordResetRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<DateTime?>("FulfilledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FulfilledByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PasswordResetRequests");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Programme", b =>
@@ -2521,6 +3199,165 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("UnitId");
 
                     b.ToTable("ProgrammeUnits");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ReportVerification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<DateTime?>("ExpirationDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GeneratedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("GeneratedByUserName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("GeneratedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HashAlgorithm")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime?>("LastVerified")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ReportId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ReportName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("RevokedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("RevokedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("SHA256Hash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("VerificationCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VerificationToken")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("WatermarkEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("WatermarkText")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneratedByUserId");
+
+                    b.HasIndex("GeneratedDate");
+
+                    b.HasIndex("ReportId")
+                        .IsUnique();
+
+                    b.HasIndex("ReportType");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("VerificationToken")
+                        .IsUnique();
+
+                    b.ToTable("ReportVerifications");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.RolePermission", b =>
@@ -3395,6 +4232,9 @@ namespace SMS.Persistence.Migrations
                     b.Property<DateTime>("AllocationDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CourseOfferingId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3467,6 +4307,8 @@ namespace SMS.Persistence.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CourseOfferingId");
 
                     b.HasIndex("LecturerId");
 
@@ -3563,7 +4405,6 @@ namespace SMS.Persistence.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("RefreshToken")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("RefreshTokenExpiryTime")
@@ -3728,6 +4569,11 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.Lecturer", "Lecturer")
+                        .WithMany("Accommodations")
+                        .HasForeignKey("LecturerId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("SMS.Domain.Entities.Room", "Room")
                         .WithMany("Accommodations")
                         .HasForeignKey("RoomId")
@@ -3736,12 +4582,13 @@ namespace SMS.Persistence.Migrations
                     b.HasOne("SMS.Domain.Entities.Student", "Student")
                         .WithMany("Accommodations")
                         .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("House");
 
                     b.Navigation("Lane");
+
+                    b.Navigation("Lecturer");
 
                     b.Navigation("Room");
 
@@ -3762,6 +4609,15 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.Lecturer", "Lecturer")
+                        .WithOne("AccommodationAssignment")
+                        .HasForeignKey("SMS.Domain.Entities.AccommodationAssignment", "LecturerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SMS.Domain.Entities.Lecturer", null)
+                        .WithMany("AccommodationAssignments")
+                        .HasForeignKey("LecturerId1");
+
                     b.HasOne("SMS.Domain.Entities.Room", "Room")
                         .WithMany()
                         .HasForeignKey("RoomId")
@@ -3776,8 +4632,7 @@ namespace SMS.Persistence.Migrations
                     b.HasOne("SMS.Domain.Entities.Student", "Student")
                         .WithOne("AccommodationAssignment")
                         .HasForeignKey("SMS.Domain.Entities.AccommodationAssignment", "StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("SMS.Domain.Entities.Student", null)
                         .WithMany("AccommodationAssignments")
@@ -3786,6 +4641,8 @@ namespace SMS.Persistence.Migrations
                     b.Navigation("House");
 
                     b.Navigation("Lane");
+
+                    b.Navigation("Lecturer");
 
                     b.Navigation("Room");
 
@@ -3796,6 +4653,10 @@ namespace SMS.Persistence.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.Assignment", b =>
                 {
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingId");
+
                     b.HasOne("SMS.Domain.Entities.Lecturer", "Lecturer")
                         .WithMany()
                         .HasForeignKey("LecturerId");
@@ -3810,11 +4671,36 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("CourseOffering");
+
                     b.Navigation("Lecturer");
 
                     b.Navigation("Semester");
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.AssignmentIssueReport", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.CourseOfferingEnrollment", "CourseOfferingEnrollment")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingEnrollmentId");
+
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.CourseOfferingLecturer", "CourseOfferingLecturer")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingLecturerId");
+
+                    b.Navigation("CourseOffering");
+
+                    b.Navigation("CourseOfferingEnrollment");
+
+                    b.Navigation("CourseOfferingLecturer");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.AssignmentSubmission", b =>
@@ -3844,6 +4730,10 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingId");
+
                     b.HasOne("SMS.Domain.Entities.StudentEnrollment", null)
                         .WithMany("Attendances")
                         .HasForeignKey("StudentEnrollmentId");
@@ -3853,6 +4743,8 @@ namespace SMS.Persistence.Migrations
                         .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("CourseOffering");
 
                     b.Navigation("Student");
                 });
@@ -3937,6 +4829,88 @@ namespace SMS.Persistence.Migrations
                     b.Navigation("Semester");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOffering", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Semester", "Semester")
+                        .WithMany()
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Semester");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOfferingEnrollment", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany("Enrollments")
+                        .HasForeignKey("CourseOfferingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CourseOffering");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOfferingLecturer", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany("Lecturers")
+                        .HasForeignKey("CourseOfferingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Lecturer", "Lecturer")
+                        .WithMany()
+                        .HasForeignKey("LecturerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CourseOffering");
+
+                    b.Navigation("Lecturer");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOfferingUnit", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany("Units")
+                        .HasForeignKey("CourseOfferingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Unit", "Unit")
+                        .WithMany()
+                        .HasForeignKey("UnitId");
+
+                    b.Navigation("CourseOffering");
+
+                    b.Navigation("Unit");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Department", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.Tenant", null)
@@ -3958,6 +4932,10 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingId");
+
                     b.HasOne("SMS.Domain.Entities.Semester", "Semester")
                         .WithMany()
                         .HasForeignKey("SemesterId");
@@ -3976,6 +4954,8 @@ namespace SMS.Persistence.Migrations
 
                     b.Navigation("Course");
 
+                    b.Navigation("CourseOffering");
+
                     b.Navigation("Semester");
 
                     b.Navigation("Student");
@@ -3985,6 +4965,10 @@ namespace SMS.Persistence.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.Grade", b =>
                 {
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingId");
+
                     b.HasOne("SMS.Domain.Entities.Enrollment", "Enrollment")
                         .WithMany("Grades")
                         .HasForeignKey("EnrollmentId");
@@ -4009,6 +4993,8 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("CourseOffering");
+
                     b.Navigation("Enrollment");
 
                     b.Navigation("Semester");
@@ -4026,6 +5012,11 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.Lecturer", "LecturerOccupant")
+                        .WithMany("Houses")
+                        .HasForeignKey("OccupantId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SMS.Domain.Entities.Student", "Occupant")
                         .WithMany("Houses")
                         .HasForeignKey("OccupantId")
@@ -4037,6 +5028,8 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Lane");
+
+                    b.Navigation("LecturerOccupant");
 
                     b.Navigation("Occupant");
 
@@ -4135,6 +5128,17 @@ namespace SMS.Persistence.Migrations
                     b.Navigation("Programme");
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ReportVerification", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.User", "GeneratedByUser")
+                        .WithMany()
+                        .HasForeignKey("GeneratedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("GeneratedByUser");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.RolePermission", b =>
@@ -4281,6 +5285,10 @@ namespace SMS.Persistence.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.UnitAllocation", b =>
                 {
+                    b.HasOne("SMS.Domain.Entities.CourseOffering", "CourseOffering")
+                        .WithMany()
+                        .HasForeignKey("CourseOfferingId");
+
                     b.HasOne("SMS.Domain.Entities.Lecturer", "Lecturer")
                         .WithMany()
                         .HasForeignKey("LecturerId")
@@ -4298,6 +5306,8 @@ namespace SMS.Persistence.Migrations
                         .HasForeignKey("UnitId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("CourseOffering");
 
                     b.Navigation("Lecturer");
 
@@ -4361,6 +5371,15 @@ namespace SMS.Persistence.Migrations
                     b.Navigation("Units");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.CourseOffering", b =>
+                {
+                    b.Navigation("Enrollments");
+
+                    b.Navigation("Lecturers");
+
+                    b.Navigation("Units");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Department", b =>
                 {
                     b.Navigation("Courses");
@@ -4387,6 +5406,15 @@ namespace SMS.Persistence.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.Lecturer", b =>
                 {
+                    b.Navigation("AccommodationAssignment")
+                        .IsRequired();
+
+                    b.Navigation("AccommodationAssignments");
+
+                    b.Navigation("Accommodations");
+
+                    b.Navigation("Houses");
+
                     b.Navigation("Timetables");
                 });
 

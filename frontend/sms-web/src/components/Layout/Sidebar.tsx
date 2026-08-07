@@ -34,6 +34,7 @@ import {
   MenuBook,
   Class,
   Schedule,
+  EventNote,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -69,6 +70,7 @@ const menuItems: MenuItem[] = [
     roles: ['all'],
     children: [
       { text: 'Courses', icon: <Book />, path: '/courses', roles: ['all'] },
+      { text: 'Course Offerings', icon: <EventNote />, path: '/course-offerings', roles: ['all'] },
       { text: 'Units', icon: <Assignment />, path: '/units', roles: ['all'] },
       { text: 'Classes', icon: <Class />, path: '/classes', roles: ['all'] },
     ],

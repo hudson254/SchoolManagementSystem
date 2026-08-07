@@ -9,6 +9,7 @@ namespace SMS.Domain.Entities
         public Guid UnitId { get; set; }
         public Guid? EnrollmentId { get; set; }
         public Guid? SemesterId { get; set; }
+        public Guid? CourseOfferingId { get; set; }
         public decimal Score { get; set; }
         public string? LetterGrade { get; set; }
         public string? Remarks { get; set; }
@@ -24,5 +25,6 @@ namespace SMS.Domain.Entities
         public virtual Unit Unit { get; set; }
         public virtual Enrollment Enrollment { get; set; }
         public virtual Semester Semester { get; set; }
+        public virtual CourseOffering CourseOffering { get; set; }
     }
 }

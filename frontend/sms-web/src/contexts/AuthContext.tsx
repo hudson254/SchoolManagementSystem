@@ -40,7 +40,10 @@ interface RegisterData {
   confirmPassword: string;
   phoneNumber: string;
   organization: string;
-  role?: string;
+  role: 'Student' | 'Lecturer';
+  username?: string;
+  courseId?: string;
+  specialization?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

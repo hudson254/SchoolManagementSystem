@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.Accommodation.Commands
@@ -52,7 +53,8 @@ namespace SMS.Application.Features.Accommodation.Commands
             // Get active assignment and vacate it
             if (house.OccupantId.HasValue)
             {
-                var assignment = await _repository.GetAssignmentByStudentAsync(house.OccupantId.Value, cancellationToken);
+                var occupantType = house.OccupantType ?? OccupantType.Student;
+                var assignment = await _repository.GetAssignmentByOccupantAsync(house.OccupantId.Value, occupantType, cancellationToken);
                 if (assignment != null)
                 {
                     assignment.Status = "Vacated";
@@ -66,6 +68,7 @@ namespace SMS.Application.Features.Accommodation.Commands
             // Update house status
             house.IsOccupied = false;
             house.OccupantId = null;
+            house.OccupantType = null;
             house.Status = HouseStatus.Vacant;
             house.VacatedDate = request.VacatedDate ?? DateTime.UtcNow;
             house.SemesterId = null;

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
 
@@ -42,6 +43,19 @@ namespace SMS.Persistence.Repositories
                 .FirstOrDefaultAsync(a => a.StudentId == studentId && !a.IsDeleted, cancellationToken);
         }
 
+        public async Task<AccommodationAssignment> GetAssignmentByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<AccommodationAssignment>()
+                .FirstOrDefaultAsync(a => a.LecturerId == lecturerId && !a.IsDeleted, cancellationToken);
+        }
+
+        public async Task<AccommodationAssignment> GetAssignmentByOccupantAsync(Guid occupantId, OccupantType occupantType, CancellationToken cancellationToken = default)
+        {
+            return occupantType == OccupantType.Student
+                ? await GetAssignmentByStudentAsync(occupantId, cancellationToken)
+                : await GetAssignmentByLecturerAsync(occupantId, cancellationToken);
+        }
+
         public async Task<AccommodationAssignment> GetAssignmentWithDetailsAsync(Guid assignmentId, CancellationToken cancellationToken = default)
         {
             return await _context.Set<AccommodationAssignment>()
@@ -67,6 +81,12 @@ namespace SMS.Persistence.Repositories
         {
             return await _context.Set<AccommodationAssignment>()
                 .FirstOrDefaultAsync(a => a.StudentId == studentId && a.SemesterId == semesterId && !a.IsDeleted, cancellationToken);
+        }
+
+        public async Task<AccommodationAssignment> GetAssignmentByLecturerAndSemesterAsync(Guid lecturerId, Guid semesterId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<AccommodationAssignment>()
+                .FirstOrDefaultAsync(a => a.LecturerId == lecturerId && a.SemesterId == semesterId && !a.IsDeleted, cancellationToken);
         }
 
         // ===== Lane Management =====
@@ -331,6 +351,15 @@ namespace SMS.Persistence.Repositories
         {
             return await _context.Set<AccommodationAssignment>()
                 .Where(a => a.StudentId == studentId && !a.IsDeleted)
+                .Include(a => a.House)
+                    .ThenInclude(h => h.Lane)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<IEnumerable<AccommodationAssignment>> GetAssignmentsByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<AccommodationAssignment>()
+                .Where(a => a.LecturerId == lecturerId && !a.IsDeleted)
                 .Include(a => a.House)
                     .ThenInclude(h => h.Lane)
                 .ToListAsync(cancellationToken);

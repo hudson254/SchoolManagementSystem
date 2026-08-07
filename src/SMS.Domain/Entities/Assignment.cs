@@ -8,6 +8,7 @@ namespace SMS.Domain.Entities
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public Guid UnitId { get; set; }
+        public Guid? CourseOfferingId { get; set; }
         public decimal MaxScore { get; set; }
         public DateTime DueDate { get; set; }
         public string? Instructions { get; set; }
@@ -31,5 +32,6 @@ namespace SMS.Domain.Entities
         public virtual Unit Unit { get; set; }
         public virtual Lecturer Lecturer { get; set; }
         public virtual Semester Semester { get; set; }
+        public virtual CourseOffering CourseOffering { get; set; }
     }
 }

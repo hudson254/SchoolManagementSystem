@@ -12,6 +12,7 @@ import type {
   LaneOccupancyReport,
   HouseOccupancyReport,
   StudentAccommodation,
+  LecturerAccommodation,
   VacantHouseReport,
   MaintenanceReport,
   OccupancyStatistics,
@@ -86,6 +87,9 @@ export const accommodationService = {
   getStudentAccommodationList: (searchTerm?: string, status?: string) =>
     api.get<StudentAccommodation[]>('/accommodation/reports/student-accommodation', { params: { searchTerm, status } }),
 
+  getLecturerAccommodationList: (searchTerm?: string, status?: string) =>
+    api.get<LecturerAccommodation[]>('/accommodation/reports/lecturer-accommodation', { params: { searchTerm, status } }),
+
   getVacantHouseReport: (laneId?: string) =>
     api.get<VacantHouseReport>('/accommodation/reports/vacant-houses', { params: { laneId } }),
 
@@ -128,6 +132,9 @@ export const accommodationService = {
 
   getStudentAssignment: (studentId: string) =>
     api.get<any>(`/accommodation/assignments/student/${studentId}`),
+
+  getLecturerAssignment: (lecturerId: string) =>
+    api.get<any>(`/accommodation/assignments/lecturer/${lecturerId}`),
 };
 
 type Guid = string;

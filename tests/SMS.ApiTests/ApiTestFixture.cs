@@ -34,8 +34,12 @@ namespace SMS.ApiTests
         private bool _disposed;
 
         private static readonly Guid DefaultTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        // Static counter shared across ALL fixture/host instances so that
+        // generated usernames are unique across the shared InMemory database.
+        private static int UsernameCounter;
         private const string AdminEmail = "admin@school.com";
         private const string AdminPassword = "Admin123!";
+        public static readonly Guid TestCourseId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
         public ApiTestFixture()
         {
@@ -99,6 +103,25 @@ namespace SMS.ApiTests
                 mockMultiTenant.Setup(x => x.TenantId).Returns(DefaultTenantId.ToString());
                 mockMultiTenant.Setup(x => x.TenantName).Returns("Test Tenant");
                 services.AddScoped(_ => mockMultiTenant.Object);
+
+                // Mock IUsernameGenerator - required by RegisterCommandHandler.
+                // Generate a unique username each time so multiple registrations
+                // don't collide in the shared InMemory database. The counter MUST
+                // be static: xUnit creates a separate fixture/host per test class,
+                // each with its own DI container, but all share the same physical
+                // InMemory store ("ApiTestDb"). A non-static per-instance counter
+                // resets to 0 for each host, so every host generates "testuser1"
+                // and the second registration fails with a duplicate username.
+                var usernameGeneratorType = typeof(SMS.Application.Common.Interfaces.IUsernameGenerator);
+                RemoveServiceDescriptors(usernameGeneratorType, services);
+                var mockUsernameGenerator = new Mock<SMS.Application.Common.Interfaces.IUsernameGenerator>();
+                mockUsernameGenerator
+                    .Setup(x => x.GenerateUsernameAsync(It.IsAny<string>(), It.IsAny<string>()))
+                    .ReturnsAsync(() => $"testuser{System.Threading.Interlocked.Increment(ref UsernameCounter)}");
+                mockUsernameGenerator
+                    .Setup(x => x.IsUsernameAvailableAsync(It.IsAny<string>()))
+                    .ReturnsAsync(true);
+                services.AddScoped(_ => mockUsernameGenerator.Object);
 
                 // Mock ITenantStore used by TenantResolutionMiddleware
                 RemoveServiceDescriptors(typeof(ITenantStore), services);
@@ -215,6 +238,23 @@ namespace SMS.ApiTests
                             throw new InvalidOperationException(
                                 $"Failed adding admin role: {string.Join(", ", addRoleResult.Errors.Select(e => e.Description))}");
                         }
+                    }
+
+                    // Seed a test course for student registration
+                    if (!await dbContext.Courses.AnyAsync(c => c.Id == TestCourseId))
+                    {
+                        dbContext.Courses.Add(new Course
+                        {
+                            Id = TestCourseId,
+                            Name = "Test Course",
+                            Code = "TC101",
+                            Description = "Test course for registration",
+                            Credits = 3,
+                            Duration = 1,
+                            IsActive = true,
+                            TenantId = DefaultTenantId
+                        });
+                        await dbContext.SaveChangesAsync();
                     }
                 }
 

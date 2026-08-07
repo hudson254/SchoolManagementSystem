@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SMS.API\SMS.API.csproj" />
+    <ProjectReference Include="..\..\src\SMS.Application\SMS.Application.csproj" />
   </ItemGroup>
 
 </Project>

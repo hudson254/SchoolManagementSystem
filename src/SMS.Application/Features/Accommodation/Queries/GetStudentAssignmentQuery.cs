@@ -5,6 +5,7 @@ using SMS.Domain.Interfaces;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
+using SMS.Domain.Enums;
 namespace SMS.Application.Features.Accommodation.Queries
 {
     public class GetStudentAssignmentQuery : IRequest<AccommodationAssignmentDto?>
@@ -50,6 +51,8 @@ namespace SMS.Application.Features.Accommodation.Queries
             {
                 Id = assignment.Id,
                 StudentId = assignment.StudentId,
+                LecturerId = assignment.LecturerId,
+                OccupantType = assignment.OccupantType,
                 RoomId = assignment.RoomId ?? Guid.Empty,
                 SemesterId = assignment.SemesterId,
                 AssignmentDate = assignment.AssignmentDate,
@@ -59,6 +62,8 @@ namespace SMS.Application.Features.Accommodation.Queries
                 Remarks = assignment.Remarks,
                 StudentName = assignment.Student?.User.FullName ?? string.Empty,
                 StudentNumber = assignment.Student?.StudentNumber ?? string.Empty,
+                LecturerName = assignment.Lecturer != null ? $"{assignment.Lecturer.FirstName} {assignment.Lecturer.LastName}" : string.Empty,
+                EmployeeNumber = assignment.Lecturer?.EmployeeNumber ?? string.Empty,
                 RoomNumber = assignment.Room?.RoomNumber ?? string.Empty,
                 BlockName = assignment.Room?.Block?.Name ?? string.Empty,
                 BuildingName = assignment.Room?.Block?.Building ?? string.Empty,

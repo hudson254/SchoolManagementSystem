@@ -11,6 +11,7 @@ namespace SMS.Domain.Entities
         public Guid? UnitId { get; set; }
         public Guid? SemesterId { get; set; }
         public Guid? AcademicYearId { get; set; }
+        public Guid? CourseOfferingId { get; set; }
         public DateTime EnrollmentDate { get; set; } = DateTime.UtcNow;
         public string Status { get; set; } = "Active";
         public bool IsActive { get; set; } = true;
@@ -24,6 +25,7 @@ namespace SMS.Domain.Entities
         public virtual Unit Unit { get; set; }
         public virtual Semester Semester { get; set; }
         public virtual AcademicYear AcademicYear { get; set; }
+        public virtual CourseOffering CourseOffering { get; set; }
         public virtual ICollection<Grade> Grades { get; set; } = new List<Grade>();
     }
 }

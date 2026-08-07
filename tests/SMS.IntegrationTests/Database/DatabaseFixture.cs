@@ -57,7 +57,7 @@ namespace SMS.IntegrationTests.Database
             else
             {
                 var npgsqlOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
-                    .UseNpgsql("Host=localhost;Database=testdb;Username=testuser;Password=testpass123")
+                    .UseNpgsql("Host=localhost;Port=5433;Database=testdb;Username=testuser;Password=testpass123")
                     .Options;
 
                 _context = new ApplicationDbContext(

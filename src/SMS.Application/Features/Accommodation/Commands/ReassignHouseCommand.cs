@@ -3,16 +3,19 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.Accommodation.Commands
 {
     /// <summary>
-    /// Command to reassign a student from one house to another.
+    /// Command to reassign an occupant from one house to another.
     /// </summary>
     public class ReassignHouseCommand : IRequest<bool>
     {
-        public Guid StudentId { get; set; }
+        public Guid? StudentId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public OccupantType OccupantType { get; set; } = OccupantType.Student;
         public Guid NewHouseId { get; set; }
         public string? Remarks { get; set; }
     }
@@ -21,8 +24,11 @@ namespace SMS.Application.Features.Accommodation.Commands
     {
         public ReassignHouseCommandValidator()
         {
-            RuleFor(x => x.StudentId).NotEmpty().WithMessage("Student ID is required");
             RuleFor(x => x.NewHouseId).NotEmpty().WithMessage("New house ID is required");
+            RuleFor(x => x).Must(x =>
+                (x.OccupantType == OccupantType.Student && x.StudentId.HasValue) ||
+                (x.OccupantType == OccupantType.Lecturer && x.LecturerId.HasValue))
+                .WithMessage("Either StudentId or LecturerId must be provided based on OccupantType");
         }
     }
 
@@ -47,10 +53,12 @@ namespace SMS.Application.Features.Accommodation.Commands
 
         public async Task<bool> Handle(ReassignHouseCommand request, CancellationToken cancellationToken)
         {
-            // Get the student's current assignment
-            var currentAssignment = await _repository.GetAssignmentByStudentAsync(request.StudentId, cancellationToken);
+            var occupantId = request.OccupantType == OccupantType.Student ? request.StudentId!.Value : request.LecturerId!.Value;
+
+            // Get the occupant's current assignment
+            var currentAssignment = await _repository.GetAssignmentByOccupantAsync(occupantId, request.OccupantType, cancellationToken);
             if (currentAssignment == null || currentAssignment.Status != "Active")
-                throw new NotFoundException("Active accommodation assignment", request.StudentId);
+                throw new NotFoundException("Active accommodation assignment", occupantId);
 
             // Get the current house
             var currentHouse = await _repository.GetHouseByIdAsync(currentAssignment.HouseId, cancellationToken);
@@ -75,6 +83,7 @@ namespace SMS.Application.Features.Accommodation.Commands
             // Vacate the current house
             currentHouse.IsOccupied = false;
             currentHouse.OccupantId = null;
+            currentHouse.OccupantType = null;
             currentHouse.Status = HouseStatus.Vacant;
             currentHouse.VacatedDate = DateTime.UtcNow;
             currentHouse.SemesterId = null;
@@ -90,7 +99,9 @@ namespace SMS.Application.Features.Accommodation.Commands
             // Assign the new house
             var newAssignment = new AccommodationAssignment
             {
-                StudentId = request.StudentId,
+                StudentId = request.OccupantType == OccupantType.Student ? request.StudentId : null,
+                LecturerId = request.OccupantType == OccupantType.Lecturer ? request.LecturerId : null,
+                OccupantType = request.OccupantType,
                 HouseId = request.NewHouseId,
                 LaneId = newHouse.LaneId,
                 SemesterId = currentAssignment.SemesterId,
@@ -105,7 +116,8 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             // Update the new house status
             newHouse.IsOccupied = true;
-            newHouse.OccupantId = request.StudentId;
+            newHouse.OccupantId = occupantId;
+            newHouse.OccupantType = request.OccupantType;
             newHouse.Status = HouseStatus.Occupied;
             newHouse.OccupiedDate = DateTime.UtcNow;
             await _repository.UpdateHouseAsync(newHouse, cancellationToken);
@@ -113,10 +125,10 @@ namespace SMS.Application.Features.Accommodation.Commands
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync("Reassign", "House",
-                $"Reassigned student {request.StudentId} from house {currentHouse.HouseNumber} to house {newHouse.HouseNumber}");
+                $"Reassigned {request.OccupantType} {occupantId} from house {currentHouse.HouseNumber} to house {newHouse.HouseNumber}");
 
-            _logger.LogInformation("Student {StudentId} reassigned from house {OldHouse} to house {NewHouse}",
-                request.StudentId, currentHouse.HouseNumber, newHouse.HouseNumber);
+            _logger.LogInformation("{OccupantType} {OccupantId} reassigned from house {OldHouse} to house {NewHouse}",
+                request.OccupantType, occupantId, currentHouse.HouseNumber, newHouse.HouseNumber);
 
             return true;
         }

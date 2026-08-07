@@ -61,6 +61,7 @@ namespace SMS.API.Extensions
                     IConfiguration configuration)
         {
             services.AddScoped<IAuditService, AuditService>();
+            services.AddScoped<SMS.Application.Common.Interfaces.IUsernameGenerator, UsernameGenerator>();
 
             return services;
         }

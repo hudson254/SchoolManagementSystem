@@ -61,6 +61,11 @@ namespace SMS.Persistence.Data
         public new DbSet<UserRole> UserRoles { get; set; }
         public DbSet<ReportVerification> ReportVerifications { get; set; }
         public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
+        public DbSet<CourseOffering> CourseOfferings { get; set; }
+        public DbSet<CourseOfferingUnit> CourseOfferingUnits { get; set; }
+        public DbSet<CourseOfferingEnrollment> CourseOfferingEnrollments { get; set; }
+        public DbSet<CourseOfferingLecturer> CourseOfferingLecturers { get; set; }
+        public DbSet<AssignmentIssueReport> AssignmentIssueReports { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -95,6 +100,10 @@ namespace SMS.Persistence.Data
                     .OnDelete(DeleteBehavior.Cascade);
                 entity.HasOne(h => h.Occupant)
                     .WithMany(s => s.Houses)
+                    .HasForeignKey(h => h.OccupantId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne(h => h.LecturerOccupant)
+                    .WithMany(l => l.Houses)
                     .HasForeignKey(h => h.OccupantId)
                     .OnDelete(DeleteBehavior.SetNull);
                 entity.HasOne(h => h.Semester)
@@ -171,6 +180,11 @@ namespace SMS.Persistence.Data
                     .HasForeignKey(a => a.StudentId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                entity.HasOne(a => a.Lecturer)
+                    .WithMany(l => l.Accommodations)
+                    .HasForeignKey(a => a.LecturerId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
                 entity.HasOne(a => a.House)
                     .WithMany(h => h.Accommodations)
                     .HasForeignKey(a => a.HouseId)
@@ -198,6 +212,11 @@ namespace SMS.Persistence.Data
                 entity.HasOne(aa => aa.Student)
                     .WithOne(s => s.AccommodationAssignment)
                     .HasForeignKey<AccommodationAssignment>(aa => aa.StudentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(aa => aa.Lecturer)
+                    .WithOne(l => l.AccommodationAssignment)
+                    .HasForeignKey<AccommodationAssignment>(aa => aa.LecturerId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(aa => aa.House)

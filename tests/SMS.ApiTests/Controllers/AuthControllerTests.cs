@@ -108,11 +108,12 @@ namespace SMS.ApiTests.Controllers
                 firstName = "Register",
                 lastName = "Test",
                 email = $"register.{System.Guid.NewGuid()}@example.com",
-                password = "Test123!@#",
-                confirmPassword = "Test123!@#",
+                password = "Test123!@#Abc",
+                confirmPassword = "Test123!@#Abc",
                 phoneNumber = "+254712345678",
                 organization = "Test School",
-                role = "Student"
+                role = "Student",
+                courseId = ApiTestFixture.TestCourseId
             };
 
             // Act
@@ -140,10 +141,12 @@ namespace SMS.ApiTests.Controllers
                 firstName = "First",
                 lastName = "User",
                 email = email,
-                password = "Test123!@#",
-                confirmPassword = "Test123!@#",
+                password = "Test123!@#Abc",
+                confirmPassword = "Test123!@#Abc",
                 phoneNumber = "+254712345678",
-                role = "Student"
+                organization = "Test School",
+                role = "Student",
+                courseId = ApiTestFixture.TestCourseId
             };
             await client.PostAsJsonAsync("/api/v1/auth/register", firstRequest);
 
@@ -153,10 +156,12 @@ namespace SMS.ApiTests.Controllers
                 firstName = "Second",
                 lastName = "User",
                 email = email,
-                password = "Test123!@#",
-                confirmPassword = "Test123!@#",
+                password = "Test123!@#Abc",
+                confirmPassword = "Test123!@#Abc",
                 phoneNumber = "+254712345679",
-                role = "Student"
+                organization = "Test School",
+                role = "Student",
+                courseId = ApiTestFixture.TestCourseId
             };
 
             // Act

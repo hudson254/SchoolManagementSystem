@@ -1,4 +1,5 @@
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -13,10 +14,13 @@ namespace SMS.Domain.Interfaces
         Task<IEnumerable<Accommodation>> GetActiveAccommodationsAsync();
         Task<Accommodation> GetAccommodationWithDetailsAsync(Guid accommodationId);
         Task<AccommodationAssignment> GetAssignmentByStudentAsync(Guid studentId, CancellationToken cancellationToken = default);
+        Task<AccommodationAssignment> GetAssignmentByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default);
+        Task<AccommodationAssignment> GetAssignmentByOccupantAsync(Guid occupantId, OccupantType occupantType, CancellationToken cancellationToken = default);
         Task<AccommodationAssignment> GetAssignmentWithDetailsAsync(Guid assignmentId, CancellationToken cancellationToken = default);
         Task UpdateAssignmentAsync(AccommodationAssignment assignment, CancellationToken cancellationToken = default);
         Task<AccommodationAssignment> AddAssignmentAsync(AccommodationAssignment assignment, CancellationToken cancellationToken = default);
         Task<AccommodationAssignment> GetAssignmentByStudentAndSemesterAsync(Guid studentId, Guid semesterId, CancellationToken cancellationToken = default);
+        Task<AccommodationAssignment> GetAssignmentByLecturerAndSemesterAsync(Guid lecturerId, Guid semesterId, CancellationToken cancellationToken = default);
 
         // ===== Lane Management =====
         Task<Lane> AddLaneAsync(Lane lane, CancellationToken cancellationToken = default);
@@ -50,6 +54,7 @@ namespace SMS.Domain.Interfaces
         Task<IEnumerable<House>> GetHousesUnderMaintenanceAsync(CancellationToken cancellationToken = default);
         Task<IEnumerable<AccommodationAssignment>> GetAssignmentsWithDetailsAsync(CancellationToken cancellationToken = default);
         Task<IEnumerable<AccommodationAssignment>> GetAssignmentsByStudentAsync(Guid studentId, CancellationToken cancellationToken = default);
+        Task<IEnumerable<AccommodationAssignment>> GetAssignmentsByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default);
 
         // ===== Legacy methods (kept for backward compatibility) =====
         Task<IEnumerable<Room>> GetRoomsAsync(int page, int pageSize, string? searchTerm, string? roomType, CancellationToken cancellationToken = default);

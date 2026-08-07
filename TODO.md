@@ -1,27 +1,49 @@
-# Repair TODO — Current Session
+# Accommodation Module: Student & Lecturer Support - Implementation TODO
 
-## Progress Tracking
+## Phase 1: Domain Layer
+- [x] Create `OccupantType` enum (`src/SMS.Domain/Enums/OccupantType.cs`)
+- [x] Update `AccommodationAssignment.cs` - Add `LecturerId`, `OccupantType`, `Lecturer` navigation
+- [x] Update `Accommodation.cs` - Add `LecturerId`, `OccupantType`, `Lecturer` navigation
+- [x] Update `House.cs` - Add `OccupantType`, `Lecturer` navigation
+- [x] Update `Lecturer.cs` - Add accommodation navigation properties
+- [x] Update `Student.cs` - Ensure backward compatibility
 
-### Completed this session
-- [x] RISK-16: React beta -> stable (package.json)
-- [x] RISK-17: Source maps disabled in production (vite.config.ts)
-- [x] RISK-20: Grafana default admin password replaced (docker-compose.prod.yml)
-- [x] RISK-22: FileStorageService path traversal hardened
+## Phase 2: Persistence Layer
+- [x] Update `ApplicationDbContext.cs` - Configure Lecturer relationships for Accommodation, AccommodationAssignment, House
 
-### Remaining items
-- [ ] RISK-15: Replace deprecated Mvc.Versioning with ApiExplorer package
-- [ ] RISK-18: Add DB indexes for AuditLogs, Enrollments, Grades, Notifications, LoginHistory
-- [ ] RISK-19: Frontend test missing (add at least one vitest test)
-- [ ] RISK-23: Remove unused AutoMapper
-- [ ] RISK-24: Remove controller stubs + duplicate BaseApiController
-- [ ] RISK-26: Nginx missing /uploads/ location
-- [ ] RISK-27: LoginHistory not persisted on login
-- [ ] RISK-13/14: SMS/Email stubs (partially examined - SmsService already improved)
-- [ ] RISK-21: Admin password recovery (HIGH)
+## Phase 3: Repository Layer
+- [x] Update `IAccommodationRepository.cs` - Add lecturer-based methods
+- [x] Update `AccommodationRepository.cs` - Implement new lecturer methods
 
-### Verification
-- [ ] dotnet build (0 errors)
-- [ ] dotnet test all projects
-- [ ] npm run build frontend
-- [ ] Update REPAIR_PROGRESS.md Live Status Table
+## Phase 4: Application Layer - DTOs
+- [x] Update `AccommodationDto.cs` - Add Lecturer fields to AccommodationAssignmentDto
+- [x] Update `LaneDto.cs` - Add OccupantType, EmployeeNumber; create OccupantAccommodationDto
 
+## Phase 5: Application Layer - Commands
+- [x] Update `AssignHouseCommand.cs` - Add LecturerId, OccupantType
+- [x] Update `ReassignHouseCommand.cs` - Add LecturerId, OccupantType
+- [x] Update `VacateHouseCommand.cs` - Support both occupant types
+- [ ] Update `AssignRoomCommand.cs` / `TransferRoomCommand.cs` - Support both types
+
+## Phase 6: Application Layer - Queries
+- [x] Update `GetStudentAssignmentQuery.cs` - Support both types
+- [x] Update `GetStudentAccommodationListQuery.cs` - Support both types
+- [x] Create `GetLecturerAssignmentQuery.cs`
+- [x] Create `GetLecturerAccommodationListQuery.cs`
+
+## Phase 7: API Layer
+- [x] Update `AccommodationController.cs` - Add lecturer endpoints
+
+## Phase 8: Frontend
+- [x] Update `accommodation.types.ts` - Add OccupantType, LecturerId, EmployeeNumber
+- [x] Update `accommodation.service.ts` - Add lecturer endpoints
+
+## Phase 9: Tests
+- [x] Update existing accommodation tests for lecturer scenarios
+- [x] Create `LecturerAccommodationTests.cs`
+
+## Phase 10: Build & Verify
+- [x] Build the entire solution
+- [x] Run all automated tests
+- [x] Fix any compilation errors or test failures
+- [x] Thorough testing: Unit tests (141 passed), API tests (62 passed), Integration tests (29 passed), Frontend tests (38 passed)

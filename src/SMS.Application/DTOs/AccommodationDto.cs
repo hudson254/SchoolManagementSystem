@@ -1,3 +1,5 @@
+using SMS.Domain.Enums;
+
 namespace SMS.Application.DTOs
 {
     public class BuildingDto
@@ -54,7 +56,9 @@ namespace SMS.Application.DTOs
     public class AccommodationAssignmentDto
     {
         public Guid Id { get; set; }
-        public Guid StudentId { get; set; }
+        public Guid? StudentId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public OccupantType OccupantType { get; set; } = OccupantType.Student;
         public Guid RoomId { get; set; }
         public Guid SemesterId { get; set; }
         public DateTime AssignmentDate { get; set; }
@@ -65,6 +69,8 @@ namespace SMS.Application.DTOs
         public string? Remarks { get; set; }
         public string StudentName { get; set; } = string.Empty;
         public string StudentNumber { get; set; } = string.Empty;
+        public string LecturerName { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
         public string RoomNumber { get; set; } = string.Empty;
         public string BlockName { get; set; } = string.Empty;
         public string BuildingName { get; set; } = string.Empty;

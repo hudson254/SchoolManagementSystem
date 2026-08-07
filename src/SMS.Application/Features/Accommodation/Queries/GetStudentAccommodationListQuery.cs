@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using SMS.Application.DTOs;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.Accommodation.Queries
@@ -32,7 +33,7 @@ namespace SMS.Application.Features.Accommodation.Queries
         {
             var assignments = await _repository.GetAssignmentsWithDetailsAsync(cancellationToken);
 
-            var query = assignments.AsEnumerable();
+            var query = assignments.Where(a => a.OccupantType == OccupantType.Student).AsEnumerable();
 
             if (!string.IsNullOrWhiteSpace(request.SearchTerm))
             {
@@ -45,7 +46,7 @@ namespace SMS.Application.Features.Accommodation.Queries
 
             var results = query.Select(a => new StudentAccommodationDto
             {
-                StudentId = a.StudentId,
+                StudentId = a.StudentId ?? Guid.Empty,
                 StudentName = a.Student != null ? $"{a.Student.FirstName} {a.Student.LastName}" : "Unknown",
                 StudentNumber = a.Student?.StudentNumber ?? "N/A",
                 HouseId = a.HouseId,

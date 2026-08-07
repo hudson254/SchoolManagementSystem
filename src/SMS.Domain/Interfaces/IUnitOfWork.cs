@@ -18,6 +18,11 @@ namespace SMS.Domain.Interfaces
         ILecturerRepository Lecturers { get; }
         IDepartmentRepository Departments { get; }
         ICalendarEventRepository CalendarEvents { get; }
+        ICourseOfferingRepository CourseOfferings { get; }
+        ICourseOfferingUnitRepository CourseOfferingUnits { get; }
+        ICourseOfferingEnrollmentRepository CourseOfferingEnrollments { get; }
+        ICourseOfferingLecturerRepository CourseOfferingLecturers { get; }
+        IAssignmentIssueReportRepository AssignmentIssueReports { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
         Task BeginTransactionAsync(CancellationToken cancellationToken = default);

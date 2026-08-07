@@ -20,5 +20,11 @@ namespace SMS.Domain.Entities
         public virtual User User { get; set; }
         public virtual Department Department { get; set; }
         public virtual ICollection<Timetable> Timetables { get; set; } = new List<Timetable>();
+
+        // Accommodation navigation properties
+        public virtual ICollection<Accommodation> Accommodations { get; set; } = new List<Accommodation>();
+        public virtual AccommodationAssignment AccommodationAssignment { get; set; }
+        public virtual ICollection<AccommodationAssignment> AccommodationAssignments { get; set; } = new List<AccommodationAssignment>();
+        public virtual ICollection<House> Houses { get; set; } = new List<House>();
     }
 }

@@ -489,5 +489,29 @@ namespace SMS.API.Controllers.v1
             var result = await Mediator.Send(query, cancellationToken);
             return Ok(result);
         }
+
+        [HttpGet("assignments/lecturer/{lecturerId}")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(AccommodationAssignmentDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetLecturerAssignment(Guid lecturerId, CancellationToken cancellationToken)
+        {
+            var query = new GetLecturerAssignmentQuery { LecturerId = lecturerId };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpGet("reports/lecturer-accommodation")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(IEnumerable<LecturerAccommodationDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetLecturerAccommodationList(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] string? searchTerm = null,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetLecturerAccommodationListQuery { LaneId = laneId, SearchTerm = searchTerm };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
     }
 }

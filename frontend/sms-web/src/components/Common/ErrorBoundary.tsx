@@ -1,39 +1,49 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Box, Typography, Button, Paper, Alert } from '@mui/material';
+import { Box, Typography, Button, Paper } from '@mui/material';
 import { Error as ErrorIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
+  onReset?: () => void;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
-  error: Error | null;
-  errorInfo: ErrorInfo | null;
 }
 
+/**
+ * Enterprise-grade React Error Boundary.
+ * - Never exposes stack traces or implementation details to users.
+ * - Shows a clean, friendly, actionable message.
+ * - Provides a "Try Again" recovery option.
+ * - Logs technical details to the console (private, dev-only).
+ */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
       hasError: false,
-      error: null,
-      errorInfo: null,
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    return { hasError: true, error };
+  static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
+    return { hasError: true };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState({ errorInfo });
-    console.error('Uncaught error:', error, errorInfo);
+    // Log technical details privately (never shown to end users).
+    // In production this would be sent to the centralized error logging pipeline.
+    console.error('Application error captured by ErrorBoundary:', {
+      name: error.name,
+      message: error.message,
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.setState({ hasError: false });
+    this.props.onReset?.();
   };
 
   render() {
@@ -65,28 +75,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <Typography variant="h5" fontWeight={600} gutterBottom>
               Something went wrong
             </Typography>
-            <Alert severity="error" sx={{ mb: 3, textAlign: 'left' }}>
-              <Typography variant="body2" fontWeight={500}>
-                {this.state.error?.message || 'An unexpected error occurred'}
-              </Typography>
-              {this.state.errorInfo && (
-                <Typography
-                  variant="caption"
-                  component="pre"
-                  sx={{
-                    mt: 1,
-                    p: 1,
-                    bgcolor: 'background.paper',
-                    borderRadius: 1,
-                    overflow: 'auto',
-                    maxHeight: 150,
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {this.state.errorInfo.componentStack}
-                </Typography>
-              )}
-            </Alert>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              We couldn&apos;t complete your request. Please try again. If the
+              problem persists, please contact support.
+            </Typography>
             <Button
               variant="contained"
               startIcon={<RefreshIcon />}

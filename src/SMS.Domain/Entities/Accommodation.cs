@@ -1,14 +1,28 @@
 using SMS.Domain.Common;
+using SMS.Domain.Enums;
 using System;
 
 namespace SMS.Domain.Entities
 {
     public class Accommodation : BaseEntity, ITenantAwareEntity
     {
-        public Guid StudentId { get; set; }
+        /// <summary>
+        /// The student assigned to this accommodation (nullable for lecturer assignments).
+        /// </summary>
+        public Guid? StudentId { get; set; }
 
         /// <summary>
-        /// The house assigned to this student (replaces RoomId).
+        /// The lecturer assigned to this accommodation (nullable for student assignments).
+        /// </summary>
+        public Guid? LecturerId { get; set; }
+
+        /// <summary>
+        /// The type of occupant (Student or Lecturer).
+        /// </summary>
+        public OccupantType OccupantType { get; set; } = OccupantType.Student;
+
+        /// <summary>
+        /// The house assigned to this occupant (replaces RoomId).
         /// </summary>
         public Guid HouseId { get; set; }
 
@@ -29,6 +43,7 @@ namespace SMS.Domain.Entities
 
         // Navigation properties
         public virtual Student Student { get; set; }
+        public virtual Lecturer Lecturer { get; set; }
         public virtual House House { get; set; }
         public virtual Lane Lane { get; set; }
         public virtual Room Room { get; set; }

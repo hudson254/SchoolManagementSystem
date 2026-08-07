@@ -16,7 +16,7 @@ namespace SMS.Persistence.Data
             var builder = new DbContextOptionsBuilder<ApplicationDbContext>();
 
             builder.UseNpgsql(
-                "Host=localhost;Database=sms_dev;Username=postgres;Password=postgres",
+                "Host=localhost;Port=5433;Database=SchoolManagementSystem;Username=sms_user;Password=SecurePassword123!",
                 npgsqlOptions =>
                 {
                     npgsqlOptions.EnableRetryOnFailure(3);

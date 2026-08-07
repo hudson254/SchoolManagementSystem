@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SMS.Application.Features.Accommodation.Commands;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 using Xunit;
 
@@ -33,7 +34,7 @@ namespace SMS.UnitTests.Accommodation
         }
 
         [Fact]
-        public async Task Handle_ValidAssignment_ShouldAssignHouse()
+        public async Task Handle_ValidStudentAssignment_ShouldAssignHouse()
         {
             // Arrange
             var houseId = Guid.NewGuid();
@@ -44,6 +45,7 @@ namespace SMS.UnitTests.Accommodation
             {
                 HouseId = houseId,
                 StudentId = studentId,
+                OccupantType = OccupantType.Student,
                 SemesterId = semesterId
             };
 
@@ -61,7 +63,7 @@ namespace SMS.UnitTests.Accommodation
             _repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(house);
 
-            _repositoryMock.Setup(r => r.GetAssignmentByStudentAsync(studentId, It.IsAny<CancellationToken>()))
+            _repositoryMock.Setup(r => r.GetAssignmentByOccupantAsync(studentId, OccupantType.Student, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((AccommodationAssignment)null);
 
             // Act
@@ -74,6 +76,54 @@ namespace SMS.UnitTests.Accommodation
             _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
             house.IsOccupied.Should().BeTrue();
             house.OccupantId.Should().Be(studentId);
+            house.OccupantType.Should().Be(OccupantType.Student);
+            house.Status.Should().Be(HouseStatus.Occupied);
+        }
+
+        [Fact]
+        public async Task Handle_ValidLecturerAssignment_ShouldAssignHouse()
+        {
+            // Arrange
+            var houseId = Guid.NewGuid();
+            var lecturerId = Guid.NewGuid();
+            var semesterId = Guid.NewGuid();
+
+            var command = new AssignHouseCommand
+            {
+                HouseId = houseId,
+                LecturerId = lecturerId,
+                OccupantType = OccupantType.Lecturer,
+                SemesterId = semesterId
+            };
+
+            var house = new House
+            {
+                Id = houseId,
+                HouseNumber = "002",
+                Status = HouseStatus.Vacant,
+                IsOccupied = false,
+                IsAvailable = true,
+                IsEnabled = true,
+                LaneId = Guid.NewGuid()
+            };
+
+            _repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(house);
+
+            _repositoryMock.Setup(r => r.GetAssignmentByOccupantAsync(lecturerId, OccupantType.Lecturer, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((AccommodationAssignment)null);
+
+            // Act
+            var result = await _handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            result.Should().NotBeEmpty();
+            _repositoryMock.Verify(r => r.AddAssignmentAsync(It.IsAny<AccommodationAssignment>(), It.IsAny<CancellationToken>()), Times.Once);
+            _repositoryMock.Verify(r => r.UpdateHouseAsync(It.IsAny<House>(), It.IsAny<CancellationToken>()), Times.Once);
+            _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+            house.IsOccupied.Should().BeTrue();
+            house.OccupantId.Should().Be(lecturerId);
+            house.OccupantType.Should().Be(OccupantType.Lecturer);
             house.Status.Should().Be(HouseStatus.Occupied);
         }
 
@@ -86,6 +136,7 @@ namespace SMS.UnitTests.Accommodation
             {
                 HouseId = houseId,
                 StudentId = Guid.NewGuid(),
+                OccupantType = OccupantType.Student,
                 SemesterId = Guid.NewGuid()
             };
 
@@ -118,6 +169,7 @@ namespace SMS.UnitTests.Accommodation
             {
                 HouseId = Guid.NewGuid(),
                 StudentId = studentId,
+                OccupantType = OccupantType.Student,
                 SemesterId = Guid.NewGuid()
             };
 
@@ -133,12 +185,54 @@ namespace SMS.UnitTests.Accommodation
             var existingAssignment = new AccommodationAssignment
             {
                 StudentId = studentId,
+                OccupantType = OccupantType.Student,
                 Status = "Active"
             };
 
             _repositoryMock.Setup(r => r.GetHouseByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(house);
-            _repositoryMock.Setup(r => r.GetAssignmentByStudentAsync(studentId, It.IsAny<CancellationToken>()))
+            _repositoryMock.Setup(r => r.GetAssignmentByOccupantAsync(studentId, OccupantType.Student, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(existingAssignment);
+
+            // Act
+            Func<Task> act = () => _handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            await act.Should().ThrowAsync<Exception>();
+        }
+
+        [Fact]
+        public async Task Handle_LecturerAlreadyHasAssignment_ShouldThrowException()
+        {
+            // Arrange
+            var lecturerId = Guid.NewGuid();
+            var command = new AssignHouseCommand
+            {
+                HouseId = Guid.NewGuid(),
+                LecturerId = lecturerId,
+                OccupantType = OccupantType.Lecturer,
+                SemesterId = Guid.NewGuid()
+            };
+
+            var house = new House
+            {
+                Id = Guid.NewGuid(),
+                HouseNumber = "002",
+                IsOccupied = false,
+                IsAvailable = true,
+                IsEnabled = true
+            };
+
+            var existingAssignment = new AccommodationAssignment
+            {
+                LecturerId = lecturerId,
+                OccupantType = OccupantType.Lecturer,
+                Status = "Active"
+            };
+
+            _repositoryMock.Setup(r => r.GetHouseByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(house);
+            _repositoryMock.Setup(r => r.GetAssignmentByOccupantAsync(lecturerId, OccupantType.Lecturer, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(existingAssignment);
 
             // Act

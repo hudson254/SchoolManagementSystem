@@ -29,6 +29,11 @@ namespace SMS.Persistence.Repositories
         private ILecturerRepository _lecturers;
         private IDepartmentRepository _departments;
         private ICalendarEventRepository _calendarEvents;
+        private ICourseOfferingRepository _courseOfferings;
+        private ICourseOfferingUnitRepository _courseOfferingUnits;
+        private ICourseOfferingEnrollmentRepository _courseOfferingEnrollments;
+        private ICourseOfferingLecturerRepository _courseOfferingLecturers;
+        private IAssignmentIssueReportRepository _assignmentIssueReports;
 
         public UnitOfWork(ApplicationDbContext context, ILogger<UnitOfWork> logger, ILoggerFactory loggerFactory)
         {
@@ -72,6 +77,21 @@ namespace SMS.Persistence.Repositories
 
         public ICalendarEventRepository CalendarEvents =>
             _calendarEvents ??= new CalendarEventRepository(_context, _loggerFactory.CreateLogger<CalendarEventRepository>());
+
+        public ICourseOfferingRepository CourseOfferings =>
+            _courseOfferings ??= new CourseOfferingRepository(_context, _loggerFactory.CreateLogger<CourseOfferingRepository>());
+
+        public ICourseOfferingUnitRepository CourseOfferingUnits =>
+            _courseOfferingUnits ??= new CourseOfferingUnitRepository(_context, _loggerFactory.CreateLogger<CourseOfferingUnitRepository>());
+
+        public ICourseOfferingEnrollmentRepository CourseOfferingEnrollments =>
+            _courseOfferingEnrollments ??= new CourseOfferingEnrollmentRepository(_context, _loggerFactory.CreateLogger<CourseOfferingEnrollmentRepository>());
+
+        public ICourseOfferingLecturerRepository CourseOfferingLecturers =>
+            _courseOfferingLecturers ??= new CourseOfferingLecturerRepository(_context, _loggerFactory.CreateLogger<CourseOfferingLecturerRepository>());
+
+        public IAssignmentIssueReportRepository AssignmentIssueReports =>
+            _assignmentIssueReports ??= new AssignmentIssueReportRepository(_context, _loggerFactory.CreateLogger<AssignmentIssueReportRepository>());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

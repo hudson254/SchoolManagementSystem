@@ -24,6 +24,7 @@ using SMS.Infrastructure.Services;
 using SMS.Infrastructure.Options;
 using SMS.Persistence.Data;
 using SMS.Persistence.Repositories;
+using SMS.API.Logging;
 using SMS.API.Middleware;
 using SMS.API.Options;
 using SMS.Notifications;
@@ -32,11 +33,18 @@ using SMS.Reporting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
+// Configure Serilog with structured JSON logging for the enterprise
+// centralized logging pipeline. All components log through this pipeline.
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
+    .Enrich.WithProperty("Application", "SchoolManagementSystem")
+    .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
+    .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/sms-.json",
+        rollingInterval: RollingInterval.Day,
+        formatter: new Serilog.Formatting.Json.JsonFormatter())
     .WriteTo.File(
         path: "logs/sms-.txt",
         rollingInterval: RollingInterval.Day,
@@ -54,6 +62,13 @@ builder.Host.UseSerilog();
 builder.Services.AddControllers(options =>
 {
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+})
+.AddJsonOptions(options =>
+{
+    // Allow enum values to be sent as strings (e.g. "Draft" instead of 0)
+    // in JSON request/response bodies. Without this, clients must send
+    // numeric enum values which is error-prone and less readable.
+    options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddMemoryCache();
@@ -253,6 +268,10 @@ builder.Services.AddHttpClient("SmsClient");
 // Register services
 builder.Services.AddScoped<IUserManagerService, SMS.Infrastructure.Services.UserManagerService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+// Register the username generator used by RegisterCommandHandler and
+// CheckUsernameAvailabilityQueryHandler. Without this the API fails to start
+// with "Unable to resolve service IUsernameGenerator" (service validation).
+builder.Services.AddScoped<SMS.Application.Common.Interfaces.IUsernameGenerator, UsernameGenerator>();
 // The Application layer consumes SMS.Application.Common.Interfaces.ICurrentUserService
 // (a distinct re-export of the domain interface). Register it to the same concrete
 // implementation; previously only the domain variant was registered, which made the
@@ -261,6 +280,10 @@ builder.Services.AddScoped<SMS.Application.Common.Interfaces.ICurrentUserService
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<AuditHelper>();
+// Register the centralized error logging pipeline (Phase 5)
+builder.Services.AddScoped<IErrorLoggingService, ErrorLoggingService>();
+// Register the searchable error repository (Phase 6) - in-memory for single-instance
+builder.Services.AddSingleton<SMS.Infrastructure.Services.IErrorRepository, SMS.Infrastructure.Services.InMemoryErrorRepository>();
 // IEmailService registration removed — email functionality fully disabled.
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 // NOTE: IPdfGenerator/IExcelGenerator are registered by SMS.Reporting (AddReporting)
@@ -293,6 +316,11 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IReportVerificationRepository, ReportVerificationRepository>();
 builder.Services.AddScoped<IUnitAllocationRepository, UnitAllocationRepository>();
 builder.Services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
+builder.Services.AddScoped<ICourseOfferingRepository, CourseOfferingRepository>();
+builder.Services.AddScoped<ICourseOfferingUnitRepository, CourseOfferingUnitRepository>();
+builder.Services.AddScoped<ICourseOfferingEnrollmentRepository, CourseOfferingEnrollmentRepository>();
+builder.Services.AddScoped<ICourseOfferingLecturerRepository, CourseOfferingLecturerRepository>();
+builder.Services.AddScoped<IAssignmentIssueReportRepository, AssignmentIssueReportRepository>();
 
 // Register UnitOfWork
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
