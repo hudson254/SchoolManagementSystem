@@ -42,32 +42,6 @@ namespace SMS.Notifications.Services
             _logger.LogInformation("Notification sent to user {UserId}: {Title}", userId, title);
         }
 
-        /// <summary>
-        /// Email notifications are not supported — SMTP has been fully removed
-        /// from the system per owner requirement (isolated LAN deployment).
-        /// </summary>
-        public Task SendEmailNotificationAsync(string userId, string email, string subject, string body)
-        {
-            _logger.LogWarning("Email notification requested but SMTP is disabled. User: {UserId}, Email: {Email}, Subject: {Subject}", userId, email, subject);
-            return Task.CompletedTask;
-        }
-
-        public async Task SendSmsNotificationAsync(string userId, string phoneNumber, string message)
-        {
-            try
-            {
-                // SMS service is currently a stub (logs only). Keep the call
-                // site intact in case a real implementation is added later.
-                // Re-activate by injecting ISmsService back into the ctor.
-                _logger.LogInformation("SMS notification to {PhoneNumber} for user {UserId}: {Message}", phoneNumber, userId, message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send SMS notification to {PhoneNumber} for user {UserId}", phoneNumber, userId);
-                throw;
-            }
-        }
-
         public async Task BroadcastNotificationAsync(string title, string message, IEnumerable<string> userIds, string? type = null)
         {
             var tasks = userIds.Select(userId => SendNotificationAsync(userId, title, message, type));
@@ -90,18 +64,7 @@ namespace SMS.Notifications.Services
         }
 
         /// <summary>
-        /// Templated email notifications are not supported — SMTP has been fully
-        /// removed from the system per owner requirement.
-        /// </summary>
-        public Task SendTemplatedEmailAsync(string userId, string email, string templateName, Dictionary<string, string> templateData)
-        {
-            _logger.LogWarning("Templated email notification requested but SMTP is disabled. User: {UserId}, Email: {Email}, Template: {Template}", userId, email, templateName);
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// Password reset notifications are no longer sent via email. Password
-        /// resets are now admin-mediated (see PasswordResetRequest entity).
+        /// Password reset notifications are now delivered in-app only.
         /// </summary>
         public async Task SendPasswordResetNotificationAsync(string userId, string email, string resetLink)
         {
@@ -112,10 +75,6 @@ namespace SMS.Notifications.Services
             _logger.LogInformation("Password reset notification (in-app only) sent to user {UserId}", userId);
         }
 
-        /// <summary>
-        /// Email verification notifications are not supported — SMTP has been
-        /// fully removed from the system per owner requirement.
-        /// </summary>
         public async Task SendVerificationNotificationAsync(string userId, string email, string verificationLink)
         {
             // Email path removed. Send an in-app notification instead.

@@ -10,7 +10,9 @@ namespace SMS.Application.Features.Users.Commands
     public class CreateUserCommand : IRequest<UserDto>
     {
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
@@ -47,15 +49,21 @@ namespace SMS.Application.Features.Users.Commands
         private readonly IUserManagerService _userManager;
         private readonly IAuditService _auditService;
         private readonly ILogger<CreateUserCommandHandler> _logger;
+        private readonly INameParser _nameParser;
+        private readonly IUsernameGenerator _usernameGenerator;
 
         public CreateUserCommandHandler(
             IUserManagerService userManager,
             IAuditService auditService,
-            ILogger<CreateUserCommandHandler> logger)
+            ILogger<CreateUserCommandHandler> logger,
+            INameParser nameParser,
+            IUsernameGenerator usernameGenerator)
         {
             _userManager = userManager;
             _auditService = auditService;
             _logger = logger;
+            _nameParser = nameParser;
+            _usernameGenerator = usernameGenerator;
         }
 
         public async Task<UserDto> Handle(CreateUserCommand request, CancellationToken cancellationToken)
@@ -64,14 +72,27 @@ namespace SMS.Application.Features.Users.Commands
             if (existingUser != null)
                 throw new ConflictException("User with this email already exists");
 
-            var username = $"{request.FirstName.ToLower()}.{request.LastName.ToLower()}{new Random().Next(100, 999)}";
+            // Parse the full name to extract any title and normalize name parts.
+            // This ensures titles like "Dr" are stored separately and never leak
+            // into usernames or file names.
+            var fullName = $"{request.FirstName} {request.LastName}".Trim();
+            var parsed = _nameParser.ParseName(fullName);
+
+            if (!parsed.IsValid)
+                throw new SMS.Application.Exceptions.ValidationException(parsed.ErrorMessage ?? "Invalid name format");
+
+            var title = request.Title ?? parsed.Title;
+
+            var username = await _usernameGenerator.GenerateUsernameAsync(parsed.FirstName, parsed.LastName);
             var user = await _userManager.CreateUserAsync(username, request.Email, request.Password, request.Role);
 
             if (user == null)
                 throw new ExternalServiceException("User creation service returned null");
 
-            user.FirstName = request.FirstName;
-            user.LastName = request.LastName;
+            user.FirstName = parsed.FirstName;
+            user.LastName = parsed.LastName;
+            user.MiddleName = parsed.MiddleName;
+            user.Title = title;
             user.PhoneNumber = request.PhoneNumber;
             await _userManager.UpdateUserAsync(user);
 
@@ -85,7 +106,9 @@ namespace SMS.Application.Features.Users.Commands
             {
                 Id = Guid.Parse(user.Id),
                 FirstName = user.FirstName ?? string.Empty,
+                MiddleName = user.MiddleName,
                 LastName = user.LastName ?? string.Empty,
+                Title = user.Title,
                 Email = user.Email ?? string.Empty,
                 UserName = user.UserName ?? string.Empty,
                 PhoneNumber = user.PhoneNumber ?? string.Empty,

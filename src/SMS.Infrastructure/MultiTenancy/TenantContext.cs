@@ -8,41 +8,70 @@ namespace SMS.Infrastructure.MultiTenancy
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public string TenantId { get; private set; } = string.Empty;
-        public string TenantName { get; private set; } = string.Empty;
-        public string ConnectionString { get; private set; } = string.Empty;
-
         public TenantContext(IHttpContextAccessor httpContextAccessor)
         {
             _httpContextAccessor = httpContextAccessor;
-            PopulateFromHttpContext();
         }
 
-        private void PopulateFromHttpContext()
+        /// <summary>
+        /// Lazily reads the current tenant ID from HttpContext.Items["TenantId"].
+        /// Reading on property access (rather than caching in the constructor) is
+        /// essential because TenantContext is a scoped service that may be resolved
+        /// (constructed) BEFORE TenantResolutionMiddleware sets HttpContext.Items.
+        /// If we cached the value in the constructor, the tenant would be empty for
+        /// the entire request whenever the context is resolved early (e.g. by the
+        /// middleware's own ITenantStore dependency), causing Guid.Parse failures
+        /// downstream.
+        /// </summary>
+        public string TenantId
         {
-            var context = _httpContextAccessor.HttpContext;
-            if (context == null)
+            get
             {
-                return;
+                if (_httpContextAccessor.HttpContext?.Items.TryGetValue("TenantId", out var tenantIdObj) == true)
+                {
+                    if (tenantIdObj is Guid tenantGuid)
+                    {
+                        return tenantGuid.ToString();
+                    }
+                    if (tenantIdObj is string tenantIdString)
+                    {
+                        return tenantIdString;
+                    }
+                }
+                return string.Empty;
             }
+        }
 
-            if (context.Items.TryGetValue("TenantId", out var tenantIdObj) && tenantIdObj is Guid tenantGuid)
+        /// <summary>
+        /// Lazily reads the current tenant name from HttpContext.Items["TenantName"].
+        /// </summary>
+        public string TenantName
+        {
+            get
             {
-                TenantId = tenantGuid.ToString();
+                if (_httpContextAccessor.HttpContext?.Items.TryGetValue("TenantName", out var tenantNameObj) == true &&
+                    tenantNameObj is string tenantName)
+                {
+                    return tenantName;
+                }
+                return string.Empty;
             }
-            else if (context.Items.TryGetValue("TenantId", out var tenantIdStringObj) && tenantIdStringObj is string tenantIdString)
-            {
-                TenantId = tenantIdString;
-            }
+        }
 
-            if (context.Items.TryGetValue("TenantName", out var tenantNameObj) && tenantNameObj is string tenantName)
+        /// <summary>
+        /// Lazily reads the current tenant connection string from
+        /// HttpContext.Items["TenantConnectionString"].
+        /// </summary>
+        public string ConnectionString
+        {
+            get
             {
-                TenantName = tenantName;
-            }
-
-            if (context.Items.TryGetValue("TenantConnectionString", out var connectionStringObj) && connectionStringObj is string connectionString)
-            {
-                ConnectionString = connectionString;
+                if (_httpContextAccessor.HttpContext?.Items.TryGetValue("TenantConnectionString", out var connectionStringObj) == true &&
+                    connectionStringObj is string connectionString)
+                {
+                    return connectionString;
+                }
+                return string.Empty;
             }
         }
     }

@@ -13,8 +13,11 @@ namespace SMS.Application.DTOs
         public string Username { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public bool RequiresEmailVerification { get; set; }
+        public string? RegistrationStatus { get; set; }
         public List<string> Roles { get; set; } = new List<string>();
     }
 
@@ -31,8 +34,15 @@ namespace SMS.Application.DTOs
         public string Password { get; set; } = string.Empty;
         public string ConfirmPassword { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string Role { get; set; } = "User";
+        public string? Organization { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Username { get; set; }
+        public Guid? CourseId { get; set; }
+        public string? Specialization { get; set; }
     }
 
     public class RefreshTokenRequestDto

@@ -1,0 +1,77 @@
+# School Management System - Alertmanager Configuration
+#
+# Production alert routing for the SMS monitoring stack.
+# Notification credentials should be provided via environment variables.
+
+global:
+  # Default timezone for notifications
+  resolve_timeout: 5m
+
+  # Email notification configuration
+  # Configure via environment variables:
+  #   ALERTMANAGER_SMTP_SMART_HOST, ALERTMANAGER_SMTP_USERNAME,
+  #   ALERTMANAGER_SMTP_PASSWORD, ALERTMANAGER_SMTP_FROM
+  smtp_from: ${ALERTMANAGER_SMTP_FROM:-alertmanager@sms.local}
+  smtp_smarthost: ${ALERTMANAGER_SMTP_SMART_HOST:-localhost:25}
+  smtp_auth_username: ${ALERTMANAGER_SMTP_USERNAME:-}
+  smtp_auth_password: ${ALERTMANAGER_SMTP_PASSWORD:-}
+  smtp_require_tls: false
+
+# Root route - default catch-all
+route:
+  receiver: "default"
+  group_by:
+    - alertname
+    - severity
+    - service
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  # Route critical alerts to a separate receiver with shorter repeat interval
+  routes:
+    - match:
+        severity: critical
+      receiver: "critical"
+      repeat_interval: 1h
+      group_wait: 10s
+      group_interval: 1m
+
+# Inhibition rules to prevent alert storms
+inhibit_rules:
+  # If API is down, suppress container-level alerts for API containers
+  - source_match:
+      severity: critical
+      alertname: APIUnavailable
+    target_match:
+      service: sms-api
+    equal: ["instance"]
+
+  # If node is down, suppress all container alerts on that node
+  - source_match:
+      severity: critical
+      alertname: PrometheusTargetDown
+    target_match_re:
+      severity: critical|warning
+    equal: ["instance"]
+
+  # If database is down, suppress dependent alerts
+  - source_match:
+      severity: critical
+      alertname: DatabaseUnavailable
+    target_match:
+      service: postgres-exporter
+    equal: ["instance"]
+
+receivers:
+  # Default receiver - log to console only when no notification integration is configured
+  - name: "default"
+    webhook_configs:
+      - url: http://localhost:9093/alertmanager/-/reload
+        send_resolved: true
+
+  # Critical alerts receiver
+  - name: "critical"
+    webhook_configs:
+      - url: http://localhost:9093/alertmanager/-/reload
+        send_resolved: true

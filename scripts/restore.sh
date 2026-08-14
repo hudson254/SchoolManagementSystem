@@ -10,10 +10,14 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 if [ -z "$1" ]; then
-    echo -e "${RED}Usage: $0 <backup_file.sql.gz>${NC}"
+    echo -e "${RED}Usage: $0 <backup_file>${NC}"
+    echo ""
+    echo "Supported formats:"
+    echo "  *.dump    - Custom-format pg_dump (created by backup.sh)"
+    echo "  *.sql.gz  - Plain SQL compressed backup"
     echo ""
     echo "Available backups:"
-    ls -la /var/backups/sms/*.sql.gz 2>/dev/null || echo "No backups found in /var/backups/sms/"
+    ls -la /var/backups/sms/*.{dump,sql.gz} 2>/dev/null || echo "No backups found in /var/backups/sms/"
     exit 1
 fi
 
@@ -34,20 +38,28 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# Determine if running in Docker
-if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
-    echo -e "${YELLOW}Running in container...${NC}"
-    gunzip -c "$BACKUP_FILE" | psql -U ${DB_USER:-sms_user} -d ${DB_NAME:-SchoolManagementSystem}
-else
-    echo -e "${YELLOW}Running locally...${NC}"
-    
-    # Check if PostgreSQL is running
-    if ! pg_isready -h localhost -p 5432 -U ${DB_USER:-sms_user} > /dev/null 2>&1; then
-        echo -e "${RED}PostgreSQL is not running. Please start it first.${NC}"
+# Determine file type and restore accordingly
+case "$BACKUP_FILE" in
+    *.dump)
+        # Custom-format dump from pg_dump -Fc
+        echo -e "${YELLOW}Detected custom-format dump. Using pg_restore...${NC}"
+        pg_restore -U ${DB_USER:-sms_user} -d ${DB_NAME:-SchoolManagementSystem} -Fc -c --if-exists "$BACKUP_FILE"
+        ;;
+    *.sql.gz)
+        # Plain SQL compressed backup
+        echo -e "${YELLOW}Detected compressed SQL. Using gunzip + psql...${NC}"
+        gunzip -c "$BACKUP_FILE" | psql -U ${DB_USER:-sms_user} -d ${DB_NAME:-SchoolManagementSystem}
+        ;;
+    *.sql)
+        # Plain SQL uncompressed backup
+        echo -e "${YELLOW}Detected plain SQL. Using psql...${NC}"
+        psql -U ${DB_USER:-sms_user} -d ${DB_NAME:-SchoolManagementSystem} -f "$BACKUP_FILE"
+        ;;
+    *)
+        echo -e "${RED}Unknown backup format: $BACKUP_FILE${NC}"
+        echo "Supported formats: .dump, .sql.gz, .sql"
         exit 1
-    fi
-    
-    gunzip -c "$BACKUP_FILE" | psql -U ${DB_USER:-sms_user} -d ${DB_NAME:-SchoolManagementSystem}
-fi
+        ;;
+esac
 
 echo -e "${GREEN}Database restored successfully!${NC}"

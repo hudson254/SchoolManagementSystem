@@ -8,6 +8,8 @@ using Moq;
 using SMS.Application.Common.Interfaces;
 using SMS.Application.Exceptions;
 using SMS.Application.Features.Auth.Commands;
+using SMS.Application.Services;
+using SMS.Domain.Common;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
 using Xunit;
@@ -21,6 +23,7 @@ namespace SMS.UnitTests.Auth
         private readonly Mock<IJwtService> _jwtServiceMock;
         private readonly Mock<IAuditService> _auditServiceMock;
         private readonly Mock<IUsernameGenerator> _usernameGeneratorMock;
+        private readonly Mock<INameParser> _nameParserMock;
         private readonly Mock<IStudentRepository> _studentRepositoryMock;
         private readonly Mock<ILecturerRepository> _lecturerRepositoryMock;
         private readonly Mock<ICourseRepository> _courseRepositoryMock;
@@ -37,6 +40,7 @@ namespace SMS.UnitTests.Auth
             _jwtServiceMock = new Mock<IJwtService>();
             _auditServiceMock = new Mock<IAuditService>();
             _usernameGeneratorMock = new Mock<IUsernameGenerator>();
+            _nameParserMock = new Mock<INameParser>();
             _studentRepositoryMock = new Mock<IStudentRepository>();
             _lecturerRepositoryMock = new Mock<ILecturerRepository>();
             _courseRepositoryMock = new Mock<ICourseRepository>();
@@ -57,13 +61,15 @@ namespace SMS.UnitTests.Auth
                 _auditServiceMock.Object,
                 _logger,
                 _usernameGeneratorMock.Object,
+                _nameParserMock.Object,
                 _studentRepositoryMock.Object,
                 _lecturerRepositoryMock.Object,
                 _courseRepositoryMock.Object,
                 _unitRepositoryMock.Object,
                 _unitAllocationRepositoryMock.Object,
                 _tenantContextMock.Object,
-                _unitOfWorkMock.Object);
+                _unitOfWorkMock.Object,
+                new PasswordPolicyService());
         }
 
         [Fact]
@@ -151,8 +157,8 @@ namespace SMS.UnitTests.Auth
                 FirstName = "John",
                 LastName = "Doe",
                 Email = "existing@example.com",
-                Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
                 Role = "Student",
                 Organization = "Test University",
                 CourseId = Guid.NewGuid()
@@ -182,8 +188,8 @@ namespace SMS.UnitTests.Auth
                 FirstName = "John",
                 LastName = "Doe",
                 Email = "john.doe@example.com",
-                Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
                 Role = "Student",
                 Organization = "Test University",
                 PhoneNumber = "+254700000000",
@@ -203,8 +209,17 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.FindByEmailAsync(command.Email))
                 .ReturnsAsync((User?)null);
 
+            _nameParserMock
+                .Setup(x => x.ParseName(It.IsAny<string>()))
+                .Returns(new NameParseResult
+                {
+                    FirstName = "John",
+                    LastName = "Doe",
+                    IsValid = true
+                });
+
             _usernameGeneratorMock
-                .Setup(x => x.GenerateUsernameAsync(command.FirstName, command.LastName))
+                .Setup(x => x.GenerateUsernameAsync("John", "Doe"))
                 .ReturnsAsync("john.doe");
 
             _userManagerMock
@@ -250,6 +265,7 @@ namespace SMS.UnitTests.Auth
             result.RefreshToken.Should().Be("test-refresh-token");
             result.Email.Should().Be(command.Email);
             result.Roles.Should().Contain("Student");
+            result.FullName.Should().Be("John Doe");
 
             _userManagerMock.Verify(x => x.CreateUserAsync("john.doe", command.Email, command.Password, "Student"), Times.Once);
             _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
@@ -264,7 +280,7 @@ namespace SMS.UnitTests.Auth
                 FirstName = "John",
                 LastName = "Doe",
                 Email = "john.doe@example.com",
-                Password = "Test123!@#",
+                Password = "Test123!@#abcd",
                 ConfirmPassword = "DifferentPassword!",
                 Role = "Student",
                 Organization = "Test University"
@@ -286,8 +302,8 @@ namespace SMS.UnitTests.Auth
                 FirstName = "Jane",
                 LastName = "Doe",
                 Email = "jane.doe@example.com",
-                Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
                 Role = "Administrator",
                 Organization = "Test University"
             };
@@ -300,6 +316,151 @@ namespace SMS.UnitTests.Auth
         }
 
         [Fact]
+        public async Task Handle_WithWeakPassword_ShouldThrowValidationException()
+        {
+            // Arrange
+            var command = new RegisterCommand
+            {
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@example.com",
+                Password = "password123",
+                ConfirmPassword = "password123",
+                Role = "Student",
+                Organization = "Test University",
+                CourseId = Guid.NewGuid()
+            };
+
+            var handler = CreateHandler();
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(
+                () => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Handle_WithCommonBlacklistedPassword_ShouldThrowValidationException()
+        {
+            // Arrange
+            var command = new RegisterCommand
+            {
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@example.com",
+                Password = "Admin12345!",
+                ConfirmPassword = "Admin12345!",
+                Role = "Student",
+                Organization = "Test University",
+                CourseId = Guid.NewGuid()
+            };
+
+            var handler = CreateHandler();
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(
+                () => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Handle_WithTitle_ShouldParseTitleAndNotLeakIntoUsername()
+        {
+            // Arrange
+            var userId = Guid.NewGuid().ToString();
+            var courseId = Guid.NewGuid();
+            var command = new RegisterCommand
+            {
+                Title = "Dr.",
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Student",
+                Organization = "Test University",
+                PhoneNumber = "+254700000000",
+                CourseId = courseId
+            };
+
+            var course = new Course
+            {
+                Id = courseId,
+                Name = "Computer Science",
+                Code = "CS101",
+                IsActive = true,
+                ProgrammeId = Guid.NewGuid()
+            };
+
+            _userManagerMock
+                .Setup(x => x.FindByEmailAsync(command.Email))
+                .ReturnsAsync((User?)null);
+
+            _nameParserMock
+                .Setup(x => x.ParseName(It.IsAny<string>()))
+                .Returns(new NameParseResult
+                {
+                    Title = "Dr.",
+                    FirstName = "John",
+                    LastName = "Doe",
+                    IsValid = true
+                });
+
+            _usernameGeneratorMock
+                .Setup(x => x.GenerateUsernameAsync("John", "Doe"))
+                .ReturnsAsync("john.doe");
+
+            _userManagerMock
+                .Setup(x => x.CreateUserAsync("john.doe", command.Email, command.Password, "Student"))
+                .ReturnsAsync((string username, string email, string password, string role) => new User
+                {
+                    Id = userId,
+                    Email = email,
+                    UserName = username,
+                    FirstName = command.FirstName,
+                    LastName = command.LastName,
+                    Title = "Dr.",
+                    IsActive = true
+                });
+
+            _userManagerMock
+                .Setup(x => x.GetRolesAsync(It.IsAny<User>()))
+                .ReturnsAsync(new List<string> { "Student" });
+
+            _jwtServiceMock
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Returns("test-access-token");
+
+            _userManagerMock
+                .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
+                .ReturnsAsync("test-refresh-token");
+
+            _courseRepositoryMock
+                .Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(course);
+
+            _unitRepositoryMock
+                .Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Unit>());
+
+            var handler = CreateHandler();
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.AccessToken.Should().Be("test-access-token");
+            result.Email.Should().Be(command.Email);
+            result.Roles.Should().Contain("Student");
+            result.FullName.Should().Be("Dr. John Doe");
+            result.Title.Should().Be("Dr.");
+
+            // Verify username was generated WITHOUT the title
+            _usernameGeneratorMock.Verify(x => x.GenerateUsernameAsync("John", "Doe"), Times.Once);
+            _usernameGeneratorMock.Verify(x => x.GenerateUsernameAsync(It.Is<string>(s => s.Contains("Dr")), It.IsAny<string>()), Times.Never);
+            _userManagerMock.Verify(x => x.CreateUserAsync("john.doe", command.Email, command.Password, "Student"), Times.Once);
+        }
+
+        [Fact]
         public async Task Handle_WithValidLecturerData_ShouldRegisterUserWithLecturerRole()
         {
             // Arrange
@@ -309,8 +470,8 @@ namespace SMS.UnitTests.Auth
                 FirstName = "Jane",
                 LastName = "Smith",
                 Email = "jane.smith@example.com",
-                Password = "Test123!@#",
-                ConfirmPassword = "Test123!@#",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
                 Role = "Lecturer",
                 Organization = "Test University",
                 PhoneNumber = "+254711111111",
@@ -321,8 +482,17 @@ namespace SMS.UnitTests.Auth
                 .Setup(x => x.FindByEmailAsync(command.Email))
                 .ReturnsAsync((User?)null);
 
+            _nameParserMock
+                .Setup(x => x.ParseName(It.IsAny<string>()))
+                .Returns(new NameParseResult
+                {
+                    FirstName = "Jane",
+                    LastName = "Smith",
+                    IsValid = true
+                });
+
             _usernameGeneratorMock
-                .Setup(x => x.GenerateUsernameAsync(command.FirstName, command.LastName))
+                .Setup(x => x.GenerateUsernameAsync("Jane", "Smith"))
                 .ReturnsAsync("jane.smith");
 
             _userManagerMock

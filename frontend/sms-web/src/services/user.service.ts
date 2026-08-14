@@ -21,7 +21,9 @@ export interface GetUsersParams {
 }
 
 export interface CreateUserRequest {
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   email: string;
   phoneNumber?: string;
@@ -31,7 +33,9 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
+  title?: string;
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   email?: string;
   phoneNumber?: string;

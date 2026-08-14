@@ -4,8 +4,11 @@ export interface Student {
   id: string;
   userId: string;
   studentNumber: string;
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
+  displayName?: string;
   email: string;
   phoneNumber: string;
   dateOfBirth: string;
@@ -71,7 +74,9 @@ export interface GradeSummary {
 }
 
 export interface CreateStudentRequest {
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   email: string;
   phoneNumber: string;
@@ -86,7 +91,9 @@ export interface CreateStudentRequest {
 }
 
 export interface UpdateStudentRequest {
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   phoneNumber: string;
   dateOfBirth: string;

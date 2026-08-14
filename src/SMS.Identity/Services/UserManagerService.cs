@@ -379,6 +379,78 @@ namespace SMS.Identity.Services
         }
 
         // Session Management
+        public async Task<bool> IsRefreshTokenReusedAsync(string userId, string refreshToken)
+        {
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(refreshToken))
+                return false;
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.RefreshTokenFamilyId == null)
+                return false;
+            var tokenHash = ComputeSha256Hash(refreshToken);
+            return user.RefreshTokenHash == tokenHash && user.RefreshToken != refreshToken;
+        }
+
+        public async Task<bool> RevokeRefreshTokenFamilyAsync(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                return false;
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return false;
+            user.RefreshToken = null;
+            user.RefreshTokenHash = null;
+            user.RefreshTokenExpiryTime = null;
+            user.RefreshTokenFamilyId = null;
+            var result = await _userManager.UpdateAsync(user);
+            return result.Succeeded;
+        }
+
+        public async Task<bool> RevokeAllRefreshTokensAsync(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                return false;
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return false;
+            user.RefreshToken = null;
+            user.RefreshTokenHash = null;
+            user.RefreshTokenExpiryTime = null;
+            user.RefreshTokenFamilyId = null;
+            var result = await _userManager.UpdateAsync(user);
+            return result.Succeeded;
+        }
+
+        public async Task<string> RotateRefreshTokenAsync(string userId, string currentRefreshToken)
+        {
+            if (string.IsNullOrEmpty(userId))
+                return null;
+            var randomNumber = new byte[64];
+            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            var newRefreshToken = Convert.ToBase64String(randomNumber);
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                user.RefreshTokenHash = ComputeSha256Hash(currentRefreshToken);
+                user.RefreshToken = newRefreshToken;
+                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+                if (user.RefreshTokenFamilyId == null)
+                    user.RefreshTokenFamilyId = Guid.NewGuid();
+                await _userManager.UpdateAsync(user);
+            }
+            return newRefreshToken;
+        }
+
+        private static string ComputeSha256Hash(string rawData)
+        {
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(rawData));
+            var builder = new System.Text.StringBuilder();
+            foreach (var b in bytes)
+                builder.Append(b.ToString("x2"));
+            return builder.ToString();
+        }
+
         public async Task<bool> LogoutAsync(string userId)
         {
             return await RevokeRefreshTokenAsync(userId);

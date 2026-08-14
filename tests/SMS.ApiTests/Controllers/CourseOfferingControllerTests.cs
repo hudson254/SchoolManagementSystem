@@ -38,7 +38,9 @@ namespace SMS.ApiTests.Controllers
     {
         private static readonly Guid DefaultTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         private const string AdminEmail = "admin@school.com";
-        private const string AdminPassword = "Admin123!";
+        // Must satisfy Identity PasswordOptions: RequiredLength=12, RequireDigit,
+        // RequireLowercase, RequireUppercase, RequireNonAlphanumeric, RequiredUniqueChars=4.
+        private const string AdminPassword = "Admin123!@#q1";
 
         public Guid SeededCourseId { get; private set; }
         public Guid SeededStudentId { get; private set; }
@@ -156,128 +158,187 @@ namespace SMS.ApiTests.Controllers
             if (!await userManager.IsInRoleAsync(adminUser, "Administrator"))
                 await userManager.AddToRoleAsync(adminUser, "Administrator");
 
-            // Seed required reference data
-            var academicYear = new AcademicYear
+            // Seed required reference data (IDEMPOTENT: InitializeAsync is
+            // invoked by xUnit before EVERY test in the fixture, so each
+            // entity must be created only if it does not already exist,
+            // otherwise the unique indexes (Email, StudentNumber,
+            // EmployeeNumber, Code) throw
+            // "An item with the same key has already been added" on the
+            // second and subsequent tests.
+            var academicYear = await db.AcademicYears
+                .FirstOrDefaultAsync(x => x.Name == "2026" && x.TenantId == DefaultTenantId);
+            if (academicYear == null)
             {
-                Id = Guid.NewGuid(),
-                Name = "2026",
-                StartDate = new DateTime(2026, 1, 1),
-                EndDate = new DateTime(2026, 12, 31),
-                IsActive = true,
-                IsCurrent = true,
-                TenantId = DefaultTenantId
-            };
-            db.AcademicYears.Add(academicYear);
+                academicYear = new AcademicYear
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "2026",
+                    StartDate = new DateTime(2026, 1, 1),
+                    EndDate = new DateTime(2026, 12, 31),
+                    IsActive = true,
+                    IsCurrent = true,
+                    TenantId = DefaultTenantId
+                };
+                db.AcademicYears.Add(academicYear);
+            }
             SeededAcademicYearId = academicYear.Id;
 
-            var semester = new Semester
+            var semester = await db.Semesters
+                .FirstOrDefaultAsync(x => x.Name == "Semester 1" && x.AcademicYearId == SeededAcademicYearId);
+            if (semester == null)
             {
-                Id = Guid.NewGuid(),
-                Name = "Semester 1",
-                SemesterNumber = 1,
-                StartDate = new DateTime(2026, 1, 1),
-                EndDate = new DateTime(2026, 6, 30),
-                IsActive = true,
-                IsCurrent = true,
-                AcademicYearId = academicYear.Id,
-                TenantId = DefaultTenantId
-            };
-            db.Semesters.Add(semester);
+                semester = new Semester
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Semester 1",
+                    SemesterNumber = 1,
+                    StartDate = new DateTime(2026, 1, 1),
+                    EndDate = new DateTime(2026, 6, 30),
+                    IsActive = true,
+                    IsCurrent = true,
+                    AcademicYearId = SeededAcademicYearId,
+                    TenantId = DefaultTenantId
+                };
+                db.Semesters.Add(semester);
+            }
             SeededSemesterId = semester.Id;
 
-            var department = new Department
+            var department = await db.Departments
+                .FirstOrDefaultAsync(x => x.Code == "CS" && x.TenantId == DefaultTenantId);
+            if (department == null)
             {
-                Id = Guid.NewGuid(),
-                Name = "Computer Science",
-                Code = "CS",
-                TenantId = DefaultTenantId
-            };
-            db.Departments.Add(department);
+                department = new Department
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Computer Science",
+                    Code = "CS",
+                    TenantId = DefaultTenantId
+                };
+                db.Departments.Add(department);
+            }
 
-            var course = new Course
+            var course = await db.Courses
+                .FirstOrDefaultAsync(x => x.Code == "WM101" && x.TenantId == DefaultTenantId);
+            if (course == null)
             {
-                Id = Guid.NewGuid(),
-                Name = "Wildlife Management",
-                Code = "WM101",
-                Description = "Intro to wildlife management",
-                Credits = 3,
-                Duration = 1,
-                DepartmentId = department.Id,
-                IsActive = true,
-                TenantId = DefaultTenantId
-            };
-            db.Courses.Add(course);
+                course = new Course
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Wildlife Management",
+                    Code = "WM101",
+                    Description = "Intro to wildlife management",
+                    Credits = 3,
+                    Duration = 1,
+                    DepartmentId = department.Id,
+                    IsActive = true,
+                    TenantId = DefaultTenantId
+                };
+                db.Courses.Add(course);
+            }
             SeededCourseId = course.Id;
 
-            // Seed a student
-            var studentUser = new User
+            // Seed a student (only if not already present)
+            var studentUser = await userManager.FindByEmailAsync("student@school.com");
+            if (studentUser == null)
             {
-                Id = Guid.NewGuid().ToString(),
-                UserName = "student@school.com",
-                Email = "student@school.com",
-                NormalizedUserName = "STUDENT@SCHOOL.COM",
-                NormalizedEmail = "STUDENT@SCHOOL.COM",
-                FirstName = "Test",
-                LastName = "Student",
-                EmailConfirmed = true,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                ConcurrencyStamp = Guid.NewGuid().ToString("N"),
-                RefreshToken = string.Empty,
-                TenantId = DefaultTenantId
-            };
-            db.Users.Add(studentUser);
+                studentUser = new User
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    UserName = "student@school.com",
+                    Email = "student@school.com",
+                    NormalizedUserName = "STUDENT@SCHOOL.COM",
+                    NormalizedEmail = "STUDENT@SCHOOL.COM",
+                    FirstName = "Test",
+                    LastName = "Student",
+                    EmailConfirmed = true,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    SecurityStamp = Guid.NewGuid().ToString("N"),
+                    ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                    RefreshToken = string.Empty,
+                    TenantId = DefaultTenantId
+                };
+                // Use UserManager so Identity stores (AspNetUsers) are consistent
+                // and the user is properly hashed/validated. Direct db.Users.Add
+                // bypasses Identity and can cause duplicate-key issues when the
+                // same user is re-added across test runs.
+                var createStudentUserResult = await userManager.CreateAsync(studentUser);
+                if (!createStudentUserResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed creating student user: {string.Join(", ", createStudentUserResult.Errors.Select(e => e.Description))}");
+                }
+            }
 
-            var student = new Student
+            var student = await db.Students
+                .FirstOrDefaultAsync(x => x.StudentNumber == "SN-TEST-001" && x.TenantId == DefaultTenantId);
+            if (student == null)
             {
-                Id = Guid.NewGuid(),
-                UserId = studentUser.Id,
-                StudentNumber = "SN-TEST-001",
-                FirstName = "Test",
-                LastName = "Student",
-                Email = "student@school.com",
-                AcademicStatus = "Active",
-                IsActive = true,
-                IsEnrolled = true,
-                TenantId = DefaultTenantId
-            };
-            db.Students.Add(student);
+                student = new Student
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = studentUser.Id,
+                    StudentNumber = "SN-TEST-001",
+                    FirstName = "Test",
+                    LastName = "Student",
+                    Email = "student@school.com",
+                    AcademicStatus = "Active",
+                    IsActive = true,
+                    IsEnrolled = true,
+                    TenantId = DefaultTenantId
+                };
+                db.Students.Add(student);
+            }
             SeededStudentId = student.Id;
 
-            // Seed a lecturer
-            var lecturerUser = new User
+            // Seed a lecturer (only if not already present)
+            var lecturerUser = await userManager.FindByEmailAsync("lecturer@school.com");
+            if (lecturerUser == null)
             {
-                Id = Guid.NewGuid().ToString(),
-                UserName = "lecturer@school.com",
-                Email = "lecturer@school.com",
-                NormalizedUserName = "LECTURER@SCHOOL.COM",
-                NormalizedEmail = "LECTURER@SCHOOL.COM",
-                FirstName = "Test",
-                LastName = "Lecturer",
-                EmailConfirmed = true,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                ConcurrencyStamp = Guid.NewGuid().ToString("N"),
-                RefreshToken = string.Empty,
-                TenantId = DefaultTenantId
-            };
-            db.Users.Add(lecturerUser);
+                lecturerUser = new User
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    UserName = "lecturer@school.com",
+                    Email = "lecturer@school.com",
+                    NormalizedUserName = "LECTURER@SCHOOL.COM",
+                    NormalizedEmail = "LECTURER@SCHOOL.COM",
+                    FirstName = "Test",
+                    LastName = "Lecturer",
+                    EmailConfirmed = true,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    SecurityStamp = Guid.NewGuid().ToString("N"),
+                    ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                    RefreshToken = string.Empty,
+                    TenantId = DefaultTenantId
+                };
+                // Use UserManager for consistent Identity store handling.
+                var createLecturerUserResult = await userManager.CreateAsync(lecturerUser);
+                if (!createLecturerUserResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed creating lecturer user: {string.Join(", ", createLecturerUserResult.Errors.Select(e => e.Description))}");
+                }
+            }
 
-            var lecturer = new Lecturer
+            var lecturer = await db.Lecturers
+                .FirstOrDefaultAsync(x => x.EmployeeNumber == "EMP-001" && x.TenantId == DefaultTenantId);
+            if (lecturer == null)
             {
-                Id = Guid.NewGuid(),
-                UserId = lecturerUser.Id,
-                FirstName = "Test",
-                LastName = "Lecturer",
-                Email = "lecturer@school.com",
-                EmployeeNumber = "EMP-001",
-                DepartmentId = department.Id,
-                IsActive = true,
-                TenantId = DefaultTenantId
-            };
-            db.Lecturers.Add(lecturer);
+                lecturer = new Lecturer
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = lecturerUser.Id,
+                    FirstName = "Test",
+                    LastName = "Lecturer",
+                    Email = "lecturer@school.com",
+                    EmployeeNumber = "EMP-001",
+                    DepartmentId = department.Id,
+                    IsActive = true,
+                    TenantId = DefaultTenantId
+                };
+                db.Lecturers.Add(lecturer);
+            }
             SeededLecturerId = lecturer.Id;
 
             await db.SaveChangesAsync();

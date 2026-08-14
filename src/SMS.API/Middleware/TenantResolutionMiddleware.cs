@@ -6,19 +6,29 @@ namespace SMS.API.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<TenantResolutionMiddleware> _logger;
+        private readonly string _defaultTenantId;
 
-        public TenantResolutionMiddleware(RequestDelegate next, ILogger<TenantResolutionMiddleware> logger)
+        public TenantResolutionMiddleware(RequestDelegate next, ILogger<TenantResolutionMiddleware> logger, IConfiguration configuration)
         {
             _next = next;
             _logger = logger;
+            _defaultTenantId = configuration["Tenant:DefaultTenantId"] ?? "11111111-1111-1111-1111-111111111111";
         }
 
         public async Task InvokeAsync(HttpContext context, ITenantStore tenantStore)
         {
+            // Skip tenant resolution for health check and other public endpoints
+            var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+            if (path == "/health" || path == "/health/")
+            {
+                await _next(context);
+                return;
+            }
+
             try
             {
                 // Resolve tenant ID from header or subdomain
-                var tenantId = "default";
+                var tenantId = _defaultTenantId;
                 if (context.Request.Headers.TryGetValue("X-Tenant-Id", out var headerTenantId))
                 {
                     tenantId = headerTenantId.ToString();

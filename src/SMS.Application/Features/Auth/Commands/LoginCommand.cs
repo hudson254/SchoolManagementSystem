@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -16,18 +17,30 @@ namespace SMS.Application.Features.Auth.Commands
 {
     public class LoginCommand : IRequest<AuthResponseDto>
     {
-        public string Email { get; set; } = string.Empty;
+        /// <summary>
+        /// The email or username used for authentication.
+        /// Maps from both "identifier" and "email" JSON properties for backward compatibility.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("identifier")]
+        public string Identifier { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public bool RememberMe { get; set; }
+
+        /// <summary>
+        /// Backward-compatible field that maps the legacy "email" JSON property.
+        /// The handler uses Identifier primarily, falling back to Email if Identifier is empty.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("email")]
+        public string Email { get; set; } = string.Empty;
     }
 
     public class LoginCommandValidator : AbstractValidator<LoginCommand>
     {
         public LoginCommandValidator()
         {
-            RuleFor(x => x.Email)
-                .NotEmpty().WithMessage("Email is required")
-                .EmailAddress().WithMessage("A valid email is required");
+            RuleFor(x => x.Identifier)
+                .NotEmpty().WithMessage("Email or username is required")
+                .MaximumLength(256).WithMessage("Email or username must not exceed 256 characters");
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Password is required");
@@ -42,6 +55,8 @@ namespace SMS.Application.Features.Auth.Commands
         private readonly ILoginHistoryRepository _loginHistoryRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<LoginCommandHandler> _logger;
+
+        private static readonly Regex EmailRegex = new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public LoginCommandHandler(
             IUserManagerService userManagerService,
@@ -63,16 +78,32 @@ namespace SMS.Application.Features.Auth.Commands
         {
             User? typedUser = null;
             string? failureReason = null;
+            // Use Identifier primarily, fall back to Email for backward compatibility
+            var identifier = (request.Identifier ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(identifier))
+                identifier = (request.Email ?? string.Empty).Trim();
 
             try
             {
-                // Find user by email
-                var user = await _userManagerService.FindByEmailAsync(request.Email);
+                // Determine if the identifier is an email or username
+                bool isEmail = EmailRegex.IsMatch(identifier);
+
+                // Find user by email or username
+                User? user = null;
+                if (isEmail)
+                {
+                    user = await _userManagerService.FindByEmailAsync(identifier);
+                }
+                else
+                {
+                    user = await _userManagerService.FindByUsernameAsync(identifier);
+                }
+
                 if (user == null)
                 {
-                    _logger.LogWarning($"Login attempt failed: User with email {request.Email} not found");
+                    _logger.LogWarning("Login attempt failed: User with identifier not found");
                     failureReason = "User not found";
-                    throw new UnauthorizedException("Invalid email or password");
+                    throw new UnauthorizedException("Invalid username/email or password");
                 }
 
                 typedUser = (User)user;
@@ -81,9 +112,9 @@ namespace SMS.Application.Features.Auth.Commands
                 var isPasswordValid = await _userManagerService.CheckPasswordAsync(typedUser, request.Password);
                 if (!isPasswordValid)
                 {
-                    _logger.LogWarning($"Login attempt failed: Invalid password for user {request.Email}");
+                    _logger.LogWarning("Login attempt failed: Invalid password for user {Identifier}", identifier);
                     failureReason = "Invalid password";
-                    throw new UnauthorizedException("Invalid email or password");
+                    throw new UnauthorizedException("Invalid username/email or password");
                 }
 
                 // Check if user is active
@@ -150,7 +181,7 @@ namespace SMS.Application.Features.Auth.Commands
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error during login for user {request.Email}");
+                _logger.LogError(ex, "Error during login for identifier {Identifier}", identifier);
                 throw;
             }
         }

@@ -79,7 +79,7 @@
           "datasource": {
             "uid": "prometheus-sms"
           },
-          "expr": "up{job=\"sms-api\"}",
+          "expr": "up{job=\"sms-api-metrics\"}",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -169,7 +169,7 @@
           "datasource": {
             "uid": "prometheus-sms"
           },
-          "expr": "up{job=\"sms-api\"}",
+          "expr": "up{job=\"sms-api-metrics\"}",
           "interval": "",
           "legendFormat": "{{job}} / {{instance}}",
           "refId": "A"
@@ -258,7 +258,7 @@
           "datasource": {
             "uid": "prometheus-sms"
           },
-          "expr": "up{job=\"sms-api\"} * on(job, instance) group_left duration_seconds",
+          "expr": "up{job=\"sms-api-metrics\"} * on(job, instance) group_left duration_seconds",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"

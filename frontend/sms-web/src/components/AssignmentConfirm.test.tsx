@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { AssignmentConfirm } from './AssignmentConfirm';
 import { confirmationService } from '../services/confirmation.service';
+import { ConfirmationStatus } from '../services/course-offering.service';
 import * as authHook from '../hooks/useAuth';
 
 vi.mock('../services/confirmation.service', () => ({
@@ -21,12 +22,17 @@ vi.mock('../hooks/useAuth', () => ({
 const mockPending = {
   id: 'enroll-1',
   courseOfferingId: 'offering-1',
+  studentId: 'student-1',
   courseName: 'Computer Science',
   courseCode: 'CS101',
   academicYearName: '2025/2026',
   semesterName: '1',
   offeringCode: 'CS-2025-1',
   status: 'Pending',
+  enrollmentDate: '2026-01-15T00:00:00Z',
+  isActive: true,
+  attemptNumber: 1,
+  confirmationStatus: ConfirmationStatus.Pending,
 };
 
 function renderWithProviders(ui: ReactNode) {

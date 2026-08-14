@@ -46,7 +46,7 @@ namespace SMS.Application.Features.Accommodation.Queries
             var results = query.Select(a => new LecturerAccommodationDto
             {
                 LecturerId = a.LecturerId ?? Guid.Empty,
-                LecturerName = a.Lecturer != null ? $"{a.Lecturer.FirstName} {a.Lecturer.LastName}" : "Unknown",
+                LecturerName = a.Lecturer != null ? BuildDisplayName(a.Lecturer) : "Unknown",
                 EmployeeNumber = a.Lecturer?.EmployeeNumber ?? "N/A",
                 HouseId = a.HouseId,
                 HouseNumber = a.House?.HouseNumber,
@@ -60,6 +60,18 @@ namespace SMS.Application.Features.Accommodation.Queries
 
             _logger.LogInformation("Lecturer accommodation list generated with {Count} entries", results.Count());
             return results;
+        }
+
+        private static string BuildDisplayName(SMS.Domain.Entities.Lecturer lecturer)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(lecturer.Title))
+                parts.Add(lecturer.Title);
+            parts.Add(lecturer.FirstName);
+            if (!string.IsNullOrWhiteSpace(lecturer.MiddleName))
+                parts.Add(lecturer.MiddleName);
+            parts.Add(lecturer.LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
         }
     }
 }

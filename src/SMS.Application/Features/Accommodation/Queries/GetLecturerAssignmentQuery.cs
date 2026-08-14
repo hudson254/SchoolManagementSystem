@@ -60,15 +60,39 @@ namespace SMS.Application.Features.Accommodation.Queries
                 MoveOutDate = assignment.MoveOutDate,
                 Status = assignment.Status,
                 Remarks = assignment.Remarks,
-                StudentName = assignment.Student?.User.FullName ?? string.Empty,
+                StudentName = assignment.Student != null ? BuildStudentDisplayName(assignment.Student) : string.Empty,
                 StudentNumber = assignment.Student?.StudentNumber ?? string.Empty,
-                LecturerName = assignment.Lecturer != null ? $"{assignment.Lecturer.FirstName} {assignment.Lecturer.LastName}" : string.Empty,
+                LecturerName = assignment.Lecturer != null ? BuildLecturerDisplayName(assignment.Lecturer) : string.Empty,
                 EmployeeNumber = assignment.Lecturer?.EmployeeNumber ?? string.Empty,
                 RoomNumber = assignment.Room?.RoomNumber ?? string.Empty,
                 BlockName = assignment.Room?.Block?.Name ?? string.Empty,
                 BuildingName = assignment.Room?.Block?.Building ?? string.Empty,
                 SemesterName = assignment.Semester?.Name ?? string.Empty
             };
+        }
+
+        private static string BuildStudentDisplayName(SMS.Domain.Entities.Student student)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(student.Title))
+                parts.Add(student.Title);
+            parts.Add(student.FirstName);
+            if (!string.IsNullOrWhiteSpace(student.MiddleName))
+                parts.Add(student.MiddleName);
+            parts.Add(student.LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+        }
+
+        private static string BuildLecturerDisplayName(SMS.Domain.Entities.Lecturer lecturer)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(lecturer.Title))
+                parts.Add(lecturer.Title);
+            parts.Add(lecturer.FirstName);
+            if (!string.IsNullOrWhiteSpace(lecturer.MiddleName))
+                parts.Add(lecturer.MiddleName);
+            parts.Add(lecturer.LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
         }
     }
 }

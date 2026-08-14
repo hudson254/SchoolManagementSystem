@@ -14,14 +14,14 @@ import {
   Checkbox,
   Divider,
 } from '@mui/material';
-import { Visibility, VisibilityOff, Email, Lock } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Person, Lock } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../hooks/useAuth';
 
 const loginSchema = z.object({
-  email: z.string().email('Invalid email address').min(1, 'Email is required'),
+  identifier: z.string().min(1, 'Email or username is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   rememberMe: z.boolean().optional(),
 });
@@ -42,7 +42,7 @@ export const Login: React.FC = () => {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
+      identifier: '',
       password: '',
       rememberMe: false,
     },
@@ -53,10 +53,10 @@ export const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await login(data.email, data.password, data.rememberMe);
+      await login(data.identifier, data.password, data.rememberMe);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      setError(err.response?.data?.message || 'Invalid username/email or password');
     } finally {
       setLoading(false);
     }
@@ -81,6 +81,17 @@ export const Login: React.FC = () => {
           }}
         >
           <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="School Management System Logo"
+              sx={{
+                width: { xs: 80, sm: 100 },
+                height: { xs: 80, sm: 100 },
+                mb: 2,
+                objectFit: 'contain',
+              }}
+            />
             <Typography
               component="h1"
               variant="h4"
@@ -105,21 +116,22 @@ export const Login: React.FC = () => {
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <Controller
-              name="email"
+              name="identifier"
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   fullWidth
-                  label="Email Address"
+                  label="Email or Username"
+                  placeholder="Enter your email or username"
                   variant="outlined"
                   margin="normal"
-                  error={!!errors.email}
-                  helperText={errors.email?.message}
+                  error={!!errors.identifier}
+                  helperText={errors.identifier?.message}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Email color="action" />
+                        <Person color="action" />
                       </InputAdornment>
                     ),
                   }}

@@ -64,7 +64,8 @@ namespace SMS.Application.Features.Courses.Queries
             {
                 new ProgrammeDto
                 {
-                    Id = 0,
+                    // Use the entity UUID public identifier — never a sequential integer.
+                    Id = course.Programme.Id,
                     Name = course.Programme.Name ?? string.Empty,
                     Code = course.Programme.Code ?? string.Empty,
                     Description = course.Programme.Description ?? string.Empty,
@@ -72,6 +73,7 @@ namespace SMS.Application.Features.Courses.Queries
                     IsActive = course.Programme.IsActive
                 }
             };
+
         }
     }
 }

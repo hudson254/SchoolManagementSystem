@@ -51,6 +51,14 @@ namespace SMS.Domain.Interfaces
         Task<bool> ValidateRefreshTokenAsync(string userId, string refreshToken);
         Task<bool> RevokeRefreshTokenAsync(string userId);
 
+        // Refresh Token Reuse Detection
+        Task<bool> IsRefreshTokenReusedAsync(string userId, string refreshToken);
+        Task<bool> RevokeRefreshTokenFamilyAsync(string userId);
+        Task<string> RotateRefreshTokenAsync(string userId, string currentRefreshToken);
+
+        // Password Reset Revocation
+        Task<bool> RevokeAllRefreshTokensAsync(string userId);
+
         // Session Management
         Task<bool> LogoutAsync(string userId);
         Task<bool> IsUserOnlineAsync(string userId);

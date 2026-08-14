@@ -9,7 +9,6 @@ import {
   Paper,
   Alert,
   InputAdornment,
-  IconButton,
   Stepper,
   Step,
   StepLabel,
@@ -17,16 +16,11 @@ import {
   CardActionArea,
   CardContent,
   Autocomplete,
-  LinearProgress,
   CircularProgress,
-  FormHelperText,
   Skeleton,
 } from "@mui/material";
 import {
-  Visibility,
-  VisibilityOff,
   Email,
-  Lock,
   Person,
   Phone,
   School,
@@ -42,6 +36,11 @@ import { z } from "zod";
 import { useAuth } from "../hooks/useAuth";
 import { apiClient } from "../services/api";
 import { passwordSchema, emailSchema, nameSchema, phoneSchema } from "../utils/validators";
+import { getPasswordStrength, PasswordContext } from "../utils/passwordStrength";
+import { PasswordField } from "../components/PasswordField/PasswordField";
+import { ConfirmPasswordField } from "../components/PasswordField/ConfirmPasswordField";
+import { PasswordStrengthMeter } from "../components/PasswordStrength/PasswordStrengthMeter";
+import { PasswordRequirementsChecklist } from "../components/PasswordRequirements/PasswordRequirementsChecklist";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +65,7 @@ type RegistrationRole = "Student" | "Lecturer";
 
 const studentRegistrationSchema = z
   .object({
+    title: z.string().optional(),
     firstName: nameSchema,
     lastName: nameSchema,
     email: emailSchema,
@@ -87,6 +87,7 @@ const studentRegistrationSchema = z
 
 const lecturerRegistrationSchema = z
   .object({
+    title: z.string().optional(),
     firstName: nameSchema,
     lastName: nameSchema,
     email: emailSchema,
@@ -140,6 +141,37 @@ const ORGANIZATION_OPTIONS = [
   "Other",
 ];
 
+const TITLE_OPTIONS = [
+  "Dr.",
+  "Prof.",
+  "Eng.",
+  "Rev.",
+  "Fr.",
+  "Pastor",
+  "Bishop",
+  "Hon.",
+  "Justice",
+  "Judge",
+  "Magistrate",
+  "H.E.",
+  "Governor",
+  "Senator",
+  "MP",
+  "MCA",
+  "Col.",
+  "Maj.",
+  "Capt.",
+  "Brig.",
+  "Lt.",
+  "Gen.",
+  "CPA",
+  "CFA",
+  "CISA",
+  "CISSP",
+  "PMP",
+  "PhD",
+];
+
 const SPECIALIZATION_SUGGESTIONS = [
   "Wildlife Conservation",
   "GIS",
@@ -152,23 +184,6 @@ const SPECIALIZATION_SUGGESTIONS = [
 ];
 
 const PRIMARY_COLOR = "#576426";
-
-// ─── Password strength meter ────────────────────────────────────────────────
-
-function getPasswordStrength(password: string): { score: number; label: string; color: string } {
-  let score = 0;
-  if (password.length >= 12) score += 25;
-  if (password.length >= 16) score += 10;
-  if (/[A-Z]/.test(password)) score += 15;
-  if (/[a-z]/.test(password)) score += 15;
-  if (/[0-9]/.test(password)) score += 15;
-  if (/[^a-zA-Z0-9]/.test(password)) score += 20;
-
-  if (score < 30) return { score, label: "Weak", color: "#f44336" };
-  if (score < 60) return { score, label: "Fair", color: "#ff9800" };
-  if (score < 80) return { score, label: "Good", color: "#2196f3" };
-  return { score, label: "Strong", color: "#4caf50" };
-}
 
 // ─── Username generator ─────────────────────────────────────────────────────
 
@@ -201,8 +216,6 @@ export const Register: React.FC = () => {
   const [activeStep, setActiveStep] = useState(0);
 
   // UI state
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -220,6 +233,7 @@ export const Register: React.FC = () => {
   const studentForm = useForm<StudentFormData>({
     resolver: zodResolver(studentRegistrationSchema),
     defaultValues: {
+      title: "",
       firstName: "",
       lastName: "",
       email: "",
@@ -239,6 +253,7 @@ export const Register: React.FC = () => {
   const lecturerForm = useForm<LecturerFormData>({
     resolver: zodResolver(lecturerRegistrationSchema),
     defaultValues: {
+      title: "",
       firstName: "",
       lastName: "",
       email: "",
@@ -254,6 +269,16 @@ export const Register: React.FC = () => {
   });
 
   const lecturerValues = lecturerForm.watch();
+
+  // ─── Password context (for blacklist checks) ─────────────────────────────
+  const passwordContext: PasswordContext = {
+    email: role === "Student" ? studentValues.email : lecturerValues.email,
+    username: role === "Student" ? studentValues.username : lecturerValues.username,
+    firstName: role === "Student" ? studentValues.firstName : lecturerValues.firstName,
+    lastName: role === "Student" ? studentValues.lastName : lecturerValues.lastName,
+    organization:
+      role === "Student" ? studentValues.organization : lecturerValues.organization,
+  };
 
   // ─── Load courses ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -336,11 +361,16 @@ export const Register: React.FC = () => {
   useEffect(() => {
     const pwd =
       role === "Student" ? studentForm.watch("password") : lecturerForm.watch("password");
-    setPasswordStrength(getPasswordStrength(pwd || ""));
+    setPasswordStrength(getPasswordStrength(pwd || "", passwordContext));
   }, [
     role,
     studentForm.watch("password"),
     lecturerForm.watch("password"),
+    passwordContext.email,
+    passwordContext.username,
+    passwordContext.firstName,
+    passwordContext.lastName,
+    passwordContext.organization,
   ]);
 
   // ─── Role Selection ──────────────────────────────────────────────────────
@@ -376,6 +406,7 @@ export const Register: React.FC = () => {
     setLoading(true);
     try {
       await registerUser({
+        title: data.title,
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
@@ -405,6 +436,7 @@ export const Register: React.FC = () => {
     setLoading(true);
     try {
       await registerUser({
+        title: data.title,
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
@@ -460,10 +492,23 @@ export const Register: React.FC = () => {
     const form = role === "Student" ? studentForm : lecturerForm;
     const errors = form.formState.errors;
     const values = form.getValues();
-    return fields.every((field) => {
+
+    const fieldsValid = fields.every((field) => {
       const value = values[field as keyof typeof values];
       return value !== undefined && value !== "" && !errors[field as keyof typeof errors];
     });
+    if (!fieldsValid) return false;
+
+    // Registration requires at least "Strong" password strength and a
+    // matching confirmation before the account step can be completed.
+    if (fields.includes("password")) {
+      const pwd = String(values.password || "");
+      const strength = getPasswordStrength(pwd, passwordContext);
+      if (strength.level !== "Strong" && strength.level !== "Very Strong") return false;
+      if (pwd !== String(values.confirmPassword || "")) return false;
+    }
+
+    return true;
   };
 
   // ─── Render: Role Selection ──────────────────────────────────────────────
@@ -618,6 +663,37 @@ export const Register: React.FC = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Please provide your personal information
             </Typography>
+            <Controller
+              name="title"
+              control={control}
+              render={({ field }) => (
+                <Autocomplete
+                  freeSolo
+                  options={TITLE_OPTIONS}
+                  value={field.value || ""}
+                  onChange={(_, newValue) => field.onChange(newValue || "")}
+                  onInputChange={(_, newValue) => field.onChange(newValue || "")}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      fullWidth
+                      label="Title (Optional)"
+                      variant="outlined"
+                      margin="normal"
+                      placeholder="e.g., Dr., Prof., Eng."
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Person color="action" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+              )}
+            />
             <Controller
               name="firstName"
               control={control}
@@ -850,87 +926,43 @@ export const Register: React.FC = () => {
               name="password"
               control={control}
               render={({ field }) => (
-                <TextField
+                <PasswordField
                   {...field}
                   fullWidth
                   label="Password *"
                   variant="outlined"
                   margin="normal"
-                  type={showPassword ? "text" : "password"}
                   error={!!errors.password}
                   helperText={errors.password?.message}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock color="action" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowPassword(!showPassword)}
-                          edge="end"
-                          aria-label="toggle password visibility"
-                        >
-                          {showPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                 />
               )}
             />
             {studentValues.password && (
-              <Box sx={{ mt: 1, mb: 1 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(passwordStrength.score, 100)}
-                  sx={{
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: "#e0e0e0",
-                    "& .MuiLinearProgress-bar": {
-                      backgroundColor: passwordStrength.color,
-                    },
-                  }}
+              <>
+                <PasswordStrengthMeter
+                  score={passwordStrength.score}
+                  level={passwordStrength.level}
                 />
-                <FormHelperText sx={{ color: passwordStrength.color }}>
-                  Password strength: {passwordStrength.label}
-                </FormHelperText>
-              </Box>
+                <PasswordRequirementsChecklist
+                  password={studentValues.password}
+                  context={passwordContext}
+                />
+              </>
             )}
 
             <Controller
               name="confirmPassword"
               control={control}
               render={({ field }) => (
-                <TextField
+                <ConfirmPasswordField
                   {...field}
                   fullWidth
                   label="Confirm Password *"
                   variant="outlined"
                   margin="normal"
-                  type={showConfirmPassword ? "text" : "password"}
+                  password={studentValues.password}
                   error={!!errors.confirmPassword}
                   helperText={errors.confirmPassword?.message}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock color="action" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          edge="end"
-                          aria-label="toggle confirm password visibility"
-                        >
-                          {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                 />
               )}
             />
@@ -1036,7 +1068,7 @@ export const Register: React.FC = () => {
                   Personal Details
                 </Typography>
                 <Typography variant="body2">
-                  {studentValues.firstName} {studentValues.lastName}
+                  {[studentValues.title, studentValues.firstName, studentValues.lastName].filter(Boolean).join(" ")}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {studentValues.organization}
@@ -1100,6 +1132,37 @@ export const Register: React.FC = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Please provide your personal information
             </Typography>
+            <Controller
+              name="title"
+              control={control}
+              render={({ field }) => (
+                <Autocomplete
+                  freeSolo
+                  options={TITLE_OPTIONS}
+                  value={field.value || ""}
+                  onChange={(_, newValue) => field.onChange(newValue || "")}
+                  onInputChange={(_, newValue) => field.onChange(newValue || "")}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      fullWidth
+                      label="Title (Optional)"
+                      variant="outlined"
+                      margin="normal"
+                      placeholder="e.g., Dr., Prof., Eng."
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Person color="action" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+              )}
+            />
             <Controller
               name="firstName"
               control={control}
@@ -1377,87 +1440,43 @@ export const Register: React.FC = () => {
               name="password"
               control={control}
               render={({ field }) => (
-                <TextField
+                <PasswordField
                   {...field}
                   fullWidth
                   label="Password *"
                   variant="outlined"
                   margin="normal"
-                  type={showPassword ? "text" : "password"}
                   error={!!errors.password}
                   helperText={errors.password?.message}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock color="action" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowPassword(!showPassword)}
-                          edge="end"
-                          aria-label="toggle password visibility"
-                        >
-                          {showPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                 />
               )}
             />
             {lecturerValues.password && (
-              <Box sx={{ mt: 1, mb: 1 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(passwordStrength.score, 100)}
-                  sx={{
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: "#e0e0e0",
-                    "& .MuiLinearProgress-bar": {
-                      backgroundColor: passwordStrength.color,
-                    },
-                  }}
+              <>
+                <PasswordStrengthMeter
+                  score={passwordStrength.score}
+                  level={passwordStrength.level}
                 />
-                <FormHelperText sx={{ color: passwordStrength.color }}>
-                  Password strength: {passwordStrength.label}
-                </FormHelperText>
-              </Box>
+                <PasswordRequirementsChecklist
+                  password={lecturerValues.password}
+                  context={passwordContext}
+                />
+              </>
             )}
 
             <Controller
               name="confirmPassword"
               control={control}
               render={({ field }) => (
-                <TextField
+                <ConfirmPasswordField
                   {...field}
                   fullWidth
                   label="Confirm Password *"
                   variant="outlined"
                   margin="normal"
-                  type={showConfirmPassword ? "text" : "password"}
+                  password={lecturerValues.password}
                   error={!!errors.confirmPassword}
                   helperText={errors.confirmPassword?.message}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock color="action" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          edge="end"
-                          aria-label="toggle confirm password visibility"
-                        >
-                          {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                 />
               )}
             />
@@ -1563,7 +1582,7 @@ export const Register: React.FC = () => {
                   Personal Details
                 </Typography>
                 <Typography variant="body2">
-                  {lecturerValues.firstName} {lecturerValues.lastName}
+                  {[lecturerValues.title, lecturerValues.firstName, lecturerValues.lastName].filter(Boolean).join(" ")}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {lecturerValues.organization}

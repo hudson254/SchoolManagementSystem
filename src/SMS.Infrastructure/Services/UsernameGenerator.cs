@@ -11,17 +11,24 @@ namespace SMS.Infrastructure.Services
     /// Generates unique, collision-free usernames using a priority-based
     /// algorithm. Each candidate is validated against the user manager before
     /// being proposed, guaranteeing uniqueness.
+    ///
+    /// Titles are NEVER included in generated usernames. The name parser is
+    /// used to strip any titles before username generation.
     /// </summary>
     public class UsernameGenerator : IUsernameGenerator
     {
         private const int MaxUsernameLength = 50;
-        private static readonly Regex ValidUsernameRegex = new Regex("^[a-z0-9]+$", RegexOptions.Compiled);
+        private const int MaxCollisionAttempts = 100;
+        // Allow dot as a valid character in usernames (e.g., firstname.lastname)
+        private static readonly Regex ValidUsernameRegex = new Regex(@"^[\p{L}\p{N}\.]+$", RegexOptions.Compiled);
 
         private readonly IUserManagerService _userManager;
+        private readonly INameParser _nameParser;
 
-        public UsernameGenerator(IUserManagerService userManager)
+        public UsernameGenerator(IUserManagerService userManager, INameParser nameParser)
         {
             _userManager = userManager;
+            _nameParser = nameParser;
         }
 
         /// <inheritdoc />
@@ -47,8 +54,10 @@ namespace SMS.Infrastructure.Services
         /// <inheritdoc />
         public async Task<string> GenerateUsernameAsync(string firstName, string lastName)
         {
-            var first = Sanitize(firstName ?? string.Empty);
-            var last = Sanitize(lastName ?? string.Empty);
+            // Strip any titles from the name parts before generating the username.
+            // This ensures titles like "Dr", "Prof" never appear in usernames.
+            var first = Sanitize(StripTitle(firstName));
+            var last = Sanitize(StripTitle(lastName));
 
             if (string.IsNullOrEmpty(first) && string.IsNullOrEmpty(last))
                 throw new ArgumentException("At least one of first name or last name is required.");
@@ -60,23 +69,63 @@ namespace SMS.Infrastructure.Services
             // 4. firstname (or lastname if first is empty)
             var candidates = BuildCandidates(first, last);
 
-            foreach (var candidate in candidates)
+            if (candidates.Length > 0)
             {
-                if (await IsUsernameAvailableAsync(candidate))
-                    return candidate;
+                // Primary candidate (preferred): try it first
+                var primary = candidates[0];
+                if (await IsUsernameAvailableAsync(primary))
+                    return primary;
+
+                // If primary is taken, try numeric suffixes on the primary before falling back
+                var counter = 2;
+                while (counter <= MaxCollisionAttempts)
+                {
+                    var numbered = $"{primary}{counter}";
+                    if (await IsUsernameAvailableAsync(numbered))
+                        return numbered;
+                    counter++;
+                }
+
+                // Then try other candidate forms (without numbering)
+                for (var idx = 1; idx < candidates.Length; idx++)
+                {
+                    var candidate = candidates[idx];
+                    if (await IsUsernameAvailableAsync(candidate))
+                        return candidate;
+                }
             }
 
-            // All simple variants are taken — append an incrementing number.
-            // Start from 2 because the base form was already tried as a candidate.
-            var baseName = candidates.LastOrDefault() ?? (first + last);
-            var counter = 2;
-            while (true)
-            {
-                var candidate = $"{baseName}{counter}";
-                if (await IsUsernameAvailableAsync(candidate))
-                    return candidate;
-                counter++;
-            }
+            // Extremely unlikely fallback: if we somehow exhaust all attempts,
+            // return the base name with a timestamp suffix as a last resort.
+            var fallbackBase = (candidates.Length > 0) ? candidates[0] : (first + last);
+            var fallback = $"{fallbackBase}{DateTime.UtcNow:yyyyMMddHHmmss}";
+            return Sanitize(fallback);
+        }
+
+        /// <inheritdoc />
+        public async Task<string> GenerateUsernameFromFullNameAsync(string fullName)
+        {
+            // Parse the full name to extract and remove any titles
+            var parsed = _nameParser.ParseName(fullName);
+
+            // Use the parsed first and last name (without title) for username generation
+            return await GenerateUsernameAsync(parsed.FirstName, parsed.LastName);
+        }
+
+        /// <summary>
+        /// Strips any recognized title from a name part.
+        /// If the name part is a title (e.g., "Dr"), returns empty string.
+        /// </summary>
+        private string StripTitle(string namePart)
+        {
+            if (string.IsNullOrWhiteSpace(namePart))
+                return string.Empty;
+
+            // Check if this name part is actually a title
+            if (_nameParser.IsRecognizedTitle(namePart))
+                return string.Empty;
+
+            return namePart;
         }
 
         private static string[] BuildCandidates(string first, string last)
@@ -116,7 +165,8 @@ namespace SMS.Infrastructure.Services
                 return string.Empty;
 
             var normalized = value.ToLowerInvariant();
-            var cleaned = new string(normalized.Where(char.IsLetterOrDigit).ToArray());
+            // Allow dot in usernames; keep letters, digits, and dot
+            var cleaned = new string(normalized.Where(c => char.IsLetterOrDigit(c) || c == '.').ToArray());
 
             if (cleaned.Length > MaxUsernameLength)
                 cleaned = cleaned.Substring(0, MaxUsernameLength);

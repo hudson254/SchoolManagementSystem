@@ -46,7 +46,7 @@ namespace SMS.Application.Features.Reports.Queries
                 ActiveStudents = enrollmentList.Count(e => e.Status == "Active"),
                 Enrollments = enrollmentList.Select(e => new StudentEnrollmentReportDto
                 {
-                    StudentName = e.Student != null ? $"{e.Student.FirstName} {e.Student.LastName}" : "Unknown",
+                    StudentName = e.Student != null ? BuildStudentDisplayName(e.Student) : "Unknown",
                     StudentNumber = e.Student?.StudentNumber ?? "",
                     ProgrammeName = e.Course?.Programme?.Name ?? "",
                     Status = e.Status
@@ -55,6 +55,18 @@ namespace SMS.Application.Features.Reports.Queries
 
             _logger.LogInformation("Generated enrollment report with {Count} records", report.TotalStudents);
             return report;
+        }
+
+        private static string BuildStudentDisplayName(SMS.Domain.Entities.Student student)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(student.Title))
+                parts.Add(student.Title);
+            parts.Add(student.FirstName);
+            if (!string.IsNullOrWhiteSpace(student.MiddleName))
+                parts.Add(student.MiddleName);
+            parts.Add(student.LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
         }
     }
 
@@ -88,7 +100,7 @@ namespace SMS.Application.Features.Reports.Queries
                 .GroupBy(a => a.Lecturer)
                 .Select(g => new LecturerWorkloadReportDto
                 {
-                    LecturerName = g.Key != null ? $"{g.Key.FirstName} {g.Key.LastName}" : "Unknown",
+                    LecturerName = g.Key != null ? BuildLecturerDisplayName(g.Key) : "Unknown",
                     TotalUnits = g.Count(),
                     TotalStudents = g.Sum(a => a.Unit?.Enrollments?.Count ?? 0),
                     Units = g.Select(a => new UnitWorkloadDto
@@ -102,6 +114,30 @@ namespace SMS.Application.Features.Reports.Queries
 
             _logger.LogInformation("Generated lecturer workload report with {Count} lecturers", workload.Count);
             return workload;
+        }
+
+        private static string BuildStudentDisplayName(SMS.Domain.Entities.Student student)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(student.Title))
+                parts.Add(student.Title);
+            parts.Add(student.FirstName);
+            if (!string.IsNullOrWhiteSpace(student.MiddleName))
+                parts.Add(student.MiddleName);
+            parts.Add(student.LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+        }
+
+        private static string BuildLecturerDisplayName(SMS.Domain.Entities.Lecturer lecturer)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(lecturer.Title))
+                parts.Add(lecturer.Title);
+            parts.Add(lecturer.FirstName);
+            if (!string.IsNullOrWhiteSpace(lecturer.MiddleName))
+                parts.Add(lecturer.MiddleName);
+            parts.Add(lecturer.LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
         }
     }
 

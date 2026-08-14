@@ -19,7 +19,7 @@ namespace SMS.Infrastructure.Services
         /// Executes a database operation with retry and exponential backoff.
         /// </summary>
         public static async Task<T> ExecuteDatabaseAsync<T>(
-            Func<Task<T>> operation,
+            Func<CancellationToken, Task<T>> operation,
             ILogger logger,
             CancellationToken cancellationToken = default)
         {
@@ -30,7 +30,7 @@ namespace SMS.Infrastructure.Services
                 {
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
-                    return await operation();
+                    return await operation(cts.Token);
                 }
                 catch (Exception ex) when (
                     ex is TimeoutException ||
@@ -55,7 +55,7 @@ namespace SMS.Infrastructure.Services
         /// Executes a database operation with retry and exponential backoff (no return value).
         /// </summary>
         public static async Task ExecuteDatabaseAsync(
-            Func<Task> operation,
+            Func<CancellationToken, Task> operation,
             ILogger logger,
             CancellationToken cancellationToken = default)
         {
@@ -66,7 +66,7 @@ namespace SMS.Infrastructure.Services
                 {
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
-                    await operation();
+                    await operation(cts.Token);
                     return;
                 }
                 catch (Exception ex) when (
@@ -92,10 +92,20 @@ namespace SMS.Infrastructure.Services
         /// Executes an external service call with retry and exponential backoff.
         /// </summary>
         public static async Task<T> ExecuteExternalAsync<T>(
-            Func<Task<T>> operation,
+            Func<CancellationToken, Task<T>> operation,
             ILogger logger,
+            bool useRetries = true,
             CancellationToken cancellationToken = default)
         {
+            // If retries are disabled (e.g. the HttpClient already has a resilience
+            // pipeline configured), execute the operation exactly once and return.
+            if (!useRetries)
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
+                return await operation(cts.Token);
+            }
+
             int retryCount = 0;
             while (true)
             {
@@ -103,7 +113,7 @@ namespace SMS.Infrastructure.Services
                 {
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
-                    return await operation();
+                    return await operation(cts.Token);
                 }
                 catch (Exception ex) when (
                     ex is System.Net.Http.HttpRequestException ||
@@ -128,10 +138,21 @@ namespace SMS.Infrastructure.Services
         /// Executes an external service call with retry and exponential backoff (no return value).
         /// </summary>
         public static async Task ExecuteExternalAsync(
-            Func<Task> operation,
+            Func<CancellationToken, Task> operation,
             ILogger logger,
+            bool useRetries = true,
             CancellationToken cancellationToken = default)
         {
+            // If retries are disabled (e.g. the HttpClient already has a resilience
+            // pipeline configured), execute the operation exactly once and return.
+            if (!useRetries)
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
+                await operation(cts.Token);
+                return;
+            }
+
             int retryCount = 0;
             while (true)
             {
@@ -139,7 +160,7 @@ namespace SMS.Infrastructure.Services
                 {
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(DefaultTimeoutSeconds));
-                    await operation();
+                    await operation(cts.Token);
                     return;
                 }
                 catch (Exception ex) when (

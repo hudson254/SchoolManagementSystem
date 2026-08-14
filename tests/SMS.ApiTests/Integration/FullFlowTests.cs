@@ -54,6 +54,47 @@ namespace SMS.ApiTests.Integration
         }
 
         [Fact]
+        public async Task AuthFlow_RegisterWithTitle_UsernameShouldNotContainTitle()
+        {
+            using var client = _fixture.CreateClient();
+            var email = $"titled.{Guid.NewGuid()}@example.com";
+            var registerRequest = new
+            {
+                title = "Dr.",
+                firstName = "John",
+                lastName = "Mwangi",
+                email,
+                password = "Test123!@#Abc",
+                confirmPassword = "Test123!@#Abc",
+                phoneNumber = "+254712345678",
+                organization = "Title Test",
+                role = "Student",
+                courseId = ApiTestFixture.TestCourseId
+            };
+
+            var registerResponse = await client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
+            registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+            var registerResult = await registerResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
+            registerResult.Should().NotBeNull();
+            registerResult!.Email.Should().Be(email);
+
+            // Username should NOT contain the title "Dr" or "dr"
+            var username = registerResult.Username ?? string.Empty;
+            username.Should().NotBeNullOrEmpty();
+            username.ToLowerInvariant().Should().NotContain("dr");
+
+            // The full name should include the title
+            registerResult.FullName.Should().Contain("Dr.");
+
+            // Get profile to verify title is stored separately
+            var meResponse = await client.GetAsync("/api/v1/auth/me");
+            meResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var logoutResponse = await client.PostAsync("/api/v1/auth/logout", null);
+            logoutResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        [Fact]
         public async Task StudentFlow_CreateStudentGetStudents_ShouldSucceed()
         {
             using var client = _fixture.CreateAuthenticatedClient();

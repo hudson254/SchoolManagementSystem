@@ -18,14 +18,14 @@ if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
     dotnet run --project src/SMS.API -- seed-data
 else
     echo -e "${YELLOW}Running locally...${NC}"
-    
-    # Check if PostgreSQL is running
-    if ! pg_isready -h localhost -p 5432 -U sms_user > /dev/null 2>&1; then
+
+    # Check if PostgreSQL is running (Docker maps to 5433 on host)
+    if ! pg_isready -h localhost -p 5433 -U sms_user > /dev/null 2>&1; then
         echo -e "${YELLOW}PostgreSQL is not running. Please start it first.${NC}"
         echo "  docker-compose -f docker/docker-compose.yml up -d postgres"
         exit 1
     fi
-    
+
     # Run seed
     dotnet run --project src/SMS.API -- seed-data
 fi

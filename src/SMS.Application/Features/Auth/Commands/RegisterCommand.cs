@@ -6,11 +6,14 @@ using System.Threading.Tasks;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
+using SMS.Application.Services;
+using SMS.Domain.Common;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
-
 
 namespace SMS.Application.Features.Auth.Commands
 {
@@ -21,12 +24,24 @@ namespace SMS.Application.Features.Auth.Commands
         public string ConfirmPassword { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string Role { get; set; } = "Student";
+
         public string? Organization { get; set; }
         public string? PhoneNumber { get; set; }
         public string? Username { get; set; }
         public Guid? CourseId { get; set; }
         public string? Specialization { get; set; }
+
+        /// <summary>
+        /// Staff ID / Establishment Number. Preserves leading zeros.
+        /// </summary>
+        public string? StaffIdEstNo { get; set; }
+
+        /// <summary>
+        /// National ID or Passport Number. Alphanumeric, preserves leading zeros.
+        /// </summary>
+        public string? NationalIdPassport { get; set; }
     }
 
     public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
@@ -84,17 +99,23 @@ namespace SMS.Application.Features.Auth.Commands
                 .NotEmpty().WithMessage("Specialization is required")
                 .MaximumLength(200).WithMessage("Specialization must not exceed 200 characters")
                 .When(x => x.Role == "Lecturer");
+
+            // Staff Id / Est No. validation
+            RuleFor(x => x.StaffIdEstNo)
+                .MaximumLength(50).WithMessage("Staff Id / Est No. must not exceed 50 characters")
+                .Matches(@"^[a-zA-Z0-9\-\/]+$").WithMessage("Staff Id / Est No. contains invalid characters")
+                .When(x => !string.IsNullOrEmpty(x.StaffIdEstNo));
+
+            // National ID / Passport No. validation
+            RuleFor(x => x.NationalIdPassport)
+                .MaximumLength(50).WithMessage("National ID / Passport No. must not exceed 50 characters")
+                .Matches(@"^[a-zA-Z0-9]+$").WithMessage("National ID / Passport No. must be alphanumeric")
+                .When(x => !string.IsNullOrEmpty(x.NationalIdPassport));
         }
     }
 
     public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthResponseDto>
     {
-        /// <summary>
-        /// The only roles ever assigned during public self-registration.
-        /// Client-supplied roles are validated against this allow-list to
-        /// prevent privilege escalation (previously an attacker could register
-        /// with Role="Administrator").
-        /// </summary>
         private static readonly HashSet<string> AllowedSelfRegistrationRoles = new(StringComparer.OrdinalIgnoreCase)
         {
             "Student",
@@ -105,7 +126,8 @@ namespace SMS.Application.Features.Auth.Commands
         private readonly IJwtService _jwtService;
         private readonly IAuditService _auditService;
         private readonly ILogger<RegisterCommandHandler> _logger;
-        private readonly SMS.Application.Common.Interfaces.IUsernameGenerator _usernameGenerator;
+        private readonly IUsernameGenerator _usernameGenerator;
+        private readonly INameParser _nameParser;
         private readonly IStudentRepository _studentRepository;
         private readonly ILecturerRepository _lecturerRepository;
         private readonly ICourseRepository _courseRepository;
@@ -113,26 +135,30 @@ namespace SMS.Application.Features.Auth.Commands
         private readonly IUnitAllocationRepository _unitAllocationRepository;
         private readonly SMS.Multitenancy.Interfaces.ITenantContext _tenantContext;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IPasswordPolicyService _passwordPolicyService;
 
         public RegisterCommandHandler(
             IUserManagerService userManagerService,
             IJwtService jwtService,
             IAuditService auditService,
             ILogger<RegisterCommandHandler> logger,
-            SMS.Application.Common.Interfaces.IUsernameGenerator usernameGenerator,
+            IUsernameGenerator usernameGenerator,
+            INameParser nameParser,
             IStudentRepository studentRepository,
             ILecturerRepository lecturerRepository,
             ICourseRepository courseRepository,
             IUnitRepository unitRepository,
             IUnitAllocationRepository unitAllocationRepository,
             SMS.Multitenancy.Interfaces.ITenantContext tenantContext,
-            IUnitOfWork unitOfWork)
+            IUnitOfWork unitOfWork,
+            IPasswordPolicyService passwordPolicyService)
         {
             _userManagerService = userManagerService;
             _jwtService = jwtService;
             _auditService = auditService;
             _logger = logger;
             _usernameGenerator = usernameGenerator;
+            _nameParser = nameParser;
             _studentRepository = studentRepository;
             _lecturerRepository = lecturerRepository;
             _courseRepository = courseRepository;
@@ -140,90 +166,83 @@ namespace SMS.Application.Features.Auth.Commands
             _unitAllocationRepository = unitAllocationRepository;
             _tenantContext = tenantContext;
             _unitOfWork = unitOfWork;
+            _passwordPolicyService = passwordPolicyService;
         }
 
         public async Task<AuthResponseDto> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {
-            // Validate passwords match
             if (request.Password != request.ConfirmPassword)
-            {
                 throw new SMS.Application.Exceptions.ValidationException("Passwords do not match");
-            }
 
-            // Validate role is in the allow-list (server-side security check).
             if (!AllowedSelfRegistrationRoles.Contains(request.Role))
-            {
                 throw new SMS.Application.Exceptions.ValidationException("Invalid registration role");
-            }
 
-            // Check if user already exists
+            // Server-side password policy enforcement (authoritative).
+            var policyErrors = _passwordPolicyService.Validate(
+                request.Password,
+                new PasswordPolicyContext
+                {
+                    Email = request.Email,
+                    Username = request.Username,
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    Organization = request.Organization
+                });
+            if (policyErrors.Count > 0)
+                throw new SMS.Application.Exceptions.ValidationException(policyErrors.First());
+
             var existingUser = await _userManagerService.FindByEmailAsync(request.Email);
             if (existingUser != null)
-            {
                 throw new ConflictException("User with this email already exists");
-            }
 
-            // Generate a unique username if one was not supplied.
+            // Parse the full name to extract any title and normalize name parts.
+            var fullName = $"{request.FirstName} {request.LastName}".Trim();
+            var parsed = _nameParser.ParseName(fullName);
+
+            var title = request.Title ?? parsed.Title;
+
+            if (!parsed.IsValid)
+                throw new SMS.Application.Exceptions.ValidationException(parsed.ErrorMessage ?? "Invalid name format");
+
             var username = request.Username;
             if (string.IsNullOrWhiteSpace(username))
             {
-                username = await _usernameGenerator.GenerateUsernameAsync(request.FirstName, request.LastName);
+                username = await _usernameGenerator.GenerateUsernameAsync(parsed.FirstName, parsed.LastName);
             }
             else
             {
-                // Re-validate the manually supplied username is unique.
                 var isAvailable = await _usernameGenerator.IsUsernameAvailableAsync(username);
                 if (!isAvailable)
-                {
                     throw new ConflictException("Username is already taken");
-                }
             }
 
-            // Create user with the validated, allow-listed role.
-            var user = await _userManagerService.CreateUserAsync(
-                username,
-                request.Email,
-                request.Password,
-                request.Role);
-
+            var user = await _userManagerService.CreateUserAsync(username, request.Email, request.Password, request.Role);
             if (user == null)
-            {
                 throw new ExternalServiceException("User creation service returned null");
-            }
 
             var typedUser = (User)user;
-
-            // Sync the User's profile fields with the Student/Lecturer entity.
-            typedUser.FirstName = request.FirstName;
-            typedUser.LastName = request.LastName;
+            typedUser.FirstName = parsed.FirstName;
+            typedUser.LastName = parsed.LastName;
+            typedUser.MiddleName = parsed.MiddleName;
+            typedUser.Title = title;
             typedUser.PhoneNumber = request.PhoneNumber;
             typedUser.Organization = request.Organization;
             await _userManagerService.UpdateUserAsync(typedUser);
 
-            // Create the role-specific record (Student or Lecturer).
             if (request.Role.Equals("Student", StringComparison.OrdinalIgnoreCase))
-            {
-                await CreateStudentRecord(request, typedUser, cancellationToken);
-            }
+                await CreateStudentRecord(request, typedUser, parsed, title, cancellationToken);
             else if (request.Role.Equals("Lecturer", StringComparison.OrdinalIgnoreCase))
-            {
-                await CreateLecturerRecord(request, typedUser, cancellationToken);
-            }
+                await CreateLecturerRecord(request, typedUser, parsed, title, cancellationToken);
 
-            // Get user roles
             var roles = await _userManagerService.GetRolesAsync(typedUser);
             var rolesList = roles?.ToList() ?? new List<string>();
 
-            // Generate tokens
             var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, rolesList);
             var refreshToken = await _userManagerService.GenerateRefreshTokenAsync(typedUser.Id.ToString());
 
-            // Log successful registration
-            await _auditService.LogAsync("Register", typedUser.Id.ToString(), $"User registered successfully as {request.Role}");
+            await _auditService.LogAsync("Register", typedUser.Id.ToString(), $"User registered successfully as {request.Role} (pending course selection)");
+            _logger.LogInformation("User registered successfully: {Email} as {Role} (pending course selection)", request.Email, request.Role);
 
-            _logger.LogInformation("User registered successfully: {Email} as {Role}", request.Email, request.Role);
-
-            // Return response
             return new AuthResponseDto
             {
                 AccessToken = accessToken,
@@ -233,13 +252,20 @@ namespace SMS.Application.Features.Auth.Commands
                 UserId = typedUser.Id.ToString(),
                 Email = typedUser.Email,
                 Username = typedUser.UserName,
-                Roles = rolesList
+                FullName = string.IsNullOrWhiteSpace(title)
+                    ? $"{typedUser.FirstName} {typedUser.LastName}".Trim()
+                    : $"{title} {typedUser.FirstName} {typedUser.LastName}".Trim(),
+                FirstName = typedUser.FirstName,
+                LastName = typedUser.LastName,
+                Title = title,
+                Roles = rolesList,
+                RegistrationStatus = RegistrationStatus.PendingCourseSelection.ToString()
             };
         }
 
-        private async Task CreateStudentRecord(RegisterCommand request, User user, CancellationToken cancellationToken)
+        private async Task CreateStudentRecord(RegisterCommand request, User user, NameParseResult parsed, string? title, CancellationToken cancellationToken)
         {
-            // Validate the selected course exists and is active.
+            // Validate course selection (stored for later use during course selection workflow)
             if (!request.CourseId.HasValue)
                 throw new SMS.Application.Exceptions.ValidationException("Course selection is required for student registration");
 
@@ -247,100 +273,58 @@ namespace SMS.Application.Features.Auth.Commands
             if (course == null || !course.IsActive)
                 throw new NotFoundException("Course", request.CourseId.Value);
 
-            // Create the student record.
             var student = new Student
             {
-                FirstName = request.FirstName,
-                LastName = request.LastName,
+                FirstName = parsed.FirstName,
+                LastName = parsed.LastName,
+                MiddleName = parsed.MiddleName,
+                Title = title,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
+                StaffIdEstNo = request.StaffIdEstNo,
+                NationalIdPassport = request.NationalIdPassport,
                 StudentNumber = $"STU{DateTime.UtcNow:yyyyMMdd}{new Random().Next(1000, 9999)}",
                 UserId = user.Id,
                 ProgrammeId = course.ProgrammeId,
                 IsActive = true,
-                IsEnrolled = true,
+                IsEnrolled = false,  // Not enrolled until course selection + approval
                 EnrollmentDate = DateTime.UtcNow,
-                TenantId = Guid.Parse(_tenantContext.TenantId)
+                TenantId = Guid.Parse(_tenantContext.TenantId),
+                RegistrationStatus = RegistrationStatus.PendingCourseSelection
             };
 
             await _studentRepository.AddAsync(student, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Automatically enroll the student in all active units of the course.
-            var units = await _unitRepository.GetUnitsByCourseIdAsync(course.Id, cancellationToken);
-            foreach (var unit in units.Where(u => u.IsActive))
-            {
-                var enrollment = new Enrollment
-                {
-                    StudentId = student.Id,
-                    CourseId = course.Id,
-                    UnitId = unit.Id,
-                    SemesterId = course.SemesterId,
-                    EnrollmentDate = DateTime.UtcNow,
-                    Status = "Active",
-                    IsActive = true,
-                    TenantId = Guid.Parse(_tenantContext.TenantId)
-                };
-                // Enrollment is added via the Student's collection to preserve
-                // referential integrity and avoid duplicate-unit enforcement.
-                student.Enrollments.Add(enrollment);
-            }
-
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            await _auditService.LogAsync("Enroll", student.Id.ToString(), $"Student enrolled in course {course.Code} with {student.Enrollments.Count} units");
+            await _auditService.LogAsync("Register", student.Id.ToString(), $"Student account created (pending course selection for course {course.Code})");
         }
 
-        private async Task CreateLecturerRecord(RegisterCommand request, User user, CancellationToken cancellationToken)
+        private async Task CreateLecturerRecord(RegisterCommand request, User user, NameParseResult parsed, string? title, CancellationToken cancellationToken)
         {
-            // Specialization is required for lecturers.
             if (string.IsNullOrWhiteSpace(request.Specialization))
                 throw new SMS.Application.Exceptions.ValidationException("Specialization is required for lecturer registration");
 
-            // Create the lecturer record.
             var lecturer = new Lecturer
             {
-                FirstName = request.FirstName,
-                LastName = request.LastName,
+                FirstName = parsed.FirstName,
+                LastName = parsed.LastName,
+                MiddleName = parsed.MiddleName,
+                Title = title,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
+                NationalIdPassport = request.NationalIdPassport,
                 EmployeeNumber = $"LEC{DateTime.UtcNow:yyyyMMdd}{new Random().Next(1000, 9999)}",
                 IsActive = true,
                 UserId = user.Id.ToString(),
                 HireDate = DateTime.UtcNow,
-                TenantId = Guid.Parse(_tenantContext.TenantId)
+                TenantId = Guid.Parse(_tenantContext.TenantId),
+                RegistrationStatus = RegistrationStatus.PendingCourseSelection
             };
 
             await _lecturerRepository.AddAsync(lecturer, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // If a course was selected, automatically assign the lecturer to
-            // all active units of that course (teaching assignment).
-            if (request.CourseId.HasValue)
-            {
-                var course = await _courseRepository.GetByIdAsync(request.CourseId.Value, cancellationToken);
-                if (course != null && course.IsActive)
-                {
-                    var units = await _unitRepository.GetUnitsByCourseIdAsync(course.Id, cancellationToken);
-                    foreach (var unit in units.Where(u => u.IsActive))
-                    {
-                        var allocation = new UnitAllocation
-                        {
-                            LecturerId = lecturer.Id,
-                            UnitId = unit.Id,
-                            SemesterId = course.SemesterId ?? Guid.Empty,
-                            AllocationDate = DateTime.UtcNow,
-                            Status = "Active",
-                            IsPrimary = true
-                        };
-                        await _unitAllocationRepository.AddAsync(allocation, cancellationToken);
-                    }
-
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                    await _auditService.LogAsync("Allocate", lecturer.Id.ToString(), $"Lecturer assigned to {units.Count(u => u.IsActive)} units of course {course.Code}");
-                }
-            }
+            await _auditService.LogAsync("Register", lecturer.Id.ToString(), $"Lecturer account created (pending course/unit selection)");
         }
     }
 }

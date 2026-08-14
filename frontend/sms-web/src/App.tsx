@@ -36,6 +36,13 @@ const Users = loadPage(() => import('./pages/Users'), 'Users');
 const Settings = loadPage(() => import('./pages/Settings'), 'Settings');
 const Profile = loadPage(() => import('./pages/Profile'), 'Profile');
 const Calendar = loadPage(() => import('./pages/Calendar'), 'Calendar');
+const Certificates = loadPage(() => import('./pages/Certificates'), 'Certificates');
+const MyCertificates = loadPage(() => import('./pages/MyCertificates'), 'MyCertificates');
+const CertificateVerification = loadPage(() => import('./pages/CertificateVerification'), 'CertificateVerification');
+const CertificateTemplates = loadPage(() => import('./pages/CertificateTemplates'), 'CertificateTemplates');
+const CourseSelectionPage = loadPage(() => import('./pages/CourseSelectionPage'), 'CourseSelectionPage');
+const EnrollmentStatusPage = loadPage(() => import('./pages/EnrollmentStatusPage'), 'EnrollmentStatusPage');
+const CourseHistoryPage = loadPage(() => import('./pages/CourseHistoryPage'), 'CourseHistoryPage');
 const NotFound = loadPage(() => import('./pages/NotFound'), 'NotFound');
 
 const queryClient = new QueryClient({
@@ -72,6 +79,7 @@ function App() {
                     <Routes>
                       <Route path="/login" element={<Login />} />
                       <Route path="/register" element={<Register />} />
+                      <Route path="/verify" element={<CertificateVerification />} />
                       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                         <Route index element={<Navigate to="/dashboard" />} />
                         <Route path="dashboard" element={<Dashboard />} />
@@ -93,6 +101,12 @@ function App() {
                         <Route path="settings" element={<Settings />} />
                         <Route path="profile" element={<Profile />} />
                         <Route path="calendar" element={<Calendar />} />
+                        <Route path="certificates" element={<Certificates />} />
+                        <Route path="certificates/templates" element={<CertificateTemplates />} />
+                        <Route path="my-certificates" element={<MyCertificates />} />
+                        <Route path="course-selection" element={<CourseSelectionPage />} />
+                        <Route path="enrollment-status" element={<EnrollmentStatusPage />} />
+                        <Route path="course-history" element={<CourseHistoryPage />} />
                         <Route path="*" element={<NotFound />} />
                       </Route>
                     </Routes>

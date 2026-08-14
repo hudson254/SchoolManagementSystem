@@ -1,20 +1,12 @@
 # School Management System - Prometheus configuration.
 #
-# LIMITATION (documented, not hidden):
-# The SMS API does NOT currently expose a Prometheus metrics endpoint.
-# Findstr verification (this repair session) found no MapMetrics /
-# prometheus-net / OpenTelemetry metrics exporter in src/SMS.API, and
-# Program.cs only maps /health (AddHealthChecks).
+# Prometheus scrapes the SMS API's /metrics endpoint for application-level
+# metrics (request count, duration, auth failures, etc.) and the /health
+# endpoint for availability monitoring.
 #
-# Scraping a non-existent /metrics endpoint would produce a permanently
-# failing scrape target. Instead, this config scrapes the API's ASP.NET Core
-# health-check endpoint (/health) as an infrastructure-level availability
-# signal. A future repair item that adds prometheus-net / OpenTelemetry can
-# replace the health-scrape target with the real /metrics endpoint by:
-#   1. adding the metrics middleware to the API (e.g. prometheus-net.AspNetCore)
-#   2. changing the scrape target below to:
-#        metrics_path: /metrics
-#   3. optionally restricting the port (e.g. 9184) via the compose file.
+# The /metrics endpoint is served by the MetricsMiddleware on the same port
+# as the API (port 80). In production, restrict access to the monitoring
+# VLAN via nginx or firewall rules.
 #
 # Scrape interval is intentionally aligned with the compose healthcheck cadence.
 
@@ -22,15 +14,102 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Alerting configuration - sends alerts to Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+      timeout: 10s
+      api_version: v2
+
+# Rule files for alerting
+rule_files:
+  - "alerts.yml"
+
 scrape_configs:
-  # --- SMS API availability (infrastructure-level probe) ---
-  - job_name: "sms-api"
-    metrics_path: "/health"
-    scheme: http
+  # --- Prometheus self-monitoring ---
+  - job_name: "prometheus"
     static_configs:
       - targets:
-          - "api:80" # compose service DNS name (internal network)
+          - "localhost:9090"
+        labels:
+          application: "prometheus"
+          environment: "production"
+
+  # --- SMS API application metrics ---
+  - job_name: "sms-api-metrics"
+    metrics_path: "/metrics"
+    scheme: http
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - "api:80"
         labels:
           application: "sms-api"
           environment: "production"
           component: "aspnet-core"
+          service: "sms-api"
+
+  # --- SMS API availability (infrastructure-level probe) ---
+  - job_name: "sms-api-health"
+    metrics_path: "/health"
+    scheme: http
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    static_configs:
+      - targets:
+          - "api:80"
+        labels:
+          application: "sms-api"
+          environment: "production"
+          component: "health-check"
+          service: "sms-api"
+
+  # --- Node Exporter (host-level metrics) ---
+  - job_name: "node"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - "node-exporter:9100"
+        labels:
+          application: "host-metrics"
+          environment: "production"
+          service: "node-exporter"
+
+  # --- PostgreSQL Exporter (database metrics) ---
+  - job_name: "postgresql"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - "postgres-exporter:9187"
+        labels:
+          application: "postgresql"
+          environment: "production"
+          service: "postgres-exporter"
+
+  # --- cAdvisor (container-level metrics) ---
+  - job_name: "cadvisor"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - "cadvisor:8080"
+        labels:
+          application: "container-metrics"
+          environment: "production"
+          service: "cadvisor"
+
+  # --- Alertmanager self-monitoring ---
+  - job_name: "alertmanager"
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - "alertmanager:9093"
+        labels:
+          application: "alertmanager"
+          environment: "production"
+          service: "alertmanager"

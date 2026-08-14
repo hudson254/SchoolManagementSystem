@@ -13,6 +13,7 @@ import {
   Typography,
   Divider,
   Alert,
+  Autocomplete,
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,6 +23,7 @@ import { studentService } from '../../services/student.service';
 import { courseService } from '../../services/course.service';
 
 const studentSchema = z.object({
+  title: z.string().optional(),
   firstName: z.string().min(1, 'First name is required').max(100),
   lastName: z.string().min(1, 'Last name is required').max(100),
   email: z.string().email('Invalid email address').min(1, 'Email is required'),
@@ -37,6 +39,37 @@ const studentSchema = z.object({
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
+
+const TITLE_OPTIONS = [
+  'Dr.',
+  'Prof.',
+  'Eng.',
+  'Rev.',
+  'Fr.',
+  'Pastor',
+  'Bishop',
+  'Hon.',
+  'Justice',
+  'Judge',
+  'Magistrate',
+  'H.E.',
+  'Governor',
+  'Senator',
+  'MP',
+  'MCA',
+  'Col.',
+  'Maj.',
+  'Capt.',
+  'Brig.',
+  'Lt.',
+  'Gen.',
+  'CPA',
+  'CFA',
+  'CISA',
+  'CISSP',
+  'PMP',
+  'PhD',
+];
 
 interface StudentFormProps {
   studentId?: string;
@@ -59,6 +92,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
   } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
+      title: '',
       firstName: '',
       lastName: '',
       email: '',
@@ -104,6 +138,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
   useEffect(() => {
     if (student) {
       reset({
+        title: student.title || '',
         firstName: student.firstName,
         lastName: student.lastName,
         email: student.email,
@@ -154,6 +189,31 @@ export const StudentForm: React.FC<StudentFormProps> = ({
       </Typography>
 
       <Grid container spacing={3}>
+        <Grid item xs={12} sm={6}>
+          <Controller
+            name="title"
+            control={control}
+            render={({ field }) => (
+              <Autocomplete
+                freeSolo
+                options={TITLE_OPTIONS}
+                value={field.value || ''}
+                onChange={(_, newValue) => field.onChange(newValue || '')}
+                onInputChange={(_, newValue) => field.onChange(newValue || '')}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label="Title (Optional)"
+                    placeholder="e.g., Dr., Prof., Eng."
+                    error={!!errors.title}
+                    helperText={errors.title?.message}
+                  />
+                )}
+              />
+            )}
+          />
+        </Grid>
         <Grid item xs={12} sm={6}>
           <Controller
             name="firstName"

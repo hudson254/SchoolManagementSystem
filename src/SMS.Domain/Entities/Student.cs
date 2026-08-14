@@ -1,4 +1,5 @@
 using SMS.Domain.Common;
+using SMS.Domain.Enums;
 using System;
 using System.Collections.Generic;
 
@@ -9,8 +10,21 @@ namespace SMS.Domain.Entities
         public string? UserId { get; set; }
         public string StudentNumber { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string Email { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Staff ID / Establishment Number. Preserves leading zeros.
+        /// </summary>
+        public string? StaffIdEstNo { get; set; }
+
+        /// <summary>
+        /// National ID or Passport Number. Alphanumeric, preserves leading zeros.
+        /// </summary>
+        public string? NationalIdPassport { get; set; }
+
         public string? PhoneNumber { get; set; }
         public string? Address { get; set; }
         public DateTime DateOfBirth { get; set; }
@@ -21,6 +35,12 @@ namespace SMS.Domain.Entities
         public string AcademicStatus { get; set; } = "Active";
         public bool IsActive { get; set; } = true;
         public bool IsEnrolled { get; set; } = true;
+
+        /// <summary>
+        /// Tracks the registration approval lifecycle.
+        /// New registrations start as PendingCourseSelection.
+        /// </summary>
+        public RegistrationStatus RegistrationStatus { get; set; } = RegistrationStatus.PendingCourseSelection;
 
         // Additional properties required by Application handlers
         public string? Gender { get; set; }

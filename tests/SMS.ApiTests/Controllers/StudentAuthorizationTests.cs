@@ -38,7 +38,9 @@ namespace SMS.ApiTests.Controllers
     {
         private static readonly Guid DefaultTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         private const string AdminEmail = "admin@school.com";
-        private const string AdminPassword = "Admin123!";
+        // Must satisfy Identity PasswordOptions: RequiredLength=12, RequireDigit,
+        // RequireLowercase, RequireUppercase, RequireNonAlphanumeric, RequiredUniqueChars=4.
+        private const string AdminPassword = "Admin123!@#q1";
 
         // Controls the mocked current user. Tests set these before creating a client.
         public string CurrentUserId { get; set; } = "test-user-id";

@@ -16,6 +16,8 @@ namespace SMS.Application.Features.Students.Commands
     {
         public string FirstName { get; set; }
         public string LastName { get; set; }
+        public string? MiddleName { get; set; }
+        public string? Title { get; set; }
         public string Email { get; set; }
         public string PhoneNumber { get; set; }
         public string Address { get; set; }
@@ -56,17 +58,23 @@ namespace SMS.Application.Features.Students.Commands
         private readonly IUserManagerService _userManager;
         private readonly SMS.Multitenancy.Interfaces.ITenantContext _tenantContext;
         private readonly IAuditService _auditService;
+        private readonly INameParser _nameParser;
+        private readonly IUsernameGenerator _usernameGenerator;
 
         public CreateStudentCommandHandler(
             IStudentRepository studentRepository,
             IUserManagerService userManager,
             SMS.Multitenancy.Interfaces.ITenantContext tenantContext,
-            IAuditService auditService)
+            IAuditService auditService,
+            INameParser nameParser,
+            IUsernameGenerator usernameGenerator)
         {
             _studentRepository = studentRepository;
             _userManager = userManager;
             _tenantContext = tenantContext;
             _auditService = auditService;
+            _nameParser = nameParser;
+            _usernameGenerator = usernameGenerator;
         }
 
         public async Task<StudentDto> Handle(CreateStudentCommand request, CancellationToken cancellationToken)
@@ -78,6 +86,17 @@ namespace SMS.Application.Features.Students.Commands
                 throw new ConflictException("User with this email already exists");
             }
 
+            // Parse the full name to extract any title and normalize name parts.
+            // This ensures titles like "Dr" are stored separately and never leak
+            // into usernames or file names.
+            var fullName = $"{request.FirstName} {request.LastName}".Trim();
+            var parsed = _nameParser.ParseName(fullName);
+
+            if (!parsed.IsValid)
+                throw new SMS.Application.Exceptions.ValidationException(parsed.ErrorMessage ?? "Invalid name format");
+
+            var title = request.Title ?? parsed.Title;
+
             // Create user account. If no password was supplied (administrative
             // student creation), generate a random secure default password so
             // the user account can be created successfully. The user can then
@@ -86,7 +105,7 @@ namespace SMS.Application.Features.Students.Commands
                 ? GenerateDefaultPassword()
                 : request.Password;
 
-            var username = $"{request.FirstName.ToLower()}.{request.LastName.ToLower()}{new Random().Next(100, 999)}";
+            var username = await _usernameGenerator.GenerateUsernameAsync(parsed.FirstName, parsed.LastName);
             var user = await _userManager.CreateUserAsync(username, request.Email, password, "Student");
 
             // Sync the User's name fields with the Student's names. UserManagerService
@@ -95,8 +114,10 @@ namespace SMS.Application.Features.Students.Commands
             // names would be blank.
             if (user != null)
             {
-                user.FirstName = request.FirstName;
-                user.LastName = request.LastName;
+                user.FirstName = parsed.FirstName;
+                user.LastName = parsed.LastName;
+                user.MiddleName = parsed.MiddleName;
+                user.Title = title;
                 user.PhoneNumber = request.PhoneNumber;
                 user.Email = request.Email;
                 await _userManager.UpdateUserAsync(user);
@@ -105,8 +126,10 @@ namespace SMS.Application.Features.Students.Commands
             // Create student
             var student = new Student
             {
-                FirstName = request.FirstName,
-                LastName = request.LastName,
+                FirstName = parsed.FirstName,
+                LastName = parsed.LastName,
+                MiddleName = parsed.MiddleName,
+                Title = title,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
                 Address = request.Address,
@@ -130,6 +153,8 @@ namespace SMS.Application.Features.Students.Commands
                 StudentNumber = createdStudent.StudentNumber,
                 FirstName = createdStudent.FirstName,
                 LastName = createdStudent.LastName,
+                MiddleName = createdStudent.MiddleName,
+                Title = createdStudent.Title,
                 Email = createdStudent.Email,
                 PhoneNumber = createdStudent.PhoneNumber,
                 Address = createdStudent.Address,
@@ -142,24 +167,28 @@ namespace SMS.Application.Features.Students.Commands
         /// Generates a cryptographically strong random default password
         /// (e.g., for administrative student creation when no password is supplied).
         /// The generated password satisfies the Identity password policy
-        /// (digit, lowercase, uppercase, min 8 characters).
+        /// (digit, lowercase, uppercase, non-alphanumeric, min 12 characters).
         /// </summary>
         private static string GenerateDefaultPassword()
         {
             const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
             const string lower = "abcdefghijkmnopqrstuvwxyz";
             const string digits = "23456789";
-            const string all = upper + lower + digits;
+            const string special = "!@#$%^&*";
+            const string all = upper + lower + digits + special;
 
             var bytes = RandomNumberGenerator.GetBytes(12);
             var chars = new char[12];
 
-            // Ensure at least one char from each required category.
+            // Ensure at least one char from each required category so the
+            // generated password passes the Identity password policy
+            // (RequireDigit, RequireUpper, RequireLower, RequireNonAlphanumeric).
             chars[0] = upper[bytes[0] % upper.Length];
             chars[1] = lower[bytes[1] % lower.Length];
             chars[2] = digits[bytes[2] % digits.Length];
+            chars[3] = special[bytes[3] % special.Length];
 
-            for (int i = 3; i < chars.Length; i++)
+            for (int i = 4; i < chars.Length; i++)
             {
                 chars[i] = all[bytes[i] % all.Length];
             }

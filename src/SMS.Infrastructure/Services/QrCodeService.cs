@@ -1,24 +1,12 @@
 using Microsoft.Extensions.Logging;
 using QRCoder;
-using System;
-using System.Threading.Tasks;
+using SMS.Domain.Interfaces;
 
 namespace SMS.Infrastructure.Services
 {
     /// <summary>
-    /// Service for generating QR codes for report verification.
+    /// Service for generating QR codes for report verification and certificates.
     /// </summary>
-    public interface IQrCodeService
-    {
-        /// <summary>
-        /// Generates a QR code as a PNG byte array.
-        /// </summary>
-        /// <param name="content">Content to encode in the QR code</param>
-        /// <param name="pixelsPerModule">Size of each QR module in pixels</param>
-        /// <returns>PNG byte array</returns>
-        Task<byte[]> GenerateQrCodeAsync(string content, int pixelsPerModule = 10);
-    }
-
     public class QrCodeService : IQrCodeService
     {
         private readonly ILogger<QrCodeService> _logger;

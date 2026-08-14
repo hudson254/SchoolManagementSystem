@@ -7,9 +7,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -20,8 +22,8 @@ using SMS.Multitenancy.Interfaces;
 using SMS.Infrastructure.MultiTenancy;
 using SMS.Identity.Models;
 using SMS.Identity.Services;
-using SMS.Infrastructure.Services;
 using SMS.Infrastructure.Options;
+using SMS.Infrastructure.Services;
 using SMS.Persistence.Data;
 using SMS.Persistence.Repositories;
 using SMS.API.Logging;
@@ -30,6 +32,192 @@ using SMS.API.Options;
 using SMS.Notifications;
 using SMS.Notifications.Hubs;
 using SMS.Reporting;
+using SMS.Certificates;
+using SMS.Certificates.Domain.Interfaces;
+
+// CLI Command implementations (must be defined before they are called)
+/// <summary>
+/// Migrates the database to the latest migration.
+/// Usage: dotnet run --project src/SMS.API -- migrate-database
+/// </summary>
+static async Task RunMigrateDatabaseAsync(string[] args)
+{
+    Console.WriteLine("Starting database migration...");
+
+    try
+    {
+        // Build a minimal service provider for database operations
+        var builder = WebApplication.CreateBuilder(args);
+        builder.Host.UseSerilog();
+
+        // Load configuration
+        builder.Configuration
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+            .AddEnvironmentVariables();
+
+        // Get connection string
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            Console.WriteLine("ERROR: DefaultConnection connection string not configured.");
+            Environment.Exit(1);
+            return;
+        }
+
+        // Register stub services required by ApplicationDbContext constructor
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentUserService>(_ => new StubCurrentUserService());
+        builder.Services.AddScoped<SMS.Domain.Interfaces.ITenantContext>(_ => new StubTenantContext());
+
+        // Ensure DbContext is registered
+        builder.Services.AddDbContext<SMS.Persistence.Data.ApplicationDbContext>(options =>
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(3);
+                npgsqlOptions.CommandTimeout(60);
+            }));
+
+        var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<SMS.Persistence.Data.ApplicationDbContext>();
+
+            Console.WriteLine($"Connecting to database: {connectionString.Split(';')[0]}...");
+
+            // Apply migrations
+            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                Console.WriteLine($"Applying {pendingMigrations.Count()} pending migration(s)...");
+                await dbContext.Database.MigrateAsync();
+                Console.WriteLine("Database migrations applied successfully.");
+            }
+            else
+            {
+                Console.WriteLine("Database is already up to date. No migrations to apply.");
+            }
+
+            Console.WriteLine("Migration completed successfully!");
+            Environment.Exit(0);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"ERROR: Migration failed: {ex.Message}");
+        Console.WriteLine($"Details: {ex.InnerException?.Message ?? ex.StackTrace}");
+        Environment.Exit(1);
+    }
+}
+
+/// <summary>
+/// Seeds the database with initial data (tenant, roles, administrator).
+/// Usage: dotnet run --project src/SMS.API -- seed-data
+/// </summary>
+static async Task RunSeedDataAsync(string[] args)
+{
+    Console.WriteLine("Starting database seeding...");
+
+    try
+    {
+        // Build a minimal service provider for database operations
+        var builder = WebApplication.CreateBuilder(args);
+        builder.Host.UseSerilog();
+
+        // Load configuration
+        builder.Configuration
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+            .AddEnvironmentVariables();
+
+        // Get connection string
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            Console.WriteLine("ERROR: DefaultConnection connection string not configured.");
+            Environment.Exit(1);
+            return;
+        }
+
+        // Ensure DbContext is registered
+        builder.Services.AddDbContext<SMS.Persistence.Data.ApplicationDbContext>(options =>
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(3);
+                npgsqlOptions.CommandTimeout(60);
+            }));
+
+        // Add Identity services
+        builder.Services.AddIdentity<SMS.Domain.Entities.User, SMS.Domain.Entities.Role>()
+            .AddEntityFrameworkStores<SMS.Persistence.Data.ApplicationDbContext>()
+            .AddDefaultTokenProviders();
+
+        // Register stub services required by ApplicationDbContext constructor
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentUserService>(_ => new StubCurrentUserService());
+        builder.Services.AddScoped<SMS.Domain.Interfaces.ITenantContext>(_ => new StubTenantContext());
+
+        // Add tenant context
+        builder.Services.AddScoped<SMS.Multitenancy.Interfaces.ITenantContext, SMS.Infrastructure.MultiTenancy.TenantContext>();
+        builder.Services.AddScoped<SMS.Infrastructure.MultiTenancy.TenantContext>();
+
+        var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<SMS.Persistence.Data.ApplicationDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SMS.Domain.Entities.User>>();
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<SMS.Domain.Entities.Role>>();
+            var tenantContext = scope.ServiceProvider.GetRequiredService<SMS.Multitenancy.Interfaces.ITenantContext>();
+            var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var seederLogger = scope.ServiceProvider.GetRequiredService<ILogger<SMS.Persistence.Services.DatabaseSeeder>>();
+
+            Console.WriteLine($"Connecting to database: {connectionString.Split(';')[0]}...");
+
+            // Ensure database exists and is migrated
+            await dbContext.Database.MigrateAsync();
+            Console.WriteLine("Database migrations verified.");
+
+            // Run seeding
+            var seeder = new SMS.Persistence.Services.DatabaseSeeder(
+                dbContext,
+                userManager,
+                roleManager,
+                tenantContext,
+                configuration,
+                seederLogger);
+
+            await seeder.SeedAsync();
+
+            Console.WriteLine("Database seeding completed successfully!");
+            Environment.Exit(0);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"ERROR: Seeding failed: {ex.Message}");
+        Console.WriteLine($"Details: {ex.InnerException?.Message ?? ex.StackTrace}");
+        Environment.Exit(1);
+    }
+}
+
+// CLI Commands for database operations (must be at top level before WebApplication builder)
+if (args.Length > 0)
+{
+    var command = args[0].ToLowerInvariant();
+
+    if (command == "migrate-database")
+    {
+        await RunMigrateDatabaseAsync(args);
+        return;
+    }
+    else if (command == "seed-data")
+    {
+        await RunSeedDataAsync(args);
+        return;
+    }
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -148,8 +336,13 @@ builder.Services.AddApiVersioning(options =>
     options.SubstituteApiVersionInUrl = true;
 });
 
-// Configure Health Checks
-builder.Services.AddHealthChecks();
+// Configure Health Checks with database connectivity check
+// Uses a custom health check that verifies PostgreSQL connectivity
+// without requiring the AspNetCore.Diagnostics.HealthChecks.EntityFrameworkCore package.
+builder.Services.AddHealthChecks()
+    .AddCheck<SMS.API.HealthChecks.DatabaseHealthCheck>(
+        "postgresql",
+        tags: new[] { "database", "postgresql" });
 
 // Configure PostgreSQL with scoped DbContext (required because ApplicationDbContext depends on scoped services)
 if (!builder.Environment.IsEnvironment("Testing"))
@@ -168,11 +361,16 @@ if (!builder.Environment.IsEnvironment("Testing"))
 // Configure Identity
 builder.Services.AddIdentity<User, Role>(options =>
 {
+    // Password policy tightened to match the server-side PasswordPolicyService.
+    // Registration is additionally validated by RegisterCommandValidator and
+    // IPasswordPolicyService (weak/blacklist/entropy checks). These Identity
+    // options are the final line of defense for programmatic user creation.
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 8;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequiredLength = 12;
+    options.Password.RequiredUniqueChars = 4;
     options.SignIn.RequireConfirmedEmail = false;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
@@ -249,7 +447,14 @@ builder.Services.AddAuthentication(options =>
 
         // The JWT "sub" claim holds the user id. MapInboundClaims=false
         // keeps it as "sub" so controllers read User.FindFirst("sub").
-        NameClaimType = "name"
+        NameClaimType = "name",
+
+        // Explicitly enforce the expected signing algorithm (HS256).
+        // This prevents algorithm confusion attacks (e.g., alg:none,
+        // HS256 vs RS256 confusion, or any unexpected algorithm).
+        // Without this, the framework accepts the algorithm indicated
+        // by the token header, which could be manipulated by an attacker.
+        ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }
     };
 });
 
@@ -260,10 +465,6 @@ builder.Services.AddApplication();
 // NOTE: SMTP/EmailOptions removed — email functionality fully disabled per
 // owner requirement. Password resets are now admin-mediated (Phase 2).
 builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection("FileStorage"));
-builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection("Sms"));
-
-// Register HttpClient for SMS service (RISK-13)
-builder.Services.AddHttpClient("SmsClient");
 
 // Register services
 builder.Services.AddScoped<IUserManagerService, SMS.Infrastructure.Services.UserManagerService>();
@@ -272,6 +473,14 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // CheckUsernameAvailabilityQueryHandler. Without this the API fails to start
 // with "Unable to resolve service IUsernameGenerator" (service validation).
 builder.Services.AddScoped<SMS.Application.Common.Interfaces.IUsernameGenerator, UsernameGenerator>();
+// Register the name parser and title configuration used by
+// RegisterCommandHandler/CreateStudentCommandHandler. NameParser depends on
+// ITitleConfiguration (which in turn needs TitleOptions); without these the
+// Register/Student flows throw "Unable to resolve service INameParser" and
+// return HTTP 500.
+builder.Services.AddScoped<SMS.Application.Common.Interfaces.INameParser, NameParser>();
+builder.Services.AddScoped<SMS.Application.Common.Interfaces.ITitleConfiguration, TitleConfiguration>();
+builder.Services.Configure<TitleOptions>(builder.Configuration.GetSection("TitleConfiguration"));
 // The Application layer consumes SMS.Application.Common.Interfaces.ICurrentUserService
 // (a distinct re-export of the domain interface). Register it to the same concrete
 // implementation; previously only the domain variant was registered, which made the
@@ -321,6 +530,23 @@ builder.Services.AddScoped<ICourseOfferingUnitRepository, CourseOfferingUnitRepo
 builder.Services.AddScoped<ICourseOfferingEnrollmentRepository, CourseOfferingEnrollmentRepository>();
 builder.Services.AddScoped<ICourseOfferingLecturerRepository, CourseOfferingLecturerRepository>();
 builder.Services.AddScoped<IAssignmentIssueReportRepository, AssignmentIssueReportRepository>();
+builder.Services.AddScoped<IAssessmentRepository, AssessmentRepository>();
+builder.Services.AddScoped<IStudentAssessmentMarkRepository, StudentAssessmentMarkRepository>();
+builder.Services.AddScoped<IAssessmentTypeRepository, AssessmentTypeRepository>();
+builder.Services.AddScoped<IAssessmentTemplateRepository, AssessmentTemplateRepository>();
+builder.Services.AddScoped<IGradingScaleRepository, GradingScaleRepository>();
+builder.Services.AddScoped<IGradeBandRepository, GradeBandRepository>();
+builder.Services.AddScoped<IStudentCertificateEligibilityRepository, StudentCertificateEligibilityRepository>();
+builder.Services.AddScoped<IGradeChangeHistoryRepository, GradeChangeHistoryRepository>();
+builder.Services.AddScoped<IUnitResultRepository, UnitResultRepository>();
+builder.Services.AddScoped<IModerationRecordRepository, ModerationRecordRepository>();
+builder.Services.AddScoped<IAssessmentExemptionRepository, AssessmentExemptionRepository>();
+builder.Services.AddScoped<ICertificateRuleRepository, CertificateRuleRepository>();
+
+// Register Certificate repositories
+builder.Services.AddScoped<ICertificateRepository, CertificateRepository>();
+builder.Services.AddScoped<ICertificateTemplateRepository, CertificateTemplateRepository>();
+builder.Services.AddScoped<ICertificateAuditLogRepository, CertificateAuditLogRepository>();
 
 // Register UnitOfWork
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -333,14 +559,38 @@ builder.Services.AddScoped<IReportTokenService, ReportTokenService>();
 builder.Services.AddScoped<IReportHashService, ReportHashService>();
 builder.Services.AddScoped<IReportAuthenticationService, ReportAuthenticationService>();
 
-// Register token revocation service (in-memory deny-list for access tokens).
-// Suitable for single-instance LAN deployment. Replace with a distributed
-// cache implementation if horizontal scaling is introduced.
-builder.Services.AddSingleton<ITokenRevocationService, InMemoryTokenRevocationService>();
+// Register token revocation service.
+// In development/testing, uses in-memory deny-list for access tokens.
+// In production, configure RedisTokenRevocation:ConnectionString to use
+// Redis-backed revocation that survives restarts and works across instances.
+builder.Services.AddSingleton<ITokenRevocationService>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var redisConnectionString = config.GetValue<string>("RedisTokenRevocation:ConnectionString");
+
+    if (!string.IsNullOrWhiteSpace(redisConnectionString))
+    {
+        // Use Redis-backed revocation for production
+        var redisOptions = sp.GetRequiredService<IOptions<RedisTokenRevocationOptions>>();
+        var logger = sp.GetRequiredService<ILogger<RedisTokenRevocationService>>();
+        return new RedisTokenRevocationService(redisOptions, logger);
+    }
+
+    // Fall back to in-memory for development/testing
+    var cache = sp.GetRequiredService<IMemoryCache>();
+    var inMemoryLogger = sp.GetRequiredService<ILogger<InMemoryTokenRevocationService>>();
+    return new InMemoryTokenRevocationService(cache, inMemoryLogger);
+});
+// Register Redis token revocation options (bound from configuration)
+builder.Services.Configure<RedisTokenRevocationOptions>(
+    builder.Configuration.GetSection("RedisTokenRevocation"));
 
 // Register SMS.Notifications and SMS.Reporting (RISK-14)
 builder.Services.AddNotifications();
 builder.Services.AddReporting();
+
+// Register Certificate Generation and Verification Module
+builder.Services.AddCertificateModule();
 
 // Configure Authorization Policies
 builder.Services.AddAuthorization(options =>
@@ -348,13 +598,13 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdministratorAccess", policy =>
         policy.RequireRole("Administrator"));
     options.AddPolicy("ModeratorAccess", policy =>
-        policy.RequireRole("Administrator", "Moderator"));
+        policy.RequireRole("Administrator", "COORDINATOR"));
     options.AddPolicy("LecturerAccess", policy =>
-        policy.RequireRole("Administrator", "Moderator", "Lecturer"));
+        policy.RequireRole("Administrator", "COORDINATOR", "Lecturer"));
     options.AddPolicy("StudentAccess", policy =>
-        policy.RequireRole("Administrator", "Moderator", "Lecturer", "Student"));
+        policy.RequireRole("Administrator", "COORDINATOR", "Lecturer", "Student"));
     options.AddPolicy("ReceptionistAccess", policy =>
-        policy.RequireRole("Administrator", "Moderator", "Receptionist"));
+        policy.RequireRole("Administrator", "COORDINATOR", "Receptionist"));
 });
 
 var app = builder.Build();
@@ -385,11 +635,20 @@ app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseMiddleware<CsrfProtectionMiddleware>();
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseMiddleware<RateLimitingMiddleware>();
+app.UseMiddleware<MetricsMiddleware>();
 
-if (app.Environment.IsDevelopment())
+// Configure Swagger based on explicit configuration (not just environment)
+// Swagger should be disabled by default in production for security
+var swaggerEnabled = builder.Configuration.GetValue<bool>("Swagger__Enabled", false);
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    Log.Information("Swagger enabled via configuration");
+}
+else
+{
+    Log.Information("Swagger disabled (set Swagger__Enabled=true to enable)");
 }
 
 // HTTPS redirect is only needed in local development (direct browser access
@@ -455,8 +714,35 @@ using (var scope = app.Services.CreateScope())
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Map health checks
-app.MapHealthChecks("/health");
+// Map health checks with detailed response for internal monitoring
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            duration = report.TotalDuration.TotalMilliseconds,
+            entries = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration.TotalMilliseconds
+            })
+        });
+        await context.Response.WriteAsync(json);
+    }
+});
+
+// Map Prometheus metrics endpoint (internal network only)
+app.MapGet("/metrics", async context =>
+{
+    context.Response.ContentType = "text/plain; charset=utf-8";
+    var metrics = SMS.API.Middleware.MetricsMiddleware.GenerateMetrics();
+    await context.Response.WriteAsync(metrics);
+});
 
 // Map SignalR NotificationHub (RISK-14)
 app.MapHub<NotificationHub>("/hub");
@@ -475,6 +761,25 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+// Stub implementations for CLI commands (migration/seed) that run outside
+// an HTTP request context. These provide empty/default values for services
+// that would otherwise require an active HttpContext.
+internal class StubCurrentUserService : ICurrentUserService
+{
+    public string UserId => string.Empty;
+    public string Username => "migration";
+    public string Email => string.Empty;
+    public bool IsAuthenticated => false;
+    public System.Collections.Generic.IEnumerable<string> Roles => System.Linq.Enumerable.Empty<string>();
+}
+
+internal class StubTenantContext : SMS.Domain.Interfaces.ITenantContext
+{
+    public string TenantId => string.Empty;
+    public string TenantName => string.Empty;
+    public string ConnectionString => string.Empty;
 }
 
 // Make Program class accessible to test projects

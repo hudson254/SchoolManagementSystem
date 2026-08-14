@@ -3,6 +3,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using SMS.Application.Common.Behaviours;  // Change this line
+using SMS.Application.Services;
 
 namespace SMS.Application
 {
@@ -18,6 +19,12 @@ namespace SMS.Application
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             });
+
+            // Register the shared password policy service (server-side authority).
+            services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
+
+            // Register Assessment Engine - Centralized assessment and grading service
+            services.AddScoped<AssessmentEngine>();
 
             return services;
         }

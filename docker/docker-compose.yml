@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: SchoolManagementSystem
       POSTGRES_USER: sms_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -43,7 +43,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:80
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD:-SecurePassword123!}"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD:?DB_PASSWORD must be set}"
       JWT_SECRET: ${JWT_SECRET}
       JWT__Issuer: ${JWT_ISSUER:-SMSAPI}
       JWT__Audience: ${JWT_AUDIENCE:-SMSWeb}
@@ -131,7 +131,7 @@ services:
       DB_HOST: postgres
       DB_NAME: SchoolManagementSystem
       DB_USER: sms_user
-      DB_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       BACKUP_DIR: /backups

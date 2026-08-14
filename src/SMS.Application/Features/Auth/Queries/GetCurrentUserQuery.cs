@@ -45,7 +45,9 @@ namespace SMS.Application.Features.Auth.Queries
             {
                 Id = user.Id.ToString(),
                 FirstName = user.FirstName ?? string.Empty,
+                MiddleName = user.MiddleName,
                 LastName = user.LastName ?? string.Empty,
+                Title = user.Title,
                 Email = user.Email ?? string.Empty,
                 UserName = user.UserName ?? string.Empty,
                 PhoneNumber = user.PhoneNumber,

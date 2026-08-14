@@ -39,6 +39,7 @@ namespace SMS.UnitTests.PasswordReset
             userManagerMock.Setup(u => u.FindByIdAsync(userId)).ReturnsAsync(user);
             userManagerMock.Setup(u => u.GeneratePasswordResetTokenAsync(It.IsAny<User>())).ReturnsAsync("reset-token");
             userManagerMock.Setup(u => u.ResetPasswordAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
+            userManagerMock.Setup(u => u.RevokeAllRefreshTokensAsync(It.IsAny<string>())).ReturnsAsync(true);
 
             var loggerMock = new Mock<ILogger<FulfillPasswordResetCommandHandler>>();
 
@@ -64,6 +65,8 @@ namespace SMS.UnitTests.PasswordReset
             Assert.Equal("Admin reset", resetRequest.ResolutionNote);
 
             repoMock.Verify(r => r.UpdateAsync(It.Is<PasswordResetRequest>(r => r.Status == PasswordResetRequestStatus.Fulfilled)), Times.Once);
+            // Verify that refresh tokens were revoked after password reset
+            userManagerMock.Verify(u => u.RevokeAllRefreshTokensAsync(userId), Times.Once);
         }
 
         [Fact]

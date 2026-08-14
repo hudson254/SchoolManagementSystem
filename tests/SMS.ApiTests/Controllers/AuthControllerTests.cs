@@ -44,7 +44,7 @@ namespace SMS.ApiTests.Controllers
             var loginRequest = new
             {
                 email = "admin@school.com",
-                password = "Admin123!",
+                password = "Admin123!@#q1",
                 rememberMe = true
             };
 
@@ -108,8 +108,10 @@ namespace SMS.ApiTests.Controllers
                 firstName = "Register",
                 lastName = "Test",
                 email = $"register.{System.Guid.NewGuid()}@example.com",
-                password = "Test123!@#Abc",
-                confirmPassword = "Test123!@#Abc",
+                // Password must not contain personal info (first/last name),
+                // so choose a strong value unrelated to "Register" or "Test".
+                password = "X9#kLm2$QwEr",
+                confirmPassword = "X9#kLm2$QwEr",
                 phoneNumber = "+254712345678",
                 organization = "Test School",
                 role = "Student",

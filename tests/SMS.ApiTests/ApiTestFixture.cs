@@ -38,7 +38,9 @@ namespace SMS.ApiTests
         // generated usernames are unique across the shared InMemory database.
         private static int UsernameCounter;
         private const string AdminEmail = "admin@school.com";
-        private const string AdminPassword = "Admin123!";
+        // Must satisfy Identity PasswordOptions: RequiredLength=12, RequireDigit,
+        // RequireLowercase, RequireUppercase, RequireNonAlphanumeric, RequiredUniqueChars=4.
+        private const string AdminPassword = "Admin123!@#q1";
         public static readonly Guid TestCourseId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
         public ApiTestFixture()

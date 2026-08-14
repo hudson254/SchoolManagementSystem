@@ -1,0 +1,54 @@
+version: '3.8'
+
+# Development override for docker-compose.yml / docker-compose.prod.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+#   docker compose -f docker-compose.prod.yml -f docker-compose.override.yml up -d
+#
+# This file provides sensible local development defaults:
+#   - Development-specific ports
+#   - Hot-reload volume mounts for the API
+#   - Developer-friendly logging
+#   - Local development database configuration
+#
+# IMPORTANT: Do NOT use this file in production. It exposes debug endpoints,
+# uses development settings, and mounts source code directories.
+
+services:
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80;https://+:443
+      Swagger__Enabled: "true"
+      Logging__LogLevel__Default: Debug
+      Logging__LogLevel__Microsoft: Information
+    volumes:
+      # Mount source code for hot reload (requires dotnet watch)
+      - ../src:/app/src:ro
+    ports:
+      # Expose HTTPS port for local development with dev certs
+      - "5001:443"
+
+  postgres:
+    ports:
+      # Expose PostgreSQL on standard port for local tooling
+      - "5432:5432"
+
+  frontend:
+    environment:
+      # Use the Vite dev server URL for hot reload
+      VITE_API_URL: http://localhost:5000/api
+    ports:
+      # Expose frontend on standard HTTP port
+      - "80:80"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: http://localhost:3001
+    ports:
+      - "3001:3000"

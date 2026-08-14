@@ -48,7 +48,19 @@ namespace SMS.Identity.Services
                 // emitted, preventing the previous privilege-escalation where
                 // every token (including admins/lecturers) received a "Student"
                 // claim.
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+
+                // Add "iat" (issued at) claim for additional validation
+                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+
+                // Add "nbf" (not before) claim - token is valid immediately
+                new Claim(JwtRegisteredClaimNames.Nbf, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+
+                // Add tenant_id claim for defense-in-depth tenant isolation.
+                // This allows services to validate tenant context from the JWT
+                // directly rather than relying solely on middleware/query filters.
+                new Claim("tenant_id", _jwtSettings.Issuer ?? "unknown"),
+
             };
 
             foreach (var role in roles)
@@ -101,7 +113,10 @@ namespace SMS.Identity.Services
                 ValidateIssuer = false,
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret)),
-                ValidateLifetime = false
+                ValidateLifetime = false,
+                // Explicitly enforce the expected signing algorithm to prevent
+                // algorithm confusion attacks. Only HS256 is accepted.
+                ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }
             };
 
             var tokenHandler = new JwtSecurityTokenHandler();
@@ -110,7 +125,7 @@ namespace SMS.Identity.Services
             if (!(securityToken is JwtSecurityToken jwtSecurityToken) ||
                 !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
             {
-                throw new SecurityTokenException("Invalid token");
+                throw new SecurityTokenException("Invalid token: unexpected algorithm");
             }
 
             return principal;
@@ -132,7 +147,11 @@ namespace SMS.Identity.Services
                     ValidateAudience = true,
                     ValidAudience = _jwtSettings.Audience,
                     ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
+                    ClockSkew = TimeSpan.Zero,
+                    // Explicitly enforce the expected signing algorithm to prevent
+                    // algorithm confusion attacks. This rejects alg:none and any
+                    // algorithm other than HS256.
+                    ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }
                 }, out SecurityToken validatedToken);
 
                 return true;

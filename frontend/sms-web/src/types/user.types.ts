@@ -1,7 +1,10 @@
 export interface User {
   id: string;
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
+  displayName?: string;
   email: string;
   phoneNumber?: string;
   organization?: string;
@@ -30,8 +33,11 @@ export interface LoginResponse {
   refreshToken: string;
   userId: string;
   email: string;
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
+  displayName?: string;
   roles: string[];
   permissions: string[];
   tenantId: string;
@@ -39,7 +45,9 @@ export interface LoginResponse {
 }
 
 export interface RegisterRequest {
+  title?: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   email: string;
   password: string;

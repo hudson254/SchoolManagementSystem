@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using FluentValidation;
@@ -11,8 +11,10 @@ using SMS.Identity.Services;
 using SMS.Infrastructure;
 using SMS.Infrastructure.Services;
 using SMS.Infrastructure.MultiTenancy;
+using SMS.Infrastructure.Options;
 using SMS.Domain.Interfaces;
 using SMS.Application.Common;
+using SMS.Application.Common.Interfaces;
 
 namespace SMS.API.Extensions
 {
@@ -52,6 +54,21 @@ namespace SMS.API.Extensions
             services.AddScoped<ICourseRepository, CourseRepository>();
             services.AddScoped<IUnitRepository, UnitRepository>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<ITitleRepository, TitleRepository>();
+
+            // Register assessment repositories
+            services.AddScoped<IAssessmentRepository, AssessmentRepository>();
+            services.AddScoped<IStudentAssessmentMarkRepository, StudentAssessmentMarkRepository>();
+            services.AddScoped<IAssessmentTypeRepository, AssessmentTypeRepository>();
+            services.AddScoped<IAssessmentTemplateRepository, AssessmentTemplateRepository>();
+            services.AddScoped<IGradingScaleRepository, GradingScaleRepository>();
+            services.AddScoped<IGradeBandRepository, GradeBandRepository>();
+            services.AddScoped<ICertificateRuleRepository, CertificateRuleRepository>();
+            services.AddScoped<IStudentCertificateEligibilityRepository, StudentCertificateEligibilityRepository>();
+            services.AddScoped<IGradeChangeHistoryRepository, GradeChangeHistoryRepository>();
+            services.AddScoped<IUnitResultRepository, UnitResultRepository>();
+            services.AddScoped<IModerationRecordRepository, ModerationRecordRepository>();
+            services.AddScoped<IAssessmentExemptionRepository, AssessmentExemptionRepository>();
 
             return services;
         }
@@ -62,6 +79,21 @@ namespace SMS.API.Extensions
         {
             services.AddScoped<IAuditService, AuditService>();
             services.AddScoped<SMS.Application.Common.Interfaces.IUsernameGenerator, UsernameGenerator>();
+            services.AddScoped<INameParser, NameParser>();
+            services.AddScoped<ITitleConfiguration, TitleConfiguration>();
+            services.Configure<TitleOptions>(configuration.GetSection("TitleConfiguration"));
+
+            // Register Assessment Engine
+            services.AddScoped<IAssessmentEngine, AssessmentEngine>();
+
+            // Register File Storage Service
+            services.AddScoped<IFileStorageService, FileStorageService>();
+            services.Configure<FileStorageOptions>(configuration.GetSection("FileStorage"));
+
+            // Register Upload Service (Centralized Enterprise Upload)
+            services.AddScoped<IUploadRepository, UploadRepository>();
+            services.AddScoped<IUploadService, UploadService>();
+            services.Configure<UploadSettings>(configuration.GetSection(UploadSettings.SectionName));
 
             return services;
         }
@@ -77,3 +109,4 @@ namespace SMS.API.Extensions
         }
     }
 }
+

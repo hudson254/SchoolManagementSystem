@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,6 +23,18 @@ namespace SMS.Domain.Interfaces
         ICourseOfferingEnrollmentRepository CourseOfferingEnrollments { get; }
         ICourseOfferingLecturerRepository CourseOfferingLecturers { get; }
         IAssignmentIssueReportRepository AssignmentIssueReports { get; }
+        IAssessmentRepository Assessments { get; }
+        IStudentAssessmentMarkRepository StudentAssessmentMarks { get; }
+        IAssessmentTypeRepository AssessmentTypes { get; }
+        IAssessmentTemplateRepository AssessmentTemplates { get; }
+        IGradingScaleRepository GradingScales { get; }
+        IGradeBandRepository GradeBands { get; }
+        ICertificateRuleRepository CertificateRules { get; }
+        IStudentCertificateEligibilityRepository StudentCertificateEligibilities { get; }
+        IGradeChangeHistoryRepository GradeChangeHistories { get; }
+        IUnitResultRepository UnitResults { get; }
+        IModerationRecordRepository ModerationRecords { get; }
+        IAssessmentExemptionRepository AssessmentExemptions { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
         Task BeginTransactionAsync(CancellationToken cancellationToken = default);
@@ -30,3 +42,4 @@ namespace SMS.Domain.Interfaces
         Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
     }
 }
+

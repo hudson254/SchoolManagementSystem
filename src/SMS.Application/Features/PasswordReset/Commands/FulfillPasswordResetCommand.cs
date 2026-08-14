@@ -56,6 +56,12 @@ namespace SMS.Application.Features.PasswordReset.Commands
             if (!resetSucceeded)
                 throw new InvalidOperationException("Password reset failed.");
 
+            // Revoke all refresh tokens for this user to prevent previously issued
+            // refresh tokens from establishing new sessions after password reset.
+            // This ensures that if an attacker had access to a refresh token before
+            // the password was changed, it cannot be used to maintain access.
+            await _userManager.RevokeAllRefreshTokensAsync(resetRequest.UserId);
+
             // Update request status
             resetRequest.Status = PasswordResetRequestStatus.Fulfilled;
             resetRequest.FulfilledByUserId = request.AdminUserId;
@@ -64,7 +70,7 @@ namespace SMS.Application.Features.PasswordReset.Commands
 
             await _repository.UpdateAsync(resetRequest);
 
-            _logger.LogInformation("Password reset request {RequestId} fulfilled by admin {AdminUserId} for user {UserId}",
+            _logger.LogInformation("Password reset request {RequestId} fulfilled by admin {AdminUserId} for user {UserId}. All refresh tokens revoked.",
                 request.RequestId, request.AdminUserId, resetRequest.UserId);
 
             return MediatR.Unit.Value;

@@ -34,6 +34,18 @@ namespace SMS.Persistence.Repositories
         private ICourseOfferingEnrollmentRepository _courseOfferingEnrollments;
         private ICourseOfferingLecturerRepository _courseOfferingLecturers;
         private IAssignmentIssueReportRepository _assignmentIssueReports;
+        private IAssessmentRepository _assessments;
+        private IStudentAssessmentMarkRepository _studentAssessmentMarks;
+        private IAssessmentTypeRepository _assessmentTypes;
+        private IAssessmentTemplateRepository _assessmentTemplates;
+        private IGradingScaleRepository _gradingScales;
+        private IGradeBandRepository _gradeBands;
+        private ICertificateRuleRepository _certificateRules;
+        private IStudentCertificateEligibilityRepository _studentCertificateEligibilities;
+        private IGradeChangeHistoryRepository _gradeChangeHistories;
+        private IUnitResultRepository _unitResults;
+        private IModerationRecordRepository _moderationRecords;
+        private IAssessmentExemptionRepository _assessmentExemptions;
 
         public UnitOfWork(ApplicationDbContext context, ILogger<UnitOfWork> logger, ILoggerFactory loggerFactory)
         {
@@ -92,6 +104,42 @@ namespace SMS.Persistence.Repositories
 
         public IAssignmentIssueReportRepository AssignmentIssueReports =>
             _assignmentIssueReports ??= new AssignmentIssueReportRepository(_context, _loggerFactory.CreateLogger<AssignmentIssueReportRepository>());
+
+        public IAssessmentRepository Assessments =>
+            _assessments ??= new AssessmentRepository(_context, _loggerFactory.CreateLogger<AssessmentRepository>());
+
+        public IStudentAssessmentMarkRepository StudentAssessmentMarks =>
+            _studentAssessmentMarks ??= new StudentAssessmentMarkRepository(_context, _loggerFactory.CreateLogger<StudentAssessmentMarkRepository>());
+
+        public IAssessmentTypeRepository AssessmentTypes =>
+            _assessmentTypes ??= new AssessmentTypeRepository(_context, _loggerFactory.CreateLogger<AssessmentTypeRepository>());
+
+        public IAssessmentTemplateRepository AssessmentTemplates =>
+            _assessmentTemplates ??= new AssessmentTemplateRepository(_context, _loggerFactory.CreateLogger<AssessmentTemplateRepository>());
+
+        public IGradingScaleRepository GradingScales =>
+            _gradingScales ??= new GradingScaleRepository(_context, _loggerFactory.CreateLogger<GradingScaleRepository>());
+
+        public IGradeBandRepository GradeBands =>
+            _gradeBands ??= new GradeBandRepository(_context, _loggerFactory.CreateLogger<GradeBandRepository>());
+
+        public ICertificateRuleRepository CertificateRules =>
+            _certificateRules ??= new CertificateRuleRepository(_context, _loggerFactory.CreateLogger<CertificateRuleRepository>());
+
+        public IStudentCertificateEligibilityRepository StudentCertificateEligibilities =>
+            _studentCertificateEligibilities ??= new StudentCertificateEligibilityRepository(_context, _loggerFactory.CreateLogger<StudentCertificateEligibilityRepository>());
+
+        public IGradeChangeHistoryRepository GradeChangeHistories =>
+            _gradeChangeHistories ??= new GradeChangeHistoryRepository(_context, _loggerFactory.CreateLogger<GradeChangeHistoryRepository>());
+
+        public IUnitResultRepository UnitResults =>
+            _unitResults ??= new UnitResultRepository(_context, _loggerFactory.CreateLogger<UnitResultRepository>());
+
+        public IModerationRecordRepository ModerationRecords =>
+            _moderationRecords ??= new ModerationRecordRepository(_context, _loggerFactory.CreateLogger<ModerationRecordRepository>());
+
+        public IAssessmentExemptionRepository AssessmentExemptions =>
+            _assessmentExemptions ??= new AssessmentExemptionRepository(_context, _loggerFactory.CreateLogger<AssessmentExemptionRepository>());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

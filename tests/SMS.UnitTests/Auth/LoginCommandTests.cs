@@ -44,11 +44,25 @@ namespace SMS.UnitTests.Auth
         }
 
         [Fact]
-        public void ValidCommand_ShouldNotHaveValidationErrors()
+        public void ValidCommand_WithEmail_ShouldNotHaveValidationErrors()
         {
             var command = new LoginCommand
             {
-                Email = "test@example.com",
+                Identifier = "test@example.com",
+                Password = "Test123!",
+                RememberMe = true
+            };
+
+            var result = _validator.TestValidate(command);
+            result.ShouldNotHaveAnyValidationErrors();
+        }
+
+        [Fact]
+        public void ValidCommand_WithUsername_ShouldNotHaveValidationErrors()
+        {
+            var command = new LoginCommand
+            {
+                Identifier = "jdoe001",
                 Password = "Test123!",
                 RememberMe = true
             };
@@ -62,28 +76,53 @@ namespace SMS.UnitTests.Auth
         {
             var command = new LoginCommand
             {
-                Email = "invalid-email",
+                Identifier = "",
                 Password = "",
                 RememberMe = true
             };
 
             var result = _validator.TestValidate(command);
-            result.ShouldHaveValidationErrorFor(x => x.Email);
+            result.ShouldHaveValidationErrorFor(x => x.Identifier);
             result.ShouldHaveValidationErrorFor(x => x.Password);
         }
 
         [Fact]
-        public async Task Handle_WithNonExistentUser_ShouldThrowUnauthorizedException()
+        public async Task Handle_WithNonExistentEmail_ShouldThrowUnauthorizedException()
         {
             var command = new LoginCommand
             {
-                Email = "nonexistent@example.com",
+                Identifier = "nonexistent@example.com",
                 Password = "Test123!",
                 RememberMe = true
             };
 
             _userManagerMock
-                .Setup(x => x.FindByEmailAsync(command.Email))
+                .Setup(x => x.FindByEmailAsync(command.Identifier))
+                .ReturnsAsync((User?)null);
+
+            var handler = CreateHandler();
+
+            await Assert.ThrowsAsync<UnauthorizedException>(
+                () => handler.Handle(command, CancellationToken.None));
+
+            // RISK-27: failed login (user not found) is recorded
+            _loginHistoryMock.Verify(
+                x => x.AddAsync(It.Is<LoginHistory>(h => !h.IsSuccessful && h.FailureReason == "User not found"), It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Fact]
+        public async Task Handle_WithNonExistentUsername_ShouldThrowUnauthorizedException()
+        {
+            var command = new LoginCommand
+            {
+                Identifier = "nonexistentuser",
+                Password = "Test123!",
+                RememberMe = true
+            };
+
+            _userManagerMock
+                .Setup(x => x.FindByUsernameAsync(command.Identifier))
                 .ReturnsAsync((User?)null);
 
             var handler = CreateHandler();
@@ -102,7 +141,7 @@ namespace SMS.UnitTests.Auth
         {
             var command = new LoginCommand
             {
-                Email = "test@example.com",
+                Identifier = "test@example.com",
                 Password = "WrongPassword!",
                 RememberMe = true
             };
@@ -111,6 +150,7 @@ namespace SMS.UnitTests.Auth
             {
                 Id = Guid.NewGuid().ToString(),
                 Email = "test@example.com",
+                UserName = "testuser",
                 FirstName = "Test",
                 LastName = "User",
                 IsActive = true,
@@ -118,7 +158,7 @@ namespace SMS.UnitTests.Auth
             };
 
             _userManagerMock
-                .Setup(x => x.FindByEmailAsync(command.Email))
+                .Setup(x => x.FindByEmailAsync(command.Identifier))
                 .ReturnsAsync(user);
 
             _userManagerMock
@@ -141,7 +181,7 @@ namespace SMS.UnitTests.Auth
         {
             var command = new LoginCommand
             {
-                Email = "test@example.com",
+                Identifier = "test@example.com",
                 Password = "Test123!",
                 RememberMe = true
             };
@@ -150,6 +190,7 @@ namespace SMS.UnitTests.Auth
             {
                 Id = Guid.NewGuid().ToString(),
                 Email = "test@example.com",
+                UserName = "testuser",
                 FirstName = "Test",
                 LastName = "User",
                 IsActive = false,
@@ -157,7 +198,7 @@ namespace SMS.UnitTests.Auth
             };
 
             _userManagerMock
-                .Setup(x => x.FindByEmailAsync(command.Email))
+                .Setup(x => x.FindByEmailAsync(command.Identifier))
                 .ReturnsAsync(user);
 
             _userManagerMock
@@ -176,12 +217,12 @@ namespace SMS.UnitTests.Auth
         }
 
         [Fact]
-        public async Task Handle_WithValidCredentials_ShouldReturnAuthResponse()
+        public async Task Handle_WithValidEmailCredentials_ShouldReturnAuthResponse()
         {
             var userId = Guid.NewGuid().ToString();
             var command = new LoginCommand
             {
-                Email = "test@example.com",
+                Identifier = "test@example.com",
                 Password = "Test123!",
                 RememberMe = true
             };
@@ -190,17 +231,17 @@ namespace SMS.UnitTests.Auth
             {
                 Id = userId,
                 Email = "test@example.com",
+                UserName = "testuser",
                 FirstName = "Test",
                 LastName = "User",
                 IsActive = true,
-                IsEmailVerified = true,
-                UserName = "testuser"
+                IsEmailVerified = true
             };
 
             var roles = new List<string> { "Student" };
 
             _userManagerMock
-                .Setup(x => x.FindByEmailAsync(command.Email))
+                .Setup(x => x.FindByEmailAsync(command.Identifier))
                 .ReturnsAsync(user);
 
             _userManagerMock
@@ -227,7 +268,72 @@ namespace SMS.UnitTests.Auth
             result.AccessToken.Should().Be("test-access-token");
             result.RefreshToken.Should().Be("test-refresh-token");
             result.UserId.Should().Be(userId);
-            result.Email.Should().Be(command.Email);
+            result.Email.Should().Be(command.Identifier);
+            result.Roles.Should().Contain("Student");
+
+            _auditServiceMock.Verify(x => x.LogAsync("Login", userId, "User logged in successfully"), Times.Once);
+
+            // RISK-27: successful login is persisted
+            _loginHistoryMock.Verify(
+                x => x.AddAsync(It.Is<LoginHistory>(h => h.IsSuccessful && h.UserId == userId), It.IsAny<CancellationToken>()),
+                Times.Once);
+            _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task Handle_WithValidUsernameCredentials_ShouldReturnAuthResponse()
+        {
+            var userId = Guid.NewGuid().ToString();
+            var command = new LoginCommand
+            {
+                Identifier = "testuser",
+                Password = "Test123!",
+                RememberMe = true
+            };
+
+            var user = new User
+            {
+                Id = userId,
+                Email = "test@example.com",
+                UserName = "testuser",
+                FirstName = "Test",
+                LastName = "User",
+                IsActive = true,
+                IsEmailVerified = true
+            };
+
+            var roles = new List<string> { "Student" };
+
+            _userManagerMock
+                .Setup(x => x.FindByUsernameAsync(command.Identifier))
+                .ReturnsAsync(user);
+
+            _userManagerMock
+                .Setup(x => x.CheckPasswordAsync(user, command.Password))
+                .ReturnsAsync(true);
+
+            _userManagerMock
+                .Setup(x => x.GetRolesAsync(user))
+                .ReturnsAsync(roles);
+
+            _jwtServiceMock
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Returns("test-access-token");
+
+            _userManagerMock
+                .Setup(x => x.GenerateRefreshTokenAsync(It.IsAny<string>()))
+                .ReturnsAsync("test-refresh-token");
+
+            var handler = CreateHandler();
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.Should().NotBeNull();
+            result.AccessToken.Should().Be("test-access-token");
+            result.RefreshToken.Should().Be("test-refresh-token");
+            result.UserId.Should().Be(userId);
+            result.Email.Should().Be(user.Email);
+            result.Username.Should().Be("testuser");
             result.Roles.Should().Contain("Student");
 
             _auditServiceMock.Verify(x => x.LogAsync("Login", userId, "User logged in successfully"), Times.Once);

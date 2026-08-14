@@ -26,5 +26,6 @@
     <ProjectReference Include="..\SMS.Identity\SMS.Identity.csproj" />
     <ProjectReference Include="..\SMS.Notifications\SMS.Notifications.csproj" />
     <ProjectReference Include="..\SMS.Reporting\SMS.Reporting.csproj" />
+    <ProjectReference Include="..\SMS.Certificates\SMS.Certificates.csproj" />
   </ItemGroup>
 </Project>

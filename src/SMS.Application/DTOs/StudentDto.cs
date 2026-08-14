@@ -9,8 +9,11 @@ namespace SMS.Application.DTOs
         public string? UserId { get; set; }
         public string StudentNumber { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string FullName => $"{FirstName} {LastName}".Trim();
+        public string DisplayName => BuildDisplayName();
         public string Email { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
         public string? Address { get; set; }
@@ -28,6 +31,33 @@ namespace SMS.Application.DTOs
         public string? EmergencyContactName { get; set; }
         public string? EmergencyContactPhone { get; set; }
         public string? EmergencyContactRelation { get; set; }
+
+        /// <summary>
+        /// Staff ID / Establishment Number. Preserves leading zeros.
+        /// </summary>
+        public string? StaffIdEstNo { get; set; }
+
+        /// <summary>
+        /// National ID or Passport Number. Alphanumeric, preserves leading zeros.
+        /// </summary>
+        public string? NationalIdPassport { get; set; }
+
+        /// <summary>
+        /// Tracks the registration approval lifecycle.
+        /// </summary>
+        public string RegistrationStatus { get; set; } = "PendingCourseSelection";
+
+        private string BuildDisplayName()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Title))
+                parts.Add(Title);
+            parts.Add(FirstName);
+            if (!string.IsNullOrWhiteSpace(MiddleName))
+                parts.Add(MiddleName);
+            parts.Add(LastName);
+            return string.Join(" ", parts.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+        }
     }
 
     public class StudentDetailsDto : StudentDto

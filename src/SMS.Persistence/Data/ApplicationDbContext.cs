@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using SMS.Certificates.Domain.Entities;
 using SMS.Domain.Common;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
@@ -10,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace SMS.Persistence.Data
 {
-    public class ApplicationDbContext : IdentityDbContext<User>
+    public partial class ApplicationDbContext : IdentityDbContext<User>
     {
         private readonly ICurrentUserService _currentUserService;
         private readonly ITenantContext _tenantContext;
@@ -66,10 +67,26 @@ namespace SMS.Persistence.Data
         public DbSet<CourseOfferingEnrollment> CourseOfferingEnrollments { get; set; }
         public DbSet<CourseOfferingLecturer> CourseOfferingLecturers { get; set; }
         public DbSet<AssignmentIssueReport> AssignmentIssueReports { get; set; }
+        public DbSet<Title> Titles { get; set; }
+        public DbSet<UploadFile> UploadFiles { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Configure Title entity
+            modelBuilder.Entity<Title>(entity =>
+            {
+                entity.HasKey(t => t.Id);
+                entity.Property(t => t.Code).IsRequired().HasMaxLength(50);
+                entity.Property(t => t.DisplayText).IsRequired().HasMaxLength(100);
+                entity.Property(t => t.Language).IsRequired().HasMaxLength(10);
+                entity.Property(t => t.Category).HasMaxLength(50);
+                entity.Property(t => t.NormalizedCode).HasMaxLength(50);
+                entity.HasIndex(t => new { t.Code, t.Language }).IsUnique();
+                entity.HasIndex(t => t.NormalizedCode);
+                entity.HasIndex(t => t.IsActive);
+            });
 
             // Configure Lane entity
             modelBuilder.Entity<Lane>(entity =>
@@ -118,6 +135,8 @@ namespace SMS.Persistence.Data
             {
                 entity.Property(u => u.FirstName).HasMaxLength(100);
                 entity.Property(u => u.LastName).HasMaxLength(100);
+                entity.Property(u => u.MiddleName).HasMaxLength(100);
+                entity.Property(u => u.Title).HasMaxLength(50);
                 entity.HasIndex(u => u.Email).IsUnique();
                 entity.HasQueryFilter(u => !u.IsDeleted);
             });
@@ -131,6 +150,8 @@ namespace SMS.Persistence.Data
 
                 entity.Property(s => s.FirstName).IsRequired().HasMaxLength(100);
                 entity.Property(s => s.LastName).IsRequired().HasMaxLength(100);
+                entity.Property(s => s.MiddleName).HasMaxLength(100);
+                entity.Property(s => s.Title).HasMaxLength(50);
                 entity.Property(s => s.Email).IsRequired().HasMaxLength(200);
                 entity.Property(s => s.StudentNumber).IsRequired().HasMaxLength(50);
                 entity.Property(s => s.PhoneNumber).HasMaxLength(20);
@@ -167,6 +188,21 @@ namespace SMS.Persistence.Data
                     .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasQueryFilter(s => !s.IsDeleted);
+            });
+
+            // Configure Lecturer entity
+            modelBuilder.Entity<Lecturer>(entity =>
+            {
+                entity.HasKey(l => l.Id);
+                entity.Property(l => l.FirstName).IsRequired().HasMaxLength(100);
+                entity.Property(l => l.LastName).IsRequired().HasMaxLength(100);
+                entity.Property(l => l.MiddleName).HasMaxLength(100);
+                entity.Property(l => l.Title).HasMaxLength(50);
+                entity.Property(l => l.Email).IsRequired().HasMaxLength(200);
+                entity.Property(l => l.PhoneNumber).HasMaxLength(20);
+                entity.Property(l => l.EmployeeNumber).IsRequired().HasMaxLength(50);
+                entity.HasIndex(l => l.EmployeeNumber).IsUnique();
+                entity.HasIndex(l => l.Email).IsUnique();
             });
 
             // Configure Accommodation entity
@@ -346,6 +382,170 @@ namespace SMS.Persistence.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasQueryFilter(rv => !rv.IsDeleted);
+            });
+
+            // Configure Certificate entities
+            modelBuilder.Entity<Certificate>(entity =>
+            {
+                entity.ToTable("Certificates");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.CertificateNumber)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.VerificationToken)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.Status)
+                    .IsRequired()
+                    .HasMaxLength(20);
+
+                entity.Property(e => e.FinalGrade)
+                    .HasMaxLength(5);
+
+                entity.Property(e => e.Classification)
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.PdfPath)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.QrCodePath)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.RevocationReason)
+                                    .HasMaxLength(500);
+
+                entity.HasIndex(e => e.CertificateNumber)
+                    .IsUnique();
+
+                entity.HasIndex(e => e.VerificationToken)
+                    .IsUnique();
+
+                entity.HasIndex(e => e.StudentId);
+                entity.HasIndex(e => e.CourseOfferingId);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.IssueDate);
+
+                entity.HasOne(e => e.Template)
+                    .WithMany()
+                    .HasForeignKey(e => e.TemplateId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<CertificateTemplate>(entity =>
+            {
+                entity.ToTable("CertificateTemplates");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.Name)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.Description)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.Type)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.Status)
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasDefaultValue("Active");
+
+                entity.Property(e => e.Version)
+                    .HasMaxLength(20);
+
+                entity.Property(e => e.FilePath)
+                    .IsRequired()
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.FieldMappings)
+                    .HasMaxLength(5000);
+
+                entity.Property(e => e.LogoPath)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.WatermarkPath)
+                    .HasMaxLength(500);
+
+                entity.HasIndex(e => e.Name)
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Type);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.IsDefault);
+            });
+
+            modelBuilder.Entity<DigitalSignature>(entity =>
+            {
+                entity.ToTable("DigitalSignatures");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.Name)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.Type)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.ImagePath)
+                    .IsRequired()
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.Status)
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasDefaultValue("Active");
+
+                entity.HasIndex(e => new { e.Name, e.Type })
+                    .IsUnique();
+            });
+
+            modelBuilder.Entity<CertificateAuditLog>(entity =>
+            {
+                entity.ToTable("CertificateAuditLogs");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.CertificateId)
+                    .IsRequired();
+
+                entity.Property(e => e.CertificateNumber)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.Action)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.UserRole)
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.IpAddress)
+                    .HasMaxLength(45);
+
+                entity.Property(e => e.SessionId)
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.Outcome)
+                    .IsRequired()
+                    .HasMaxLength(20);
+
+                entity.Property(e => e.Timestamp)
+                    .IsRequired();
+
+                entity.HasIndex(e => e.CertificateId);
+                entity.HasIndex(e => e.CertificateNumber);
+                entity.HasIndex(e => e.Action);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.Timestamp);
             });
 
             // Apply global tenant query filters.

@@ -35,6 +35,9 @@ import {
   Class,
   Schedule,
   EventNote,
+  WorkspacePremium,
+  VerifiedUser,
+  Description,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -104,6 +107,24 @@ const menuItems: MenuItem[] = [
     icon: <CalendarMonth />,
     path: '/calendar',
     roles: ['all'],
+  },
+  {
+    text: 'Certificates',
+    icon: <WorkspacePremium />,
+    path: '/certificates',
+    roles: ['administrator', 'moderator'],
+  },
+  {
+    text: 'Certificate Templates',
+    icon: <Description />,
+    path: '/certificates/templates',
+    roles: ['administrator'],
+  },
+  {
+    text: 'My Certificates',
+    icon: <VerifiedUser />,
+    path: '/my-certificates',
+    roles: ['student'],
   },
   {
     text: 'Users',

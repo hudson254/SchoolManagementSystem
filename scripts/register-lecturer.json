@@ -1,0 +1,10 @@
+{
+  "email": "test.lecturer@school.edu",
+  "password": "Test@12345pass",
+  "confirmPassword": "Test@12345pass",
+  "firstName": "John",
+  "lastName": "Doe",
+  "role": "Lecturer",
+  "organization": "Default School",
+  "specialization": "Computer Science"
+}

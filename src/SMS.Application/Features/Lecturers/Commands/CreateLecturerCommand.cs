@@ -11,7 +11,9 @@ namespace SMS.Application.Features.Lecturers.Commands
     public class CreateLecturerCommand : IRequest<LecturerDto>
     {
         public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
         public string LastName { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string Email { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
         public string EmployeeNumber { get; set; } = string.Empty;
@@ -60,6 +62,8 @@ namespace SMS.Application.Features.Lecturers.Commands
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
         private readonly ILogger<CreateLecturerCommandHandler> _logger;
+        private readonly INameParser _nameParser;
+        private readonly IUsernameGenerator _usernameGenerator;
 
         public CreateLecturerCommandHandler(
             ILecturerRepository lecturerRepository,
@@ -68,7 +72,9 @@ namespace SMS.Application.Features.Lecturers.Commands
             SMS.Multitenancy.Interfaces.ITenantContext tenantContext,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
-            ILogger<CreateLecturerCommandHandler> logger)
+            ILogger<CreateLecturerCommandHandler> logger,
+            INameParser nameParser,
+            IUsernameGenerator usernameGenerator)
         {
             _lecturerRepository = lecturerRepository;
             _departmentRepository = departmentRepository;
@@ -77,6 +83,8 @@ namespace SMS.Application.Features.Lecturers.Commands
             _unitOfWork = unitOfWork;
             _auditService = auditService;
             _logger = logger;
+            _nameParser = nameParser;
+            _usernameGenerator = usernameGenerator;
         }
 
         public async Task<LecturerDto> Handle(CreateLecturerCommand request, CancellationToken cancellationToken)
@@ -99,15 +107,40 @@ namespace SMS.Application.Features.Lecturers.Commands
                     throw new NotFoundException("Department", request.DepartmentId.Value);
             }
 
+            // Parse the full name to extract any title and normalize name parts.
+            // This ensures titles like "Dr" are stored separately and never leak
+            // into usernames or file names.
+            var fullName = $"{request.FirstName} {request.LastName}".Trim();
+            var parsed = _nameParser.ParseName(fullName);
+
+            if (!parsed.IsValid)
+                throw new SMS.Application.Exceptions.ValidationException(parsed.ErrorMessage ?? "Invalid name format");
+
+            var title = request.Title ?? parsed.Title;
+
             // Create user account
-            var username = $"{request.FirstName.ToLower()}.{request.LastName.ToLower()}{new Random().Next(100, 999)}";
+            var username = await _usernameGenerator.GenerateUsernameAsync(parsed.FirstName, parsed.LastName);
             var user = await _userManager.CreateUserAsync(username, request.Email, request.Password, "Lecturer");
+
+            // Sync the User's name fields with the Lecturer's names
+            if (user != null)
+            {
+                user.FirstName = parsed.FirstName;
+                user.LastName = parsed.LastName;
+                user.MiddleName = parsed.MiddleName;
+                user.Title = title;
+                user.PhoneNumber = request.PhoneNumber;
+                user.Email = request.Email;
+                await _userManager.UpdateUserAsync(user);
+            }
 
             // Create lecturer
             var lecturer = new Lecturer
             {
-                FirstName = request.FirstName,
-                LastName = request.LastName,
+                FirstName = parsed.FirstName,
+                LastName = parsed.LastName,
+                MiddleName = parsed.MiddleName,
+                Title = title,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
                 EmployeeNumber = request.EmployeeNumber,
@@ -130,6 +163,8 @@ namespace SMS.Application.Features.Lecturers.Commands
                 Id = lecturer.Id,
                 FirstName = lecturer.FirstName,
                 LastName = lecturer.LastName,
+                MiddleName = lecturer.MiddleName,
+                Title = lecturer.Title,
                 Email = lecturer.Email,
                 PhoneNumber = lecturer.PhoneNumber,
                 EmployeeNumber = lecturer.EmployeeNumber,
