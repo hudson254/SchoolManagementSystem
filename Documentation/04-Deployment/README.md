@@ -85,6 +85,17 @@ Before deploying to production, verify:
 
 ### Production Architecture
 
+For **LAN-only deployments** (recommended for internal school networks with Omada LAN DNS):
+
+```
+LAN Client → Nginx (HTTPS) → API (HTTP) → PostgreSQL
+                  → Frontend (Static Files)
+                  → Prometheus/Grafana (Monitoring)
+                  → Backup Service
+```
+
+For **internet-facing deployments** (requires public domain and Let's Encrypt):
+
 ```
 Internet → Nginx (HTTPS) → API (HTTP) → PostgreSQL
                   → Frontend (Static Files)
@@ -133,13 +144,14 @@ The production Nginx configuration (`docker/nginx.conf`) includes:
 - Request size limits
 
 ```nginx
-# Example Nginx configuration
+# Example Nginx configuration (LAN-only deployment)
+# The actual nginx.conf uses server_name _; (catch-all) which works with any hostname
 server {
-    listen 443 ssl;
-    server_name sms.example.com;
+    listen 443 ssl http2;
+    server_name _;  # Catch-all - works with any internal hostname
     
-    ssl_certificate /etc/ssl/certs/sms.crt;
-    ssl_certificate_key /etc/ssl/private/sms.key;
+    ssl_certificate /etc/ssl/certs/sms.school.local.crt;
+    ssl_certificate_key /etc/ssl/private/sms.school.local.key;
     
     location / {
         proxy_pass http://frontend:80;
@@ -235,8 +247,15 @@ The system includes an Nginx reverse proxy that:
 
 ### Custom Domain Configuration
 
+For **LAN-only deployments** with Omada LAN DNS:
+1. Configure Omada LAN DNS entry (see [Debian 13 Server Preparation Guide](DEBIAN13_SERVER_PREPARATION_GUIDE.md))
+2. Configure SSL certificates (Internal CA for LAN)
+3. Update Nginx configuration with your internal hostname
+4. Restart Nginx: `docker compose restart nginx`
+
+For **internet-facing deployments**:
 1. Update DNS records to point to your server
-2. Configure SSL certificates
+2. Configure SSL certificates (Let's Encrypt or commercial CA)
 3. Update Nginx configuration with your domain
 4. Restart Nginx: `docker compose restart nginx`
 
@@ -288,15 +307,20 @@ Use self-signed certificates for development only:
 ./scripts/gen-dev-cert.ps1
 ```
 
-### Production SSL
-Options for production SSL certificates:
+### Production SSL (LAN-Only Deployment)
+For LAN-only deployments (no public domain), use an **Internal Certificate Authority**:
+1. **Internal CA** (recommended for LAN) — Create your own CA and sign server certificates
+2. See the [Debian 13 Server Preparation Guide](DEBIAN13_SERVER_PREPARATION_GUIDE.md) Section 4 for complete instructions
+
+### Production SSL (Internet-Facing Deployment)
+For internet-facing deployments with a public domain:
 1. **Let's Encrypt** (free, automated)
 2. **Commercial CA** (DigiCert, Comodo, etc.)
 3. **Cloudflare** (if using Cloudflare proxy)
 
 ### SSL Best Practices
-- Use certificates from a trusted CA
-- Enable automatic renewal (Let's Encrypt)
+- Use certificates from a trusted CA (or internal CA for LAN)
+- Enable automatic renewal (Let's Encrypt for public domains)
 - Use strong cipher suites
 - Enable HSTS in production
 - Redirect HTTP to HTTPS
@@ -439,6 +463,7 @@ Alertmanager handles alert routing:
 |---------|-------------|
 | [Installation Guide](../03-Installation/README.md) | Initial installation |
 | [Configuration Guide](../05-Configuration/README.md) | All configuration options |
+| [Debian 13 Server Preparation Guide](DEBIAN13_SERVER_PREPARATION_GUIDE.md) | LAN-only deployment with Omada DNS |
 | [Operations Guide](../21-Operations/README.md) | Operational procedures |
 | [Maintenance Guide](../15-Maintenance/README.md) | Routine maintenance |
 | [Troubleshooting Guide](../16-Troubleshooting/README.md) | Deployment troubleshooting |

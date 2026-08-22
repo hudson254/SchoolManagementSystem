@@ -94,7 +94,7 @@ For HTTPS with self-signed certificates in development:
 ./scripts/generate-ssl.sh
 ```
 
-> **⚠️ WARNING**: Self-signed certificates will cause browser warnings. For production, use Let's Encrypt or a commercial CA.
+> **⚠️ WARNING**: Self-signed certificates will cause browser warnings. For **LAN-only** production deployments, use an **Internal Certificate Authority** (see [Debian 13 Server Preparation Guide](../04-Deployment/DEBIAN13_SERVER_PREPARATION_GUIDE.md) Section 4). For internet-facing deployments, use Let's Encrypt or a commercial CA.
 
 #### 4. Start the Containers
 ```bash
