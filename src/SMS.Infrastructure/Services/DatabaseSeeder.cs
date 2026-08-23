@@ -77,9 +77,9 @@ namespace SMS.Persistence.Services
 
             var roles = new[]
             {
-                "SYSTEM ADMINISTRATOR",
+                "SystemAdministrator",
                 "Administrator",
-                "COORDINATOR",
+                "Coordinator",
                 "Lecturer",
                 "Student",
                 "Receptionist"
@@ -239,8 +239,8 @@ namespace SMS.Persistence.Services
                 throw new InvalidOperationException($"Failed to create administrator user: {errors}");
             }
 
-            // Assign SYSTEM ADMINISTRATOR role (highest privilege)
-            result = await _userManager.AddToRoleAsync(adminUser, "SYSTEM ADMINISTRATOR");
+            // Assign SystemAdministrator role (highest privilege)
+            result = await _userManager.AddToRoleAsync(adminUser, "SystemAdministrator");
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -285,9 +285,9 @@ namespace SMS.Persistence.Services
         {
             return roleName switch
             {
-                "SYSTEM ADMINISTRATOR" => "Super administrator with unrestricted system access",
+                "SystemAdministrator" => "Super administrator with unrestricted system access",
                 "Administrator" => "Full system access with all permissions",
-                "COORDINATOR" => "Elevated access for content and user management",
+                "Coordinator" => "Elevated access for content and user management",
                 "Lecturer" => "Teaching staff with course and grade management",
                 "Student" => "Student access for learning and enrollment",
                 "Receptionist" => "Front desk access for registration and inquiries",

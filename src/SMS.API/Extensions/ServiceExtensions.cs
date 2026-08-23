@@ -46,6 +46,11 @@ namespace SMS.API.Extensions
                 options.UseNpgsql(
                     configuration.GetConnectionString("DefaultConnection"),
                     x => x.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
+
+                // Add the tenant context interceptor to set PostgreSQL session variable for RLS
+                var tenantContext = serviceProvider.GetRequiredService<ITenantContext>();
+                var logger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TenantContextDbInterceptor>>();
+                options.AddInterceptors(new TenantContextDbInterceptor(tenantContext, logger));
             });
 
             // Register repositories

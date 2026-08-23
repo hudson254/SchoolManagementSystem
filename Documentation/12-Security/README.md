@@ -62,18 +62,18 @@ The School Management System implements defense-in-depth security with multiple 
 
 ## Authorization
 
-### Policy-Based Authorization
+### Policy-Based Authorization (from Program.cs)
 ```csharp
 options.AddPolicy("AdministratorAccess", policy =>
     policy.RequireRole("Administrator"));
 options.AddPolicy("ModeratorAccess", policy =>
-    policy.RequireRole("Administrator", "COORDINATOR"));
+    policy.RequireRole("Administrator", "Coordinator"));
 options.AddPolicy("LecturerAccess", policy =>
-    policy.RequireRole("Administrator", "COORDINATOR", "Lecturer"));
+    policy.RequireRole("Administrator", "Coordinator", "Lecturer"));
 options.AddPolicy("StudentAccess", policy =>
-    policy.RequireRole("Administrator", "COORDINATOR", "Lecturer", "Student"));
+    policy.RequireRole("Administrator", "Coordinator", "Lecturer", "Student"));
 options.AddPolicy("ReceptionistAccess", policy =>
-    policy.RequireRole("Administrator", "COORDINATOR", "Receptionist"));
+    policy.RequireRole("Administrator", "Coordinator", "Receptionist"));
 ```
 
 ### Registration Status Authorization

@@ -19,7 +19,7 @@ namespace SMS.API.Controllers.v1
         private readonly IStudentRepository _studentRepository;
 
         // Staff roles that are allowed to view/update any student's record.
-        private static readonly string[] StaffRoles = { "Administrator", "Moderator", "Lecturer", "Receptionist" };
+        private static readonly string[] StaffRoles = { "Administrator", "Coordinator", "Lecturer", "Receptionist" };
 
         public StudentController(
             ILogger<StudentController> logger,

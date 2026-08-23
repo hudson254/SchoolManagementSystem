@@ -135,27 +135,27 @@ namespace SMS.IntegrationTests.Database
         [Fact]
         public async Task NonTenantAwareEntity_IsNotFilteredByTenant()
         {
-            // Arrange — Regression test for the ADMIN-RESET workflow failure.
-            // PasswordResetRequest extends BaseEntity (has a Guid TenantId
-            // column) but does NOT implement ITenantAwareEntity. The global
-            // tenant filter previously excluded such records (saved with
-            // Guid.Empty) from every tenant-scoped query, breaking the
-            // admin password-reset repository. The filter must only apply to
-            // ITenantAwareEntity implementors.
+            // Arrange — Regression test for entities without ITenantAwareEntity.
+            // Previously, PasswordResetRequest did not implement ITenantAwareEntity
+            // and was visible across tenants. As of the RLS remediation, it now
+            // implements ITenantAwareEntity and is tenant-scoped. This test verifies
+            // that truly non-tenant-aware entities (if any remain) are visible
+            // across tenants. Currently, all entities implement ITenantAwareEntity,
+            // so this test is a safety net for future entities.
             var dbName = $"NonTenantAwareTest_{Guid.NewGuid()}";
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseInMemoryDatabase(databaseName: dbName)
                 .Options;
 
-            var tenantContextMock = new Mock<ITenantContext>();
-            tenantContextMock.SetupGet(x => x.TenantId).Returns(TenantA.ToString());
-            var currentUserMock = new Mock<ICurrentUserService>();
+            // Seed data under TenantA with tenant-aware PasswordResetRequest
+            var tenantContextMockA = new Mock<ITenantContext>();
+            tenantContextMockA.SetupGet(x => x.TenantId).Returns(TenantA.ToString());
+            var currentUserMockA = new Mock<ICurrentUserService>();
 
-            await using (var seedContext = new ApplicationDbContext(options, currentUserMock.Object, tenantContextMock.Object))
+            await using (var seedContext = new ApplicationDbContext(options, currentUserMockA.Object, tenantContextMockA.Object))
             {
-                // Save WITHOUT the tenant filter stamping a TenantId —
-                // PasswordResetRequest is not ITenantAwareEntity, so
-                // SaveChangesAsync leaves TenantId at Guid.Empty.
+                // PasswordResetRequest now implements ITenantAwareEntity, so
+                // SaveChangesAsync stamps TenantId = TenantA.
                 seedContext.PasswordResetRequests.AddRange(
                     new PasswordResetRequest
                     {
@@ -174,14 +174,14 @@ namespace SMS.IntegrationTests.Database
                 await seedContext.SaveChangesAsync();
             }
 
-            // Act — query from a context scoped to a DIFFERENT tenant (Tenant B).
+            // Act — query from Tenant B's context
             await using (var contextB = CreateContextWithDb(options, TenantB))
             {
                 var requests = await contextB.PasswordResetRequests.ToListAsync();
 
-                // Assert — non-tenant-aware records are visible across tenants
-                // (they carry no tenant semantics and must not be excluded).
-                requests.Should().HaveCount(2);
+                // Assert — PasswordResetRequest is NOW tenant-aware, so
+                // Tenant B should see ZERO records (all belong to Tenant A).
+                requests.Should().HaveCount(0);
             }
         }
 

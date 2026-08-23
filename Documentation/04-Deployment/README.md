@@ -121,16 +121,16 @@ cp .env.example .env
 #### 2. Deploy with Production Compose
 ```bash
 # Start production stack
-docker compose -f docker/docker-compose.prod.yml up -d
+docker compose -f docker/docker-compose.prod.yml --env-file .env up -d
 
 # Check all services are running
-docker compose ps
+docker compose -f docker/docker-compose.prod.yml ps
 
 # Apply migrations
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Seed initial data
-docker exec sms-api dotnet run -- seed-data
+docker compose exec api dotnet SMS.API.dll seed-data
 ```
 
 #### 3. Configure Nginx
@@ -381,7 +381,7 @@ dotnet ef database update PreviousMigrationName
 
 4. **Apply migrations**
    ```bash
-   docker exec sms-api dotnet run -- migrate-database
+   docker compose exec api dotnet SMS.API.dll migrate-database
    ```
 
 5. **Restart services**

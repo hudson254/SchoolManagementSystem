@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Identity;
+using SMS.Domain.Common;
 using System;
 using System.Collections.Generic;
 
 namespace SMS.Domain.Entities
 {
-    public class User : IdentityUser
+    public class User : IdentityUser, ITenantAwareEntity
     {
         public string FirstName { get; set; }
         public string LastName { get; set; }

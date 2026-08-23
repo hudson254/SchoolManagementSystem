@@ -183,7 +183,7 @@ namespace SMS.ApiTests
                     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
 
                     // Create roles
-                    foreach (var roleName in new[] { "Administrator", "Lecturer", "Student", "Moderator" })
+                    foreach (var roleName in new[] { "Administrator", "Coordinator", "Lecturer", "Student" })
                     {
                         if (!await roleManager.RoleExistsAsync(roleName))
                         {

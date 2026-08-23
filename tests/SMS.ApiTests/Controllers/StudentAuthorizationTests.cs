@@ -144,7 +144,7 @@ namespace SMS.ApiTests.Controllers
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
 
-            foreach (var roleName in new[] { "Administrator", "Lecturer", "Student", "Moderator" })
+            foreach (var roleName in new[] { "Administrator", "Lecturer", "Student", "Coordinator" })
             {
                 if (!await roleManager.RoleExistsAsync(roleName))
                 {
@@ -366,11 +366,11 @@ namespace SMS.ApiTests.Controllers
         }
 
         [Fact]
-        public async Task Moderator_AccessingAnyStudentData_ShouldReturnOk()
+        public async Task Coordinator_AccessingAnyStudentData_ShouldReturnOk()
         {
             var (anyStudentId, _) = _fixture.SeedStudent("owner");
-            _fixture.CurrentUserId = "moderator-user-id";
-            _fixture.CurrentUserRoles = new[] { "Moderator" };
+            _fixture.CurrentUserId = "coordinator-user-id";
+            _fixture.CurrentUserRoles = new[] { "Coordinator" };
             using var client = _fixture.CreateAuthenticatedClient();
 
             var response = await client.GetAsync($"/api/v1/students/{anyStudentId}");

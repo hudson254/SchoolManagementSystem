@@ -13,6 +13,7 @@ COPY ["src/SMS.Identity/SMS.Identity.csproj", "SMS.Identity/"]
 COPY ["src/SMS.Multitenancy/SMS.Multitenancy.csproj", "SMS.Multitenancy/"]
 COPY ["src/SMS.Notifications/SMS.Notifications.csproj", "SMS.Notifications/"]
 COPY ["src/SMS.Reporting/SMS.Reporting.csproj", "SMS.Reporting/"]
+COPY ["src/SMS.Certificates/SMS.Certificates.csproj", "SMS.Certificates/"]
 
 RUN dotnet restore "SMS.API/SMS.API.csproj"
 

@@ -16,8 +16,9 @@
 ### System Access
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| API Health | `http://localhost:5000/health` | None |
-| Swagger UI | `http://localhost:5000/swagger` | JWT (if enabled) |
+| Application (via Nginx) | `https://sms.school.internal` or `http://sms.school.internal:8080` | User credentials |
+| API (direct, dev only) | `http://localhost:5000` | JWT token |
+| Swagger UI | `http://localhost:5000/swagger` | JWT (dev only, disabled in production) |
 | Grafana | `http://localhost:3001` | admin / GRAFANA_PASSWORD |
 | Prometheus | `http://localhost:9090` | None |
 
@@ -38,6 +39,9 @@
 # Start all services
 docker compose -f docker/docker-compose.yml up -d
 
+# Start production services
+docker compose -f docker/docker-compose.prod.yml --env-file .env up -d
+
 # Check status
 docker compose ps
 
@@ -45,16 +49,16 @@ docker compose ps
 docker compose logs -f api
 
 # Execute migration
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Execute seed
-docker exec sms-api dotnet run -- seed-data
+docker compose exec api dotnet SMS.API.dll seed-data
 
 # Backup database
 docker compose exec postgres pg_dump -U sms_user -d SchoolManagementSystem -F c -f /backups/backup.dump
 
 # Restore database
-docker compose exec -T postgres pg_restore -U sms_user -d SchoolManagementSystem < backup.dump
+docker compose exec -T postgres pg_restore -U sms_user -d SchoolManagementSystem -F c < backup.dump
 ```
 
 ### Database
@@ -95,17 +99,22 @@ git push origin v1.0.0
 
 ## Default Ports
 
-| Service | Port | Environment |
-|---------|------|-------------|
-| API (Docker) | 5000 | All |
-| API (Development) | 5000 | Dev |
-| Frontend (Docker) | 3000 | All |
-| Frontend (Development) | 5173 | Dev |
-| PostgreSQL | 5433 (mapped) | All |
-| Nginx HTTP | 8080 | All |
-| Nginx HTTPS | 8443 | All |
-| Prometheus | 9090 | All |
-| Grafana | 3001 | All |
+| Service | Port | Environment | Notes |
+|---------|------|-------------|-------|
+| API (Docker - dev) | 5000 | Dev | Mapped to container port 80 |
+| API (Direct) | 5000 | Dev | dotnet run |
+| API (Production) | (internal) | Production | No host port; only accessible via Nginx |
+| Frontend (Docker) | 3000 | All | Mapped to container port 80 |
+| Frontend (Development) | 5173 | Dev | Vite dev server |
+| PostgreSQL | 5433 (host) / 5432 (container) | Dev/Test | Not exposed in production |
+| Nginx HTTP | 8080 (configurable via NGINX_HTTP_PORT) | All | Default HTTP entry point |
+| Nginx HTTPS | 8443 (configurable via NGINX_HTTPS_PORT) | All | Default HTTPS entry point |
+| Prometheus | 9090 | Dev | Internal only in production |
+| Grafana | 3001 | Dev | Internal only in production |
+| Alertmanager | 9093 | Internal | Docker network only |
+| Node Exporter | 9100 | Internal | Docker network only |
+| Postgres Exporter | 9187 | Internal | Docker network only |
+| cAdvisor | 8080 | Internal | Docker network only |
 
 ---
 

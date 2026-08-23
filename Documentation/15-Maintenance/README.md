@@ -122,7 +122,7 @@ tar -czf logs_archive_$(date +%Y%m).tar.gz logs/*.json
 
 ```bash
 # Connect to PostgreSQL
-docker-compose exec postgres psql -U sms_admin -d sms_db
+docker compose exec postgres psql -U sms_user -d SchoolManagementSystem
 
 # Run VACUUM
 VACUUM (VERBOSE, ANALYZE);
@@ -138,7 +138,7 @@ VACUUM FULL VERBOSE;
 REINDEX TABLE students;
 
 # Reindex entire database
-REINDEX DATABASE sms_db;
+REINDEX DATABASE SchoolManagementSystem;
 ```
 
 ### Update Statistics
@@ -155,10 +155,10 @@ ANALYZE VERBOSE students;
 
 ```bash
 # Check database for corruption
-docker-compose exec postgres pg_checksums -c -D /var/lib/postgresql/data
+docker compose exec postgres pg_checksums -c -D /var/lib/postgresql/data
 
 # Check specific table
-docker-compose exec postgres psql -U sms_admin -d sms_db -c "SELECT * FROM pg_stat_user_tables WHERE relname = 'students';"
+docker compose exec postgres psql -U sms_user -d SchoolManagementSystem -c "SELECT * FROM pg_stat_user_tables WHERE relname = 'students';"
 ```
 
 ## Performance Tuning
@@ -211,10 +211,10 @@ curl http://localhost:8080/health
 
 ```bash
 # Check container status
-docker-compose ps
+docker compose ps
 
 # View container logs
-docker-compose logs --tail=50 api
+docker compose logs --tail=50 api
 
 # Check resource usage
 docker stats
@@ -252,7 +252,7 @@ dotnet list package --outdated
 
 ## Storage Management
 
-### Monitoring Storage
+### Storage Management
 
 ```bash
 # Check disk usage
@@ -263,7 +263,7 @@ du -sh /app/uploads/
 du -sh /app/logs/
 
 # Check database size
-docker-compose exec postgres psql -U sms_admin -d sms_db -c "SELECT pg_size_pretty(pg_database_size('sms_db'));"
+docker compose exec postgres psql -U sms_user -d SchoolManagementSystem -c "SELECT pg_size_pretty(pg_database_size('SchoolManagementSystem'));"
 ```
 
 ### Cleanup Tasks

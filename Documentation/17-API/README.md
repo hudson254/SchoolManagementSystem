@@ -18,33 +18,43 @@
 The School Management System exposes a RESTful API at `/api/v1/`. All endpoints are versioned and secured with JWT authentication.
 
 ### Base URL
-- **Development**: `http://localhost:5000/api/v1`
-- **Docker**: `http://localhost:5000/api/v1`
-- **Production**: `https://your-domain.com/api/v1`
+- **Development (direct)**: `http://localhost:5000/api/v1`
+- **Docker (via Nginx)**: `http://localhost:8080/api/v1` or `https://localhost:8443/api/v1`
+- **Production (LAN)**: `https://<hostname>/api/v1`
 
-### API Controllers
-| Controller | Base Path | Description |
-|------------|-----------|-------------|
-| AuthController | `/api/v1/auth` | Authentication |
-| StudentController | `/api/v1/students` | Student management |
-| CourseController | `/api/v1/courses` | Course management |
-| UnitController | `/api/v1/units` | Unit management |
-| EnrollmentController | `/api/v1/enrollments` | Enrollment management |
-| GradeController | `/api/v1/grades` | Grade management |
-| LecturerController | `/api/v1/lecturers` | Lecturer management |
-| TimetableController | `/api/v1/timetables` | Timetable management |
-| AccommodationController | `/api/v1/accommodation` | Accommodation management |
-| ReportController | `/api/v1/reports` | Report generation |
-| NotificationController | `/api/v1/notifications` | Notification management |
-| AuditController | `/api/v1/audit` | Audit log management |
-| ApprovalController | `/api/v1/approvals` | Approval workflows |
-| CourseOfferingController | `/api/v1/course-offerings` | Course offering management |
-| AssessmentController | `/api/v1/assessments` | Assessment management |
-| CertificateController | `/api/v1/certificates` | Certificate management |
-| PasswordResetController | `/api/v1/password-reset` | Password reset workflow |
-| ReportVerificationController | `/api/v1/report-verification` | Report verification |
-| ErrorAdminController | `/api/v1/errors` | Error log administration |
-| ConfirmationController | `/api/v1/confirmations` | Enrollment/teaching confirmations |
+### API Controllers (from src code)
+| Controller | Route | Description |
+|------------|-------|-------------|
+| AuthController | `/api/v{version}/auth` | Authentication (login, register, refresh, logout) |
+| AccommodationController | `/api/v{version}/accommodation` | Accommodation management |
+| ApprovalController | `/api/v{version}/approvals` | Approval workflows |
+| AssessmentController | `/api/v{version}/assessments` | Assessment management |
+| AssignmentController | `/api/v{version}/assignments` | Assignment management |
+| AuditController | `/api/v{version}/audit` | Audit log management |
+| CertificateController | `/api/v{version}/certificates` | Certificate generation/management |
+| CertificateTemplateController | `/api/v{version}/certificate-templates` | Certificate templates |
+| ConfirmationController | `/api/v{version}/confirmations` | Enrollment/teaching confirmations |
+| CourseController | `/api/v{version}/courses` | Course management |
+| CourseOfferingController | `/api/v{version}/course-offerings` | Course offering management |
+| CourseOfferingAssignmentController | `/api/v{version}/course-offering-assignments` | Assignment issues |
+| DashboardController | `/api/v{version}/dashboard` | Dashboard data |
+| EnrollmentController | `/api/v{version}/enrollments` | Enrollment management |
+| ErrorAdminController | `/api/v{version}/admin/errors` | Error log administration |
+| GradeController | `/api/v{version}/grades` | Grade management |
+| HealthController | `/health` | System health checks |
+| LecturerController | `/api/v{version}/lecturers` | Lecturer management |
+| LecturerAssignmentController | `/api/v{version}/lecturer-assignments` | Lecturer assignments |
+| NotificationController | `/api/v{version}/notifications` | Notification management |
+| PasswordResetController | `/api/v{version}/password-reset` | Password reset workflow |
+| ReportController | `/api/v{version}/reports` | Report generation |
+| ReportAdminController | `/api/v{version}/admin/reports` | Report administration |
+| ReportVerificationController | `/api/v{version}/verify/report` | Report verification |
+| ReturningUserController | `/api/v{version}/returning-users` | Returning student enrollment |
+| StudentController | `/api/v{version}/students` | Student management |
+| TimetableController | `/api/v{version}/timetables` | Timetable management |
+| UnitController | `/api/v{version}/units` | Unit management |
+| UserController | `/api/v{version}/users` | User management |
+| VerificationController | `/api/v{version}/verify` | Certificate verification |
 
 ---
 

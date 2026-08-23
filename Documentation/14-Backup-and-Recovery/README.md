@@ -32,13 +32,20 @@ Backup of environment configuration and application settings.
 
 ```bash
 # Backup entire database
-pg_dump -h localhost -U sms_admin -d sms_db -F c -f sms_backup_$(date +%Y%m%d).dump
+pg_dump -h localhost -U sms_user -d SchoolManagementSystem -F c -f sms_backup_$(date +%Y%m%d).dump
 
 # Backup with compression
-pg_dump -h localhost -U sms_admin -d sms_db -F c -Z 9 -f sms_backup_$(date +%Y%m%d).dump
+pg_dump -h localhost -U sms_user -d SchoolManagementSystem -F c -Z 9 -f sms_backup_$(date +%Y%m%d).dump
 
 # Backup specific schema only
-pg_dump -h localhost -U sms_admin -d sms_db -n public -f sms_schema_backup.sql
+pg_dump -h localhost -U sms_user -d SchoolManagementSystem -n public -f sms_schema_backup.sql
+```
+
+### Docker-Based Database Backup
+
+```bash
+# Backup using Docker
+docker compose exec postgres pg_dump -U sms_user -d SchoolManagementSystem -F c -f /backups/manual_$(date +%Y%m%d).dump
 ```
 
 ### File Storage Backup
@@ -93,7 +100,7 @@ crontab -e
 **Using Docker:**
 The production Docker Compose includes a backup service:
 ```bash
-docker-compose exec backup ./backup.sh
+docker compose exec backup ./backup.sh
 ```
 
 ## Backup Verification
@@ -124,14 +131,21 @@ tar -tzf uploads_backup.tar.gz | head -20
 
 ```bash
 # Restore from custom format dump
-pg_restore -h localhost -U sms_admin -d sms_db -c sms_backup.dump
+pg_restore -h localhost -U sms_user -d SchoolManagementSystem -c sms_backup.dump
 
 # Restore with parallel jobs (faster for large databases)
-pg_restore -h localhost -U sms_admin -d sms_db -j 4 -c sms_backup.dump
+pg_restore -h localhost -U sms_user -d SchoolManagementSystem -j 4 -c sms_backup.dump
 
 # Restore to a different database name
-createdb -U sms_admin sms_db_restored
-pg_restore -h localhost -U sms_admin -d sms_db_restored sms_backup.dump
+createdb -U sms_user SchoolManagementSystem_restored
+pg_restore -h localhost -U sms_user -d SchoolManagementSystem_restored sms_backup.dump
+```
+
+### Docker-Based Restore
+
+```bash
+# Restore via Docker
+docker compose exec -T postgres pg_restore -U sms_user -d SchoolManagementSystem -F c < sms_backup.dump
 ```
 
 ### File Storage Restore
@@ -148,13 +162,13 @@ tar -xzf uploads_backup.tar.gz -C /restore/path/
 
 1. Stop the application:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 2. Restore database:
 ```bash
-docker-compose up -d postgres
-docker-compose exec -T postgres pg_restore -U sms_admin -d sms_db < backup.dump
+docker compose up -d postgres
+docker compose exec -T postgres pg_restore -U sms_user -d SchoolManagementSystem < backup.dump
 ```
 
 3. Restore file storage:
@@ -164,12 +178,12 @@ tar -xzf uploads_backup.tar.gz -C /app/
 
 4. Restart the application:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 5. Run any pending migrations:
 ```bash
-docker-compose exec api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 ```
 
 ## Point-in-Time Recovery

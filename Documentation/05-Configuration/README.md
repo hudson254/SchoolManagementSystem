@@ -89,6 +89,58 @@ The School Management System uses a hierarchical configuration system that loads
 | `BACKUP_INTERVAL` | No | 86400 | Backup interval in seconds |
 | `BACKUP_RETENTION_DAYS` | No | 30 | Days to retain backups |
 
+### Frontend / CORS Configuration
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FRONTEND_URL` | ✅ Yes (production) | - | Full URL of the frontend (used for CORS). e.g. `https://sms.school.internal` |
+| `API_URL` | No | `/api` | Frontend API base URL (relative path in Docker) |
+
+### Administrator Credentials (for seeding)
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ADMIN_EMAIL` | ✅ Yes | - | Administrator email address for initial account creation |
+| `ADMIN_PASSWORD` | ✅ Yes | - | Administrator password (min 12 chars, complex) |
+| `ADMIN_FIRST_NAME` | No | System | Administrator first name |
+| `ADMIN_LAST_NAME` | No | Administrator | Administrator last name |
+
+### Feature Flags
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `Swagger__Enabled` | No | false | Enable/disable Swagger UI (must be false in production) |
+| `ENABLE_MFA` | No | false | Multi-factor authentication (not yet implemented) |
+| `ENABLE_PWA` | No | true | Progressive Web App support |
+
+### SMTP Configuration (currently disabled)
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SMTP_HOST` | No | smtp.gmail.com | SMTP server hostname |
+| `SMTP_PORT` | No | 587 | SMTP server port |
+| `SMTP_USERNAME` | No | - | SMTP authentication username |
+| `SMTP_PASSWORD` | No | - | SMTP authentication password |
+| `SMTP_FROM` | No | - | SMTP from address |
+
+### SSL Certificate Configuration
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SSL_PASSWORD` | No | - | Password for SSL certificate files (.pfx) |
+
+### Monitoring Configuration
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GRAFANA_PASSWORD` | ✅ Yes | - | Grafana admin password |
+| `GRAFANA_USER` | No | admin | Grafana admin username |
+| `GRAFANA_URL` | No | http://localhost:3001 | Grafana external URL |
+| `ALERTMANAGER_SMTP_FROM` | No | alertmanager@sms.local | Alertmanager email from address |
+| `ALERTMANAGER_SMTP_SMART_HOST` | No | localhost:25 | Alertmanager SMTP relay host |
+| `ALERTMANAGER_SMTP_USERNAME` | No | - | Alertmanager SMTP username |
+| `ALERTMANAGER_SMTP_PASSWORD` | No | - | Alertmanager SMTP password |
+
+### Rate Limiting Configuration
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `RATE_LIMIT_PERMIT` | No | 100 | Rate limit permits per window (production) |
+| `RATE_LIMIT_WINDOW` | No | 60 | Rate limit window in seconds |
+
 ---
 
 ## Appsettings Sections

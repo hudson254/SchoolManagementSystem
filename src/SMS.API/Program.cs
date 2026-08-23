@@ -426,6 +426,18 @@ jwtConfig["Secret"] = jwtSecret;
 
 var key = Encoding.UTF8.GetBytes(jwtSecret);
 
+// Validate production configuration requirements
+if (builder.Environment.IsProduction())
+{
+    var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? builder.Configuration["Frontend:Url"];
+    if (string.IsNullOrWhiteSpace(frontendUrl))
+        throw new InvalidOperationException("FRONTEND_URL is required in production. Set FRONTEND_URL environment variable.");
+
+    var configuredCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+    if (configuredCorsOrigins == null || configuredCorsOrigins.Length == 0 || configuredCorsOrigins.All(string.IsNullOrWhiteSpace))
+        throw new InvalidOperationException("Cors:AllowedOrigins must be configured in production. At least one origin is required for frontend access.");
+}
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -629,13 +641,15 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdministratorAccess", policy =>
         policy.RequireRole("Administrator"));
     options.AddPolicy("ModeratorAccess", policy =>
-        policy.RequireRole("Administrator", "COORDINATOR"));
+        policy.RequireRole("Administrator", "Coordinator"));
     options.AddPolicy("LecturerAccess", policy =>
-        policy.RequireRole("Administrator", "COORDINATOR", "Lecturer"));
+        policy.RequireRole("Administrator", "Coordinator", "Lecturer"));
     options.AddPolicy("StudentAccess", policy =>
-        policy.RequireRole("Administrator", "COORDINATOR", "Lecturer", "Student"));
+        policy.RequireRole("Administrator", "Coordinator", "Lecturer", "Student"));
     options.AddPolicy("ReceptionistAccess", policy =>
-        policy.RequireRole("Administrator", "COORDINATOR", "Receptionist"));
+        policy.RequireRole("Administrator", "Coordinator", "Receptionist"));
+    options.AddPolicy("SystemAdministratorAccess", policy =>
+        policy.RequireRole("SystemAdministrator"));
 });
 
 var app = builder.Build();

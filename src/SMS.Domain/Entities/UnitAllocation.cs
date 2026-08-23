@@ -3,7 +3,7 @@ using SMS.Domain.Common;
 
 namespace SMS.Domain.Entities
 {
-    public class UnitAllocation : BaseEntity
+    public class UnitAllocation : BaseEntity, ITenantAwareEntity
     {
         [Required]
         public Guid LecturerId { get; set; }

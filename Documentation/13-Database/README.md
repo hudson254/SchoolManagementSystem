@@ -27,7 +27,7 @@ The School Management System uses **PostgreSQL 16** as its primary database with
 |---------|-------|
 | Database Name | SchoolManagementSystem |
 | Database User | sms_user |
-| Default Port | 5432 (mapped to 5433 in Docker) |
+| Default Port | 5432 (mapped to 5433 in development docker-compose; NOT exposed in production) |
 | EF Core Provider | Npgsql (PostgreSQL) |
 | Connection Pool | Min: 1, Max: 10 |
 | Command Timeout | 60 seconds |

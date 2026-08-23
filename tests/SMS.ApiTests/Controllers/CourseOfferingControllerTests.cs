@@ -126,7 +126,7 @@ namespace SMS.ApiTests.Controllers
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
 
-            foreach (var roleName in new[] { "Administrator", "Lecturer", "Student", "Moderator" })
+            foreach (var roleName in new[] { "Administrator", "Lecturer", "Student", "Coordinator" })
             {
                 if (!await roleManager.RoleExistsAsync(roleName))
                 {

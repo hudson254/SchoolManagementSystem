@@ -73,19 +73,19 @@ This guide provides solutions for common issues that may occur in the School Man
 
 ```bash
 # Check container status
-docker-compose ps
+docker compose ps
 
 # View logs for specific container
-docker-compose logs api
-docker-compose logs postgres
+docker compose logs api
+docker compose logs postgres
 
 # Check port conflicts
 netstat -ano | findstr :5432
 netstat -ano | findstr :8080
 
 # Restart containers
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ### Port Already in Use
@@ -94,7 +94,7 @@ docker-compose up -d
 
 **Solutions:**
 ```bash
-# Change port in docker-compose.yml or .env
+# Change port in docker-compose.yml (file name) or .env
 # Example: change 8080:8080 to 8081:8080
 ```
 
@@ -105,14 +105,14 @@ docker-compose up -d
 **Solutions:**
 ```bash
 # Check PostgreSQL is running
-docker-compose ps postgres
+docker compose ps postgres
 
 # Check PostgreSQL logs
-docker-compose logs postgres
+docker compose logs postgres
 
 # Verify connection string in .env
 # Restart PostgreSQL
-docker-compose restart postgres
+docker compose restart postgres
 ```
 
 ## Database Issues
@@ -124,13 +124,13 @@ docker-compose restart postgres
 **Solutions:**
 ```bash
 # Check migration status
-docker-compose exec api dotnet ef migrations list --project src/SMS.Persistence
+docker compose exec api dotnet ef migrations list --project src/SMS.Persistence
 
 # Re-run migrations
-docker-compose exec api dotnet run --project src/SMS.API -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Rollback last migration
-docker-compose exec api dotnet ef migrations remove --project src/SMS.Persistence
+docker compose exec api dotnet ef migrations remove --project src/SMS.Persistence
 ```
 
 ### Database Connection Lost
@@ -293,7 +293,7 @@ chmod -R 755 uploads/
 3. Ensure sufficient disk space
 4. Check for active connections to the database:
    ```bash
-   SELECT * FROM pg_stat_activity WHERE datname = 'sms_db';
+   SELECT * FROM pg_stat_activity WHERE datname = 'SchoolManagementSystem';
    ```
 
 ### Backup Fails
@@ -307,7 +307,7 @@ chmod -R 755 uploads/
 3. Check backup script permissions
 4. Test backup manually:
    ```bash
-   pg_dump -h localhost -U sms_admin -d sms_db -F c -f test_backup.dump
+   pg_dump -h localhost -U sms_user -d SchoolManagementSystem -F c -f test_backup.dump
    ```
 
 ## Notification Issues

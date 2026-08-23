@@ -108,13 +108,13 @@ docker compose ps
 #### 5. Run Database Migrations
 ```bash
 # Execute database migrations inside the API container
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 ```
 
 #### 6. Seed Initial Data
 ```bash
 # Seed roles and initial data
-docker exec sms-api dotnet run -- seed-data
+docker compose exec api dotnet SMS.API.dll seed-data
 ```
 
 #### 7. Verify Installation
@@ -268,7 +268,7 @@ GRANT ALL ON SCHEMA public TO sms_user;
 ### Running Migrations
 ```bash
 # Via Docker
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Via .NET CLI
 cd src/SMS.API
@@ -278,7 +278,7 @@ dotnet run -- migrate-database
 ### Seeding Data
 ```bash
 # Via Docker
-docker exec sms-api dotnet run -- seed-data
+docker compose exec api dotnet SMS.API.dll seed-data
 
 # Via .NET CLI
 cd src/SMS.API
@@ -287,7 +287,7 @@ dotnet run -- seed-data
 
 The seed process creates:
 - Default tenant
-- All user roles (Administrator, Coordinator, Lecturer, Student, Receptionist)
+- All user roles (Administrator, COORDINATOR, Lecturer, Student, Receptionist)
 - Default administrator account
 - Title configuration data
 - Certificate rules and templates
@@ -357,7 +357,7 @@ docker compose logs --tail=50 api
 - **Fix**: Review the [Troubleshooting Guide](../16-Troubleshooting/README.md)
 
 ### Port Already in Use
-- Change the port mapping in `docker-compose.yml` or `.env`
+- Change the port mapping in `docker/docker-compose*.yml` files or `.env`
 - Common conflict ports: 5433, 5000, 3000, 8080
 
 ### Database Connection Failed

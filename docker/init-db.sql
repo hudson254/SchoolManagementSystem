@@ -9,6 +9,9 @@
 --     dotnet run --project src/SMS.API -- seed-data)
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Include RLS infrastructure setup
+\i /docker-entrypoint-initdb.d/init-db-rls.sql
+
 -- The docker-entrypoint runs this script already connected to POSTGRES_DB,
 -- so we target that database via current_database() instead of hardcoding it
 -- (identifiers are case-sensitive and %I preserves the actual casing via

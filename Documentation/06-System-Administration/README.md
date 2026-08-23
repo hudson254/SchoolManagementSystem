@@ -270,7 +270,7 @@ Logs are rotated daily. Configure retention period in Serilog configuration.
 
 ### Monitoring Logs
 
-Use `docker-compose logs -f api` to view live logs.
+Use `docker compose logs -f api` to view live logs.
 
 ## Database Maintenance
 
@@ -294,16 +294,16 @@ Use `docker-compose logs -f api` to view live logs.
 
 1. Backup database
 2. Pull latest code: `git pull`
-3. Rebuild: `docker-compose build`
-4. Apply migrations: `docker-compose exec api dotnet run -- migrate-database`
-5. Restart services: `docker-compose up -d`
+3. Rebuild: `docker compose build`
+4. Apply migrations: `docker compose exec api dotnet SMS.API.dll migrate-database`
+5. Restart services: `docker compose up -d`
 
 ### Rollback Process
 
-1. Stop services: `docker-compose down`
+1. Stop services: `docker compose down`
 2. Revert code: `git checkout <previous-tag>`
 3. Restore database from backup
-4. Restart services: `docker-compose up -d`
+4. Restart services: `docker compose up -d`
 
 ## Frequently Asked Questions
 

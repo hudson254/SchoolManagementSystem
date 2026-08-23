@@ -249,19 +249,19 @@ The system follows **Clean Architecture** principles with the Command Query Resp
 ### Frontend
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| React | 18+ | UI framework |
+| React | 19 | UI framework |
 | TypeScript | Latest | Type-safe JavaScript |
-| Material UI | Latest | Component library |
-| TanStack Query | Latest | Server state management |
-| React Router | Latest | Client-side routing |
-| React Hook Form | Latest | Form management |
-| Vite | Latest | Build tool and dev server |
+| Material UI | 5.16+ | Component library |
+| TanStack Query | 5.40+ | Server state management |
+| React Router | 7.18+ | Client-side routing |
+| React Hook Form | 7.52+ | Form management |
+| Vite | 8.1.5 | Build tool and dev server |
 
 ### Database
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | PostgreSQL | 16 | Primary database |
-| Row Level Security | - | Multi-tenant isolation |
+| Row Level Security | - | Multi-tenant isolation (not yet RLS-enabled in all tables)
 
 ### Infrastructure
 | Technology | Version | Purpose |

@@ -23,8 +23,9 @@ namespace SMS.Domain.Common
 
         public static class Roles
         {
+            public const string SystemAdministrator = "SystemAdministrator";
             public const string Administrator = "Administrator";
-            public const string Moderator = "Moderator";
+            public const string Coordinator = "Coordinator";
             public const string Lecturer = "Lecturer";
             public const string Student = "Student";
             public const string Receptionist = "Receptionist";

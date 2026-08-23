@@ -3,7 +3,7 @@ using SMS.Domain.Common;
 
 namespace SMS.Domain.Entities
 {
-    public class Classroom : BaseEntity
+    public class Classroom : BaseEntity, ITenantAwareEntity
     {
         [Required]
         [MaxLength(50)]

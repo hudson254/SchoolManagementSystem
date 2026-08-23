@@ -6,7 +6,7 @@ namespace SMS.Domain.Entities
     /// <summary>
     /// Programme-Unit junction entity
     /// </summary>
-    public class ProgrammeUnit : BaseEntity
+    public class ProgrammeUnit : BaseEntity, ITenantAwareEntity
     {
         /// <summary>
         /// Programme ID

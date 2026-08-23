@@ -277,7 +277,8 @@ export const Users: React.FC = () => {
               >
                 <MenuItem value="">All</MenuItem>
                 <MenuItem value="SystemAdministrator">System Administrator</MenuItem>
-                <MenuItem value="Moderator">Moderator</MenuItem>
+                <MenuItem value="Administrator">Administrator</MenuItem>
+                <MenuItem value="Coordinator">Coordinator</MenuItem>
                 <MenuItem value="Lecturer">Lecturer</MenuItem>
                 <MenuItem value="Student">Student</MenuItem>
                 <MenuItem value="Receptionist">Receptionist</MenuItem>

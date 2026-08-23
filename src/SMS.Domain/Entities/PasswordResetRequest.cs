@@ -8,7 +8,7 @@ namespace SMS.Domain.Entities
     /// an administrator. Replaces the previous email-link-based self-service
     /// reset flow, which required SMTP (now fully removed from the system).
     /// </summary>
-    public class PasswordResetRequest : BaseEntity
+    public class PasswordResetRequest : BaseEntity, ITenantAwareEntity
     {
         public Guid Id { get; set; }
 

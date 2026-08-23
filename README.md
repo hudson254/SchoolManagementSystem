@@ -202,9 +202,9 @@ Six roles are seeded automatically (see [Roles and Permissions](#roles-and-permi
 
 | Role | Main Responsibilities |
 |------|-----------------------|
-| **SYSTEM ADMINISTRATOR** | Super administrator with unrestricted system access. Seeded as the initial admin user. |
+| **SystemAdministrator** | Super administrator with unrestricted system access. Seeded as the initial admin user. |
 | **Administrator** | Full system access with all permissions: user management, approvals, configuration, reports. |
-| **COORDINATOR** | Elevated access for content and user management — course offerings, enrollment coordination, approvals. |
+| **Coordinator** | Elevated access for content and user management — course offerings, enrollment coordination, approvals. |
 | **Lecturer** | Teaching staff — view assigned units, record grades/assessments, manage assignments & attendance. |
 | **Student** | Self-enrollment, view courses/grades/certificates, accommodation requests, notifications. |
 | **Receptionist** | Front desk access — registration support, accommodation allocation, inquiries. |
@@ -214,10 +214,10 @@ Authorization policies are defined in `SMS.API/Program.cs`:
 | Policy | Roles |
 |--------|-------|
 | `AdministratorAccess` | `Administrator` |
-| `ModeratorAccess` | `Administrator`, `COORDINATOR` |
-| `LecturerAccess` | `Administrator`, `COORDINATOR`, `Lecturer` |
-| `StudentAccess` | `Administrator`, `COORDINATOR`, `Lecturer`, `Student` |
-| `ReceptionistAccess` | `Administrator`, `COORDINATOR`, `Receptionist` |
+| `ModeratorAccess` | `Administrator`, `Coordinator` |
+| `LecturerAccess` | `Administrator`, `Coordinator`, `Lecturer` |
+| `StudentAccess` | `Administrator`, `Coordinator`, `Lecturer`, `Student` |
+| `ReceptionistAccess` | `Administrator`, `Coordinator`, `Receptionist` |
 
 ---
 
@@ -399,7 +399,7 @@ docker compose -f docker/docker-compose.prod.yml down
 
 ## Initial Administrator Creation
 
-The first `SYSTEM ADMINISTRATOR` is created automatically by the seeding process using environment variables (never hardcoded).
+The first `SystemAdministrator` is created automatically by the seeding process using environment variables (never hardcoded).
 
 ### 1. Configure credentials in `.env`
 
@@ -427,7 +427,7 @@ docker compose -f docker/docker-compose.prod.yml exec api dotnet SMS.API.dll see
 
 ### 4. Log in
 
-Open the frontend at `https://your-domain`, and log in with the configured `ADMIN_EMAIL` / `ADMIN_PASSWORD`. The user is assigned the **SYSTEM ADMINISTRATOR** role automatically.
+Open the frontend at `https://your-domain`, and log in with the configured `ADMIN_EMAIL` / `ADMIN_PASSWORD`. The user is assigned the **SystemAdministrator** role automatically.
 
 ---
 

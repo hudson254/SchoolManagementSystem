@@ -27,18 +27,18 @@ The initial release of the School Management System.
 ### [1.0.0] - Initial Release
 
 #### Added
-- Complete multi-tenant architecture with Row Level Security
-- JWT-based authentication with role-based access control
+- Complete multi-tenant architecture
+- JWT-based authentication with role-based access control (RBAC)
 - User registration and approval workflow
 - Student portal with course enrollment and academic records
 - Lecturer portal with unit management, grading, and attendance
-- Coordinator portal with approvals and academic coordination
+- Coordinator (COORDINATOR) portal with approvals and academic coordination
 - Administrator portal with full system management
 - Accommodation management (lanes, houses, rooms, assignments)
 - Certificate generation with QR code verification
 - Report generation with PDF/Excel export
 - Real-time notifications via SignalR
-- SMS notifications via Twilio (configurable)
+- SMS notifications via Twilio (configurable, not yet operational)
 - File upload and management
 - Audit logging system
 - Error management and logging with correlation IDs
@@ -46,12 +46,33 @@ The initial release of the School Management System.
 - Docker containerization for all services
 - Prometheus/Grafana monitoring stack
 - Automated backup service
+- PWA (Progressive Web App) support
 - Comprehensive API with versioning
-- Swagger API documentation
+- Swagger API documentation (development only)
 - Health check endpoints
 - Password reset workflow
 - Course offering management
 - Assessment engine with grading scales and moderation
+- 331 unit tests, 63 API tests, 29 integration tests
+- CI/CD pipeline with GitHub Actions
+- End-to-end tests with Playwright
+- Zero npm vulnerabilities after React Router v7 upgrade
+
+#### Changed (Documentation Audit - 23 August 2026)
+- All documentation updated to match actual source code
+- Fixed database credentials: `sms_admin`/`sms_db` → `sms_user`/`SchoolManagementSystem`
+- Fixed Docker commands: `docker-compose` → `docker compose`
+- Fixed role names: `Coordinator` → `COORDINATOR` (matching authorization policies)
+- Added missing environment variables: `FRONTEND_URL`, `ADMIN_*`, `SMTP_*`, etc.
+- Updated React version from 18+ to 19
+- Updated PostgreSQL version to 16
+- Updated API controller list to match all 30+ controllers
+- Fixed port documentation for production vs development
+- Updated architecture diagram and middleware pipeline
+- Removed Hangfire references (not actually used)
+- Clarified Redis is optional, not required for production
+- Updated production security posture documentation
+- Corrected all credential references in troubleshooting commands
 
 ---
 

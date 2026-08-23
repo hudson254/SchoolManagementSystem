@@ -51,8 +51,14 @@ namespace SMS.Infrastructure.MultiTenancy
                     return null;
                 }
 
-                // Query database for tenant
+                // IMPORTANT: Use IgnoreQueryFilters() here because the global tenant
+                // query filter is not yet applicable - this query runs DURING tenant
+                // resolution BEFORE the tenant context is established for the request.
+                // The Tenant entity's tenant_id equals its own id, so the global filter
+                // would match only when the current tenant is already known, creating a
+                // circular dependency. IgnoreQueryFilters() breaks this cycle safely.
                 var tenant = await _context.Set<Tenant>()
+                    .IgnoreQueryFilters()
                     .AsNoTracking()
                     .FirstOrDefaultAsync(t => t.Id == tenantGuid && t.IsActive && !t.IsDeleted);
 
@@ -104,8 +110,10 @@ namespace SMS.Infrastructure.MultiTenancy
                     return false;
                 }
 
-                // Check if tenant exists and is active
+                // Same reasoning as GetTenantAsync: IgnoreQueryFilters() to avoid
+                // circular dependency during tenant resolution.
                 var exists = await _context.Set<Tenant>()
+                    .IgnoreQueryFilters()
                     .AsNoTracking()
                     .AnyAsync(t => t.Id == tenantGuid && t.IsActive && !t.IsDeleted);
 
