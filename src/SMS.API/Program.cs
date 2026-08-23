@@ -274,15 +274,46 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// Configure CORS
+// Configure CORS with explicit allowed origins from configuration.
+// In development, falls back to http://localhost:5173 (Vite default).
+// In production, must be explicitly set via Cors:AllowedOrigins or Frontend:Url.
+// Wildcard origins are NOT permitted when AllowCredentials() is used.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (corsOrigins == null || corsOrigins.Length == 0)
+{
+    var frontendUrl = builder.Configuration.GetValue<string>("Frontend:Url");
+    if (!string.IsNullOrWhiteSpace(frontendUrl))
+    {
+        corsOrigins = new[] { frontendUrl };
+    }
+    else
+    {
+        corsOrigins = builder.Environment.IsDevelopment()
+            ? new[] { "http://localhost:5173", "http://localhost:3000" }
+            : Array.Empty<string>();
+    }
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(builder.Configuration.GetValue<string>("Frontend:Url") ?? "http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
+        else
+        {
+            // Production fallback: deny all cross-origin requests
+            // This ensures CORS is restrictive by default
+            policy.WithOrigins()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
     });
 });
 
@@ -345,18 +376,18 @@ builder.Services.AddHealthChecks()
         tags: new[] { "database", "postgresql" });
 
 // Configure PostgreSQL with scoped DbContext (required because ApplicationDbContext depends on scoped services)
-if (!builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddDbContext<ApplicationDbContext>(
-        options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
-            npgsqlOptions =>
-            {
-                npgsqlOptions.EnableRetryOnFailure(3);
-                npgsqlOptions.CommandTimeout(60);
-            }),
-        contextLifetime: ServiceLifetime.Scoped,
-        optionsLifetime: ServiceLifetime.Scoped);
-}
+// The Testing environment also uses PostgreSQL (via the Docker test database) so that
+// API tests exercise the same database provider as production. This eliminates the
+// InMemory-vs-PostgreSQL behavioral differences that caused test failures.
+builder.Services.AddDbContext<ApplicationDbContext>(
+    options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(3);
+            npgsqlOptions.CommandTimeout(60);
+        }),
+    contextLifetime: ServiceLifetime.Scoped,
+    optionsLifetime: ServiceLifetime.Scoped);
 
 // Configure Identity
 builder.Services.AddIdentity<User, Role>(options =>
@@ -689,25 +720,44 @@ app.UseStaticFiles(new StaticFileOptions
     }
 });
 
-// Apply migrations and seed data (skip migrations in automated test environment)
+// Apply migrations and seed data.
+// The Testing environment also applies migrations because it uses a real
+// PostgreSQL database (via Docker) to exercise the same database provider
+// as production. This ensures API tests validate the actual schema.
+// When using InMemory provider (e.g., some test fixtures), migrations are
+// skipped gracefully since InMemory does not support relational operations.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     try
     {
-        if (!app.Environment.IsEnvironment("Testing"))
+        // Check if the database provider supports relational operations
+        // (e.g., PostgreSQL, SQL Server) before attempting migrations.
+        // InMemory provider does not support GetPendingMigrationsAsync.
+        if (dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
         {
-            await dbContext.Database.MigrateAsync();
-            Log.Information("Database migrations applied successfully.");
+            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                Log.Information("Applying {Count} pending migration(s)...", pendingMigrations.Count());
+                await dbContext.Database.MigrateAsync();
+                Log.Information("Database migrations applied successfully.");
+            }
+            else
+            {
+                Log.Information("Database is already up to date. No migrations to apply.");
+            }
         }
         else
         {
-            Log.Information("Skipping database migrations in Testing environment.");
+            Log.Information("InMemory provider detected. Skipping migrations (schema created via EnsureCreated).");
+            await dbContext.Database.EnsureCreatedAsync();
         }
     }
     catch (Exception ex)
     {
-        Log.Warning(ex, "Error applying migrations. The application will continue without migrations.");
+        Log.Fatal(ex, "CRITICAL: Database migration failed. The application cannot start with an incompatible database schema.");
+        throw;  // Re-throw to prevent application from running with wrong schema
     }
 }
 

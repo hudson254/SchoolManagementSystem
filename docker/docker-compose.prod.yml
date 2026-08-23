@@ -1,6 +1,10 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database - Production
+  # Accessible only through the internal Docker network.
+  # No host port is exposed. The API connects via the internal hostname "postgres".
+  # For development/local access, use docker-compose.dev.yml which exposes port 5433.
   postgres:
     image: postgres:16-alpine
     container_name: sms-postgres
@@ -12,8 +16,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5433:5432"
+    # Production: PostgreSQL is not exposed to the host. Only internal Docker network.
+    # Health checks and API communication use the internal hostname "postgres".
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sms_user -d SchoolManagementSystem"]
       interval: 30s
@@ -36,7 +42,6 @@ services:
 
   # API Backend (Production)
   # Runs HTTP-only behind the nginx reverse proxy which terminates TLS.
-  # See docker-compose.yml for the root-cause analysis of the 502 issue.
   api:
     build:
       context: ..
@@ -46,15 +51,16 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:80
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD}"
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
       JWT__Issuer: ${JWT_ISSUER:-SMSAPI}
       JWT__Audience: ${JWT_AUDIENCE:-SMSWeb}
       JWT__ExpiryMinutes: ${JWT_EXPIRY:-60}
       TZ: Africa/Nairobi
-      # CRITICAL BLOCKER B1 FIX: FileStorage path must match the api_uploads volume mount
       FileStorage__Path: /app/uploads
-      # CRITICAL BLOCKER B5 FIX: Serilog log path must match the api_logs volume mount
       Serilog__WriteTo__1__Args__path: /app/logs/sms-.log
+      # Production CORS: must be set to the actual frontend URL
+      Frontend__Url: ${FRONTEND_URL:?FRONTEND_URL is required in production}
+      Cors__AllowedOrigins__0: ${FRONTEND_URL:?FRONTEND_URL is required in production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,8 +68,9 @@ services:
       - api_logs:/app/logs
       - api_data:/app/data
       - api_uploads:/app/uploads
-    ports:
-      - "5000:80"
+    # Production: API port is not exposed to the host. nginx is the only entry point.
+    expose:
+      - "80"
     restart: unless-stopped
     networks:
       - sms-network
@@ -96,8 +103,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "3000:80"
+    expose:
+      - "80"
     restart: unless-stopped
     networks:
       - sms-network
@@ -177,22 +184,22 @@ services:
         reservations:
           memory: 128M
 
-  # Alertmanager - alert routing and notification delivery
+  # Alertmanager - Production: restricted to internal network only
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: sms-alertmanager
     volumes:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager_data:/alertmanager
-    ports:
-      - "9093:9093"
+    expose:
+      - "9093"
     restart: unless-stopped
     networks:
       - sms-network
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
+      - '--web.external-url=http://alertmanager:9093'
     logging:
       driver: "json-file"
       options:
@@ -205,7 +212,7 @@ services:
         reservations:
           memory: 128M
 
-  # Node Exporter - host-level metrics (CPU, memory, disk)
+  # Node Exporter - Production: restricted to internal network only
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: sms-node-exporter
@@ -218,8 +225,8 @@ services:
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    ports:
-      - "9100:9100"
+    expose:
+      - "9100"
     restart: unless-stopped
     networks:
       - sms-network
@@ -235,7 +242,7 @@ services:
         reservations:
           memory: 128M
 
-  # PostgreSQL Exporter - database metrics
+  # PostgreSQL Exporter - Production: restricted to internal network only
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: sms-postgres-exporter
@@ -244,8 +251,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "9187:9187"
+    expose:
+      - "9187"
     restart: unless-stopped
     networks:
       - sms-network
@@ -261,7 +268,7 @@ services:
         reservations:
           memory: 128M
 
-  # cAdvisor - container-level metrics
+  # cAdvisor - Production: restricted to internal network only
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: sms-cadvisor
@@ -274,8 +281,8 @@ services:
     devices:
       - /dev/kmsg
     privileged: true
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     restart: unless-stopped
     networks:
       - sms-network
@@ -291,6 +298,8 @@ services:
         reservations:
           memory: 128M
 
+  # Prometheus - Production: restricted to internal network
+  # Accessible to administrators via nginx reverse proxy or SSH tunnel
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: sms-prometheus
@@ -298,8 +307,10 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus-alerts.yml:/etc/prometheus/alerts.yml
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
+    # Production: Prometheus is not exposed to the host. Access via internal network.
+    # For admin access, use SSH tunnel or Grafana (which is also internal-only).
+    expose:
+      - "9090"
     restart: unless-stopped
     networks:
       - sms-network
@@ -315,12 +326,12 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'
 
+  # Grafana - Production: restricted to internal network
+  # Accessible to administrators via nginx reverse proxy or SSH tunnel
   grafana:
     image: grafana/grafana:11.2.0
     container_name: sms-grafana
     environment:
-      # RISK-20: no insecure default fallback. GRAFANA_PASSWORD must be
-      # supplied via the environment, otherwise compose fails with a warning.
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_INSTALL_PLUGINS: grafana-piechart-panel
@@ -329,8 +340,10 @@ services:
       - grafana_data:/var/lib/grafana
       - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana-datasources:/etc/grafana/provisioning/datasources
-    ports:
-      - "3001:3000"
+    # Production: Grafana is not exposed to the host. Access via internal network.
+    # For admin access, use SSH tunnel or configure nginx reverse proxy with auth.
+    expose:
+      - "3000"
     depends_on:
       - prometheus
     restart: unless-stopped

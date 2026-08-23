@@ -107,6 +107,8 @@ namespace SMS.Application.Features.Students.Commands
 
             var username = await _usernameGenerator.GenerateUsernameAsync(parsed.FirstName, parsed.LastName);
             var user = await _userManager.CreateUserAsync(username, request.Email, password, "Student");
+            if (user == null)
+                throw new ExternalServiceException("Failed to create user account", "USER_CREATION_FAILED");
 
             // Sync the User's name fields with the Student's names. UserManagerService
             // creates users with empty FirstName/LastName, but GetStudent/GetCurrentUser

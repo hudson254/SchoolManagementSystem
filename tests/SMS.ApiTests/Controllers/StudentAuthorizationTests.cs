@@ -52,14 +52,10 @@ namespace SMS.ApiTests.Controllers
 
             builder.ConfigureServices(services =>
             {
-                RemoveServiceDescriptors(typeof(ApplicationDbContext), services);
-                RemoveServiceDescriptors(typeof(DbContextOptions<ApplicationDbContext>), services);
-                RemoveServiceDescriptors(typeof(Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<ApplicationDbContext>), services);
-
-                services.AddDbContext<ApplicationDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("StudentIdorTestDb");
-                }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
+                // NOTE: We no longer override with InMemory database.
+                // The Testing environment configures PostgreSQL, and this fixture
+                // now uses the same PostgreSQL test database. Each test generates
+                // unique student IDs, so there are no conflicts between tests.
 
                 // Mock ICurrentUserService — the controller resolves the
                 // APPLICATION interface (SMS.Application.Common.Interfaces),
@@ -114,9 +110,36 @@ namespace SMS.ApiTests.Controllers
 
         public async Task InitializeAsync()
         {
+            // Create a client first to ensure the server is built (Services becomes available)
+            using var initClient = base.CreateClient();
+
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            // Handle both InMemory and real PostgreSQL providers
+            if (db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+            {
+                var pending = await db.Database.GetPendingMigrationsAsync();
+                if (pending.Any())
+                    await db.Database.MigrateAsync();
+            }
+            else
+            {
+                await db.Database.EnsureCreatedAsync();
+            }
+
+            // Ensure the default tenant exists (references by AspNetUsers.TenantId)
+            if (!await db.Tenants.AnyAsync(t => t.Id == DefaultTenantId))
+            {
+                db.Tenants.Add(new Tenant
+                {
+                    Id = DefaultTenantId,
+                    Name = "Default Tenant",
+                    Organization = "Default Organization",
+                    Subdomain = "default",
+                    IsActive = true
+                });
+                await db.SaveChangesAsync();
+            }
 
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
@@ -211,17 +234,19 @@ namespace SMS.ApiTests.Controllers
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
 
-            // Create a linked User entity so the GetStudentQueryHandler can
-            // populate student.User (it dereferences User.FirstName/LastName).
+            var email = $"{emailPrefix}-{Guid.NewGuid():N}@school.com";
+            var userName = $"{emailPrefix}-{Guid.NewGuid():N}";
+
+            // Use UserManager to create the user (ensures password hash, proper Identity pipeline)
             var user = new User
             {
-                // ASP.NET Identity User.Id is a string, not a Guid
                 Id = Guid.NewGuid().ToString(),
-                UserName = $"{emailPrefix}-{Guid.NewGuid():N}",
-                Email = $"{emailPrefix}-{Guid.NewGuid():N}@school.com",
-                NormalizedUserName = $"{emailPrefix}-{Guid.NewGuid():N}".ToUpperInvariant(),
-                NormalizedEmail = $"{emailPrefix}-{Guid.NewGuid():N}@school.com".ToUpperInvariant(),
+                UserName = userName,
+                Email = email,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                NormalizedEmail = email.ToUpperInvariant(),
                 FirstName = "Test",
                 LastName = "Student",
                 PhoneNumber = "555-0000",
@@ -234,7 +259,13 @@ namespace SMS.ApiTests.Controllers
                 RefreshToken = string.Empty,
                 TenantId = DefaultTenantId
             };
-            db.Users.Add(user);
+
+            var createResult = userManager.CreateAsync(user, "Test123!@#Xyz").GetAwaiter().GetResult();
+            if (!createResult.Succeeded)
+            {
+                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                throw new InvalidOperationException($"Failed to create test user: {errors}");
+            }
 
             var student = new Student
             {

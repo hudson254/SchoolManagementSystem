@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -54,15 +54,6 @@ namespace SMS.ApiTests.Controllers
 
             builder.ConfigureServices(services =>
             {
-                RemoveServiceDescriptors(typeof(ApplicationDbContext), services);
-                RemoveServiceDescriptors(typeof(DbContextOptions<ApplicationDbContext>), services);
-                RemoveServiceDescriptors(typeof(Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<ApplicationDbContext>), services);
-
-                services.AddDbContext<ApplicationDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("CourseOfferingApiTestDb");
-                }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
-
                 // Mock ICurrentUserService (Application interface)
                 var appCurrentUserServiceType = typeof(SMS.Application.Common.Interfaces.ICurrentUserService);
                 RemoveServiceDescriptors(appCurrentUserServiceType, services);
@@ -113,9 +104,24 @@ namespace SMS.ApiTests.Controllers
 
         public async Task InitializeAsync()
         {
+            // Create a client first to ensure the server is built (Services becomes available)
+            using var initClient = base.CreateClient();
+
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            // Use MigrateAsync since we're now using PostgreSQL (same as ApiTestFixture).
+            // EnsureCreatedAsync does not create the full Identity schema.
+            // Only migrate if there are pending migrations
+            if (db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+            {
+                var pending = await db.Database.GetPendingMigrationsAsync();
+                if (pending.Any())
+                    await db.Database.MigrateAsync();
+            }
+            else
+            {
+                await db.Database.EnsureCreatedAsync();
+            }
 
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
@@ -173,8 +179,8 @@ namespace SMS.ApiTests.Controllers
                 {
                     Id = Guid.NewGuid(),
                     Name = "2026",
-                    StartDate = new DateTime(2026, 1, 1),
-                    EndDate = new DateTime(2026, 12, 31),
+                    StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    EndDate = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc),
                     IsActive = true,
                     IsCurrent = true,
                     TenantId = DefaultTenantId
@@ -192,8 +198,8 @@ namespace SMS.ApiTests.Controllers
                     Id = Guid.NewGuid(),
                     Name = "Semester 1",
                     SemesterNumber = 1,
-                    StartDate = new DateTime(2026, 1, 1),
-                    EndDate = new DateTime(2026, 6, 30),
+                    StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    EndDate = new DateTime(2026, 6, 30, 0, 0, 0, DateTimeKind.Utc),
                     IsActive = true,
                     IsCurrent = true,
                     AcademicYearId = SeededAcademicYearId,

@@ -48,11 +48,11 @@ namespace SMS.Domain.Entities
         public string? Remarks { get; set; }
 
         // Navigation properties
-        public virtual Student Student { get; set; }
-        public virtual Lecturer Lecturer { get; set; }
+        public virtual Student? Student { get; set; }
+        public virtual Lecturer? Lecturer { get; set; }
         public virtual House House { get; set; }
         public virtual Lane Lane { get; set; }
-        public virtual Room Room { get; set; }
+        public virtual Room? Room { get; set; }
         public virtual Semester Semester { get; set; }
     }
 }

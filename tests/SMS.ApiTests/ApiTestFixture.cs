@@ -22,20 +22,17 @@ namespace SMS.ApiTests
     public class ApiTestFixture : WebApplicationFactory<Program>
     {
         // xUnit runs test classes in parallel by default, each with its own
-        // fixture instance. EF Core InMemory creates a SEPARATE store per DI
-        // container (unless an explicit shared InMemoryDatabaseRoot is provided).
-        // Parallel fixtures therefore cannot share a static seeded state.
-        // Test assembly parallelization is disabled (TestAssemblyConfig.cs) so
-        // each fixture instance builds & seeds its OWN store sequentially. Seed
-        // state is therefore per-instance (not static).
-        private readonly SemaphoreSlim InitLock = new(1, 1);
+        // fixture instance. The PostgreSQL test database is shared across all
+        // fixture instances, so we use a static lock to ensure the database
+        // is migrated and seeded exactly once.
+        private static readonly SemaphoreSlim InitLock = new(1, 1);
         private bool _initialized;
         private string? _cachedAdminToken;
         private bool _disposed;
 
         private static readonly Guid DefaultTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         // Static counter shared across ALL fixture/host instances so that
-        // generated usernames are unique across the shared InMemory database.
+        // generated usernames are unique across the shared PostgreSQL database.
         private static int UsernameCounter;
         private const string AdminEmail = "admin@school.com";
         // Must satisfy Identity PasswordOptions: RequiredLength=12, RequireDigit,
@@ -55,29 +52,9 @@ namespace SMS.ApiTests
 
             builder.ConfigureServices(services =>
             {
-                // Program.cs skips AddDbContext for "Testing" environment (line ~84).
-                // We register InMemory here so Identity stores (already registered by Program.cs's AddIdentity)
-                // resolve to the InMemory context.
-                RemoveServiceDescriptors<ApplicationDbContext>(services);
-                RemoveServiceDescriptors(typeof(DbContextOptions<ApplicationDbContext>), services);
-                RemoveServiceDescriptors(typeof(Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<ApplicationDbContext>), services);
-
-                // Use a FIXED database name AND a SHARED InMemoryDatabaseRoot so that
-                // all scopes (seed scope, request pipeline scopes) AND all fixture
-                // instances (each with its own WebApplicationFactory host / DI container)
-                // point to the SAME physical InMemory store. Without the shared root,
-                // each host gets a fresh empty database -> authenticated/DB-dependent
-                // tests fail with empty responses.
-                services.AddDbContext<ApplicationDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("ApiTestDb");
-                }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
-
-                // NOTE: Do NOT call services.AddIdentity<User,Role>(...) here.
-                // Program.cs already registers Identity with AddIdentity + AddEntityFrameworkStores<ApplicationDbContext>().
-                // Calling AddIdentity again would add duplicate auth schemes (Identity.Application, etc.)
-                // and throw "Scheme already exists: Identity.Application" at host startup.
-                // The EF stores registered by Program.cs will resolve to the InMemory ApplicationDbContext above.
+                // Program.cs now registers PostgreSQL for ALL environments (including Testing),
+                // so the API tests exercise the same database provider as production.
+                // We no longer override with InMemory.
 
                 // Mock ICurrentUserService — the controller resolves the
                 // APPLICATION interface (SMS.Application.Common.Interfaces),
@@ -108,18 +85,22 @@ namespace SMS.ApiTests
 
                 // Mock IUsernameGenerator - required by RegisterCommandHandler.
                 // Generate a unique username each time so multiple registrations
-                // don't collide in the shared InMemory database. The counter MUST
+                // don't collide in the shared PostgreSQL database. The counter MUST
                 // be static: xUnit creates a separate fixture/host per test class,
                 // each with its own DI container, but all share the same physical
-                // InMemory store ("ApiTestDb"). A non-static per-instance counter
-                // resets to 0 for each host, so every host generates "testuser1"
-                // and the second registration fails with a duplicate username.
+                // PostgreSQL database.
                 var usernameGeneratorType = typeof(SMS.Application.Common.Interfaces.IUsernameGenerator);
                 RemoveServiceDescriptors(usernameGeneratorType, services);
                 var mockUsernameGenerator = new Mock<SMS.Application.Common.Interfaces.IUsernameGenerator>();
                 mockUsernameGenerator
                     .Setup(x => x.GenerateUsernameAsync(It.IsAny<string>(), It.IsAny<string>()))
-                    .ReturnsAsync(() => $"testuser{System.Threading.Interlocked.Increment(ref UsernameCounter)}");
+                    .ReturnsAsync(() =>
+                    {
+                        var counter = System.Threading.Interlocked.Increment(ref UsernameCounter);
+                        // Use a short GUID fragment to guarantee uniqueness across all test runs
+                        var uniqueSuffix = Guid.NewGuid().ToString("N")[..6];
+                        return $"testuser{counter}_{uniqueSuffix}";
+                    });
                 mockUsernameGenerator
                     .Setup(x => x.IsUsernameAvailableAsync(It.IsAny<string>()))
                     .ReturnsAsync(true);
@@ -157,8 +138,10 @@ namespace SMS.ApiTests
         }
 
         /// <summary>
-        /// Ensures the database is seeded with roles and admin user.
+        /// Ensures the database is migrated and seeded with roles and admin user.
         /// Called lazily after the server is built (Services is available).
+        /// Uses a static lock so the shared PostgreSQL database is initialized
+        /// exactly once across all fixture instances.
         /// </summary>
         private async Task EnsureSeedDataAsync()
         {
@@ -172,7 +155,29 @@ namespace SMS.ApiTests
                 using (var scope = Services.CreateScope())
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    await dbContext.Database.EnsureCreatedAsync();
+
+                    // Since the PostgreSQL test database is shared across all fixture instances,
+                    // seed data operations below are idempotent (check-before-create).
+                    // To avoid username collisions across test runs, each test generates
+                    // unique emails/names using GUIDs. Migrations are applied by Program.cs
+                    // at server startup, but we also ensure they run here for safety.
+                    await dbContext.Database.MigrateAsync();
+
+                    // Seed the default tenant FIRST because AspNetUsers has a
+                    // foreign key constraint FK_AspNetUsers_Tenants_TenantId.
+                    // Without a Tenant record, user creation fails with 23503.
+                    if (!await dbContext.Tenants.AnyAsync(t => t.Id == DefaultTenantId))
+                    {
+                        dbContext.Tenants.Add(new Tenant
+                        {
+                            Id = DefaultTenantId,
+                            Name = "Default Tenant",
+                            Organization = "Default Organization",
+                            Subdomain = "default",
+                            IsActive = true
+                        });
+                        await dbContext.SaveChangesAsync();
+                    }
 
                     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
                     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
@@ -269,8 +274,8 @@ namespace SMS.ApiTests
         }
 
         /// <summary>
-        /// Hides WebApplicationFactory.CreateClient() so that the InMemory database is
-        /// always seeded (roles + admin user) before any test request is issued.
+        /// Hides WebApplicationFactory.CreateClient() so that the PostgreSQL database is
+        /// always migrated and seeded (roles + admin user) before any test request is issued.
         /// WebApplicationFactory.CreateClient() is not virtual, so we use method hiding (`new`).
         /// All test fields are typed as ApiTestFixture, so this method is resolved at call sites.
         /// CreateClientWithTenant() calls base.CreateClient() (no recursion).

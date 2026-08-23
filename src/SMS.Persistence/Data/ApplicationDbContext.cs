@@ -59,7 +59,9 @@ namespace SMS.Persistence.Data
         public DbSet<StudentEnrollment> StudentEnrollments { get; set; }
         public DbSet<Tenant> Tenants { get; set; }
         public DbSet<UnitAllocation> UnitAllocations { get; set; }
-        public new DbSet<UserRole> UserRoles { get; set; }
+        // UserRoles is already defined on IdentityDbContext<User> base class.
+        // The derived UserRole type is mapped via TPH using AspNetUserRoles table.
+        // Do NOT add a separate DbSet<UserRole> here - it's inherited.
         public DbSet<ReportVerification> ReportVerifications { get; set; }
         public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
         public DbSet<CourseOffering> CourseOfferings { get; set; }
@@ -111,22 +113,34 @@ namespace SMS.Persistence.Data
                 entity.Property(h => h.Status).IsRequired().HasMaxLength(30);
                 entity.Property(h => h.Notes).HasMaxLength(500);
                 entity.HasIndex(h => new { h.LaneId, h.HouseNumber }).IsUnique();
+
                 entity.HasOne(h => h.Lane)
                     .WithMany(l => l.Houses)
                     .HasForeignKey(h => h.LaneId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                // FIX: Explicitly configure Occupant as Student and LecturerOccupant as Lecturer
+                // using separate FK columns to avoid the shadow FK conflict.
+                // House.OccupantId is the FK for Student (nullable, one-to-many)
                 entity.HasOne(h => h.Occupant)
                     .WithMany(s => s.Houses)
                     .HasForeignKey(h => h.OccupantId)
                     .OnDelete(DeleteBehavior.SetNull);
+
+                // House.LecturerOccupant maps to Lecturer with the SAME OccupantId column
+                // This is intentionally using the same column since a house can only have
+                // one occupant type at a time. The OccupantType discriminator determines
+                // which navigation property is valid.
                 entity.HasOne(h => h.LecturerOccupant)
                     .WithMany(l => l.Houses)
                     .HasForeignKey(h => h.OccupantId)
                     .OnDelete(DeleteBehavior.SetNull);
+
                 entity.HasOne(h => h.Semester)
                     .WithMany()
                     .HasForeignKey(h => h.SemesterId)
                     .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasQueryFilter(h => !h.IsDeleted);
             });
 
@@ -139,6 +153,30 @@ namespace SMS.Persistence.Data
                 entity.Property(u => u.Title).HasMaxLength(50);
                 entity.HasIndex(u => u.Email).IsUnique();
                 entity.HasQueryFilter(u => !u.IsDeleted);
+            });
+
+            // FIX: Explicitly configure UserRole entity to avoid shadow FK UserId1/RoleId1
+            // IdentityUserRole<string> already defines UserId (string) and RoleId (string)
+            // with the composite key on the base IdentityUserRole<string> type.
+            // The UserRole class adds navigation properties User and Role.
+            // We need to explicitly tell EF Core to use the inherited UserId/RoleId properties
+            // from IdentityUserRole<string> as the FKs for the navigation properties.
+            // NOTE: We do NOT call HasKey() here because the key is already configured
+            // on IdentityUserRole<string> by the Identity framework. Configuring a key
+            // on a derived type would cause EF Core error.
+            modelBuilder.Entity<UserRole>(entity =>
+            {
+                // Explicitly map User navigation to UserId FK (inherited from IdentityUserRole<string>)
+                entity.HasOne(ur => ur.User)
+                    .WithMany()
+                    .HasForeignKey(ur => ur.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Explicitly map Role navigation to RoleId FK (inherited from IdentityUserRole<string>)
+                entity.HasOne(ur => ur.Role)
+                    .WithMany(r => r.UserRoles)
+                    .HasForeignKey(ur => ur.RoleId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Configure Student entity
@@ -162,8 +200,10 @@ namespace SMS.Persistence.Data
                     .HasForeignKey<Student>(s => s.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                // FIX: Explicitly configure Programme relationship using ProgrammeId
+                // Use .WithMany(p => p.Students) to match the inverse navigation in Programme
                 entity.HasOne(s => s.Programme)
-                    .WithMany()
+                    .WithMany(p => p.Students)
                     .HasForeignKey(s => s.ProgrammeId)
                     .OnDelete(DeleteBehavior.Restrict);
 
@@ -187,6 +227,16 @@ namespace SMS.Persistence.Data
                     .HasForeignKey(h => h.OccupantId)
                     .OnDelete(DeleteBehavior.SetNull);
 
+                // FIX: AccommodationAssignments - one-to-many with Student
+                // AccommodationAssignment.StudentId is the FK for this relationship.
+                // The singular AccommodationAssignment navigation is removed from hte model
+                // to avoid conflict - both can't use the same inverse navigation Student.
+                // Use only the plural colleciton for the one-to-many.
+                entity.HasMany(s => s.AccommodationAssignments)
+                    .WithOne(aa => aa.Student)
+                    .HasForeignKey(aa => aa.StudentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasQueryFilter(s => !s.IsDeleted);
             });
 
@@ -203,6 +253,53 @@ namespace SMS.Persistence.Data
                 entity.Property(l => l.EmployeeNumber).IsRequired().HasMaxLength(50);
                 entity.HasIndex(l => l.EmployeeNumber).IsUnique();
                 entity.HasIndex(l => l.Email).IsUnique();
+
+                // FIX: Add Department relationship configuration
+                entity.HasOne(l => l.Department)
+                    .WithMany()
+                    .HasForeignKey(l => l.DepartmentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // FIX: AccommodationAssignments - one-to-many with Lecturer
+                // AccommodationAssignment.LecturerId is the FK for this relationship.
+                // The singular AccommodationAssignment navigation on Lecturer is removed
+                // to avoid conflict with the plural collection using the same inverse navigation.
+                entity.HasMany(l => l.AccommodationAssignments)
+                    .WithOne(aa => aa.Lecturer)
+                    .HasForeignKey(aa => aa.LecturerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Configure AccommodationAssignment entity
+            modelBuilder.Entity<AccommodationAssignment>(entity =>
+            {
+                entity.HasKey(aa => aa.Id);
+                entity.Property(aa => aa.Status).IsRequired().HasMaxLength(50);
+
+                // FIX: Both Student and Lecturer relationships are already configured
+                // from the Student and Lecturer side to avoid ambiguous FK mapping.
+                // Only configure the House, Lane, Room, and Semester relationships here.
+                entity.HasOne(aa => aa.House)
+                    .WithMany(h => h.AccommodationAssignments)
+                    .HasForeignKey(aa => aa.HouseId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(aa => aa.Lane)
+                    .WithMany()
+                    .HasForeignKey(aa => aa.LaneId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(aa => aa.Room)
+                    .WithMany()
+                    .HasForeignKey(aa => aa.RoomId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(aa => aa.Semester)
+                    .WithMany()
+                    .HasForeignKey(aa => aa.SemesterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasQueryFilter(aa => !aa.IsDeleted);
             });
 
             // Configure Accommodation entity
@@ -239,46 +336,22 @@ namespace SMS.Persistence.Data
                 entity.HasQueryFilter(a => !a.IsDeleted);
             });
 
-            // Configure AccommodationAssignment entity
-            modelBuilder.Entity<AccommodationAssignment>(entity =>
-            {
-                entity.HasKey(aa => aa.Id);
-                entity.Property(aa => aa.Status).IsRequired().HasMaxLength(50);
-
-                entity.HasOne(aa => aa.Student)
-                    .WithOne(s => s.AccommodationAssignment)
-                    .HasForeignKey<AccommodationAssignment>(aa => aa.StudentId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(aa => aa.Lecturer)
-                    .WithOne(l => l.AccommodationAssignment)
-                    .HasForeignKey<AccommodationAssignment>(aa => aa.LecturerId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(aa => aa.House)
-                    .WithMany(h => h.AccommodationAssignments)
-                    .HasForeignKey(aa => aa.HouseId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(aa => aa.Lane)
-                    .WithMany()
-                    .HasForeignKey(aa => aa.LaneId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(aa => aa.Room)
-                    .WithMany()
-                    .HasForeignKey(aa => aa.RoomId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasQueryFilter(aa => !aa.IsDeleted);
-            });
-
             // Configure Course entity relationships
             modelBuilder.Entity<Course>(entity =>
             {
                 entity.HasOne(c => c.Programme)
                     .WithMany(p => p.Courses)
                     .HasForeignKey(c => c.ProgrammeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(c => c.Department)
+                    .WithMany()
+                    .HasForeignKey(c => c.DepartmentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(c => c.Semester)
+                    .WithMany()
+                    .HasForeignKey(c => c.SemesterId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasMany(c => c.Programmes)
@@ -416,7 +489,7 @@ namespace SMS.Persistence.Data
                     .HasMaxLength(500);
 
                 entity.Property(e => e.RevocationReason)
-                                    .HasMaxLength(500);
+                    .HasMaxLength(500);
 
                 entity.HasIndex(e => e.CertificateNumber)
                     .IsUnique();
@@ -546,6 +619,143 @@ namespace SMS.Persistence.Data
                 entity.HasIndex(e => e.Action);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.Timestamp);
+            });
+
+            // FIX: Configure Class entity relationships
+            modelBuilder.Entity<Class>(entity =>
+            {
+                entity.HasOne(c => c.Lecturer)
+                    .WithMany()
+                    .HasForeignKey(c => c.LecturerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(c => c.Unit)
+                    .WithMany()
+                    .HasForeignKey(c => c.UnitId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(c => c.Semester)
+                    .WithMany()
+                    .HasForeignKey(c => c.SemesterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // FIX: Configure LectureNote entity relationships
+            modelBuilder.Entity<LectureNote>(entity =>
+            {
+                entity.HasOne(ln => ln.Lecturer)
+                    .WithMany()
+                    .HasForeignKey(ln => ln.LecturerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(ln => ln.Unit)
+                    .WithMany()
+                    .HasForeignKey(ln => ln.UnitId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // FIX: Configure UnitAllocation entity relationships
+            modelBuilder.Entity<UnitAllocation>(entity =>
+            {
+                entity.HasOne(ua => ua.Lecturer)
+                    .WithMany()
+                    .HasForeignKey(ua => ua.LecturerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(ua => ua.Unit)
+                    .WithMany()
+                    .HasForeignKey(ua => ua.UnitId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(ua => ua.Semester)
+                    .WithMany()
+                    .HasForeignKey(ua => ua.SemesterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(ua => ua.CourseOffering)
+                    .WithMany()
+                    .HasForeignKey(ua => ua.CourseOfferingId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // FIX: Configure StudentEnrollment entity relationships
+            modelBuilder.Entity<StudentEnrollment>(entity =>
+            {
+                entity.HasOne(se => se.Student)
+                    .WithMany()
+                    .HasForeignKey(se => se.StudentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(se => se.Unit)
+                    .WithMany()
+                    .HasForeignKey(se => se.UnitId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(se => se.Semester)
+                    .WithMany()
+                    .HasForeignKey(se => se.SemesterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // FIX: Configure ProgrammeUnit entity relationships
+            modelBuilder.Entity<ProgrammeUnit>(entity =>
+            {
+                entity.HasKey(pu => new { pu.ProgrammeId, pu.UnitId });
+
+                entity.HasOne(pu => pu.Programme)
+                    .WithMany()
+                    .HasForeignKey(pu => pu.ProgrammeId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(pu => pu.Unit)
+                    .WithMany()
+                    .HasForeignKey(pu => pu.UnitId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // FIX: Configure CourseOffering entity relationships
+            // The CourseOffering entity uses [Table("course_offerings")]
+            // and maps to Course, AcademicYear, and Semester
+            modelBuilder.Entity<CourseOffering>(entity =>
+            {
+                entity.HasKey(co => co.Id);
+                entity.Property(co => co.OfferingCode).IsRequired().HasMaxLength(50);
+                entity.Property(co => co.Intake).HasMaxLength(100);
+                entity.Property(co => co.Notes).HasMaxLength(1000);
+                entity.Property(co => co.Status).HasConversion<int>();
+                entity.HasIndex(co => co.OfferingCode).IsUnique();
+
+                entity.HasOne(co => co.Course)
+                    .WithMany()
+                    .HasForeignKey(co => co.CourseId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(co => co.AcademicYear)
+                    .WithMany()
+                    .HasForeignKey(co => co.AcademicYearId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(co => co.Semester)
+                    .WithMany()
+                    .HasForeignKey(co => co.SemesterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(co => co.Units)
+                    .WithOne(cou => cou.CourseOffering)
+                    .HasForeignKey(cou => cou.CourseOfferingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(co => co.Enrollments)
+                    .WithOne(coe => coe.CourseOffering)
+                    .HasForeignKey(coe => coe.CourseOfferingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(co => co.Lecturers)
+                    .WithOne(col => col.CourseOffering)
+                    .HasForeignKey(col => col.CourseOfferingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasQueryFilter(co => !co.IsDeleted);
             });
 
             // Apply global tenant query filters.

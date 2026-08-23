@@ -169,7 +169,7 @@ public class CertificateEligibilityServiceTests
 
         // Assert
         Assert.False(result.IsEligible);
-        Assert.Contains("Final grade F does not meet minimum passing requirement", result.IneligibilityReasons);
+        Assert.Contains("Final grade F does not meet minimum passing requirement (minimum D)", result.IneligibilityReasons);
     }
 
     [Fact]
@@ -236,6 +236,10 @@ public class CertificateEligibilityServiceTests
         var student2 = Guid.NewGuid();
         _enrollmentRepo.Setup(r => r.GetEnrollmentsByCourseAsync(offeringId))
             .ReturnsAsync(new List<Enrollment> { new() { StudentId = student1 }, new() { StudentId = student2 } });
+        _enrollmentRepo.Setup(r => r.GetEnrollmentAsync(student1, offeringId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Enrollment());
+        _enrollmentRepo.Setup(r => r.GetEnrollmentAsync(student2, offeringId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Enrollment());
         _offeringRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CourseOffering { Status = CourseOfferingStatus.Completed });
         _certRepo.Setup(r => r.GetByStudentIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
@@ -262,6 +266,10 @@ public class CertificateEligibilityServiceTests
         var ineligibleStudent = Guid.NewGuid();
         _enrollmentRepo.Setup(r => r.GetEnrollmentsByCourseAsync(offeringId))
             .ReturnsAsync(new List<Enrollment> { new() { StudentId = eligibleStudent }, new() { StudentId = ineligibleStudent } });
+        _enrollmentRepo.Setup(r => r.GetEnrollmentAsync(eligibleStudent, offeringId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Enrollment());
+        _enrollmentRepo.Setup(r => r.GetEnrollmentAsync(ineligibleStudent, offeringId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Enrollment());
         _offeringRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CourseOffering { Status = CourseOfferingStatus.Completed });
         _certRepo.Setup(r => r.GetByStudentIdAsync(eligibleStudent, It.IsAny<CancellationToken>()))

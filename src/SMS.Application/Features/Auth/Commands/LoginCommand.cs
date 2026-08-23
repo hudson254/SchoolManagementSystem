@@ -38,9 +38,17 @@ namespace SMS.Application.Features.Auth.Commands
     {
         public LoginCommandValidator()
         {
-            RuleFor(x => x.Identifier)
-                .NotEmpty().WithMessage("Email or username is required")
-                .MaximumLength(256).WithMessage("Email or username must not exceed 256 characters");
+            // Accept either Identifier (preferred) or Email (backward-compatible)
+            RuleFor(x => x)
+                .Must(x => !string.IsNullOrWhiteSpace(x.Identifier) || !string.IsNullOrWhiteSpace(x.Email))
+                .WithMessage("Email or username is required")
+                .DependentRules(() =>
+                {
+                    RuleFor(x => x.Identifier)
+                        .MaximumLength(256).WithMessage("Email or username must not exceed 256 characters");
+                    RuleFor(x => x.Email)
+                        .MaximumLength(256).WithMessage("Email must not exceed 256 characters");
+                });
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Password is required");
@@ -165,7 +173,9 @@ namespace SMS.Application.Features.Auth.Commands
                 // RISK-27: Persist a failed login record (with reason when the
                 // user exists) so administrators can detect brute-force
                 // attempts and audit lockouts via GetFailedLoginsAsync.
-                if (typedUser != null || failureReason != null)
+                // Only log when the user exists (typedUser != null) - for
+                // non-existent users, there's no user to log against.
+                if (typedUser != null && failureReason != null)
                 {
                     await _loginHistoryRepository.AddAsync(new LoginHistory
                     {

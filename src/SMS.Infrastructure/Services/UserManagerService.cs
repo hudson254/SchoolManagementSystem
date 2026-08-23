@@ -124,7 +124,8 @@ namespace SMS.Infrastructure.Services
             var result = await _userManager.CreateAsync(user, password);
             if (!result.Succeeded)
             {
-                _logger.LogError("Failed to create user: {Errors}", string.Join(", ", result.Errors));
+                var errorMessages = string.Join(", ", result.Errors.Select(e => e.Description));
+                _logger.LogError("Failed to create user: {Errors}", errorMessages);
                 return null;
             }
 

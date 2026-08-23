@@ -56,7 +56,8 @@ namespace SMS.API.Middleware
             _logger.LogError(exception, "An unhandled exception occurred: {Message}. CorrelationId: {CorrelationId}",
                 exception.Message, correlationId);
 
-            var (statusCode, errorCode, message, details, severity, category) = ClassifyException(exception, _env.IsDevelopment());
+            var isDevelopment = _env.IsDevelopment() || _env.EnvironmentName == "Testing";
+            var (statusCode, errorCode, message, details, severity, category) = ClassifyException(exception, isDevelopment);
 
             var errorResponse = new ErrorResponse
             {

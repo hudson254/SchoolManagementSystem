@@ -203,6 +203,17 @@ namespace SMS.UnitTests.Assessments
                 MaxScore = 100
             };
 
+            // Need to mock assessment repository first - otherwise KeyNotFoundException is thrown
+            _assessmentRepositoryMock.Setup(r => r.GetByIdAsync(command.AssessmentId))
+                .ReturnsAsync(new Assessment
+                {
+                    Id = command.AssessmentId,
+                    UnitId = Guid.NewGuid(),
+                    IsWeightLocked = false,
+                    Title = "Test Assessment",
+                    MaxScore = 100
+                });
+
             // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(() => _engine.EnterMarkAsync(command));
         }
@@ -405,12 +416,26 @@ namespace SMS.UnitTests.Assessments
 
             _assessmentRepositoryMock.Setup(r => r.GetByUnitAsync(unitId))
                 .ReturnsAsync(assessments);
+            _markRepositoryMock.Setup(r => r.GetByUnitAndStudentAsync(unitId, Guid.Empty))
+                .ReturnsAsync(marks);
             _markRepositoryMock.Setup(r => r.GetByUnitAndStudentAsync(unitId, studentId))
                 .ReturnsAsync(marks);
             _gradingScaleRepositoryMock.Setup(r => r.GetActiveVersionAsync())
                 .ReturnsAsync(gradingScale);
             _gradeBandRepositoryMock.Setup(r => r.GetByScaleAsync(gradingScale.Id))
                 .ReturnsAsync(gradeBands);
+
+            // Set up existing grade so UpdateAsync is called
+            var existingGrade = new Grade
+            {
+                StudentId = studentId,
+                UnitId = unitId,
+                Score = 0,
+                LetterGrade = "F",
+                Remarks = "Initial"
+            };
+            _gradeRepositoryMock.Setup(r => r.GetStudentGradesAsync(studentId))
+                .ReturnsAsync(new List<Grade> { existingGrade });
 
             // Act
             await _engine.AssignGradesAsync(unitId);
@@ -506,17 +531,21 @@ namespace SMS.UnitTests.Assessments
             var studentId = Guid.NewGuid();
             var unitId = Guid.NewGuid();
 
+            var assessmentId = Guid.NewGuid();
             var assessments = new List<Assessment>
             {
-                new Assessment { Id = Guid.NewGuid(), IsMandatory = true }
+                new Assessment { Id = assessmentId, IsMandatory = true, IsActive = true, Weight = 100, MaxScore = 100, Title = "Final Exam" }
             };
 
             var marks = new List<StudentAssessmentMark>
             {
                 new StudentAssessmentMark
                 {
-                    AssessmentId = assessments[0].Id,
+                    AssessmentId = assessmentId,
                     StudentId = studentId,
+                    Mark = 80,
+                    Percentage = 80,
+                    WeightedScore = 80,
                     IsDraft = false,
                     IsExempt = false
                 }
@@ -575,6 +604,17 @@ namespace SMS.UnitTests.Assessments
                 Score = -10,
                 MaxScore = 100
             };
+
+            // Need to mock assessment repository first - otherwise KeyNotFoundException is thrown
+            _assessmentRepositoryMock.Setup(r => r.GetByIdAsync(command.AssessmentId))
+                .ReturnsAsync(new Assessment
+                {
+                    Id = command.AssessmentId,
+                    UnitId = Guid.NewGuid(),
+                    IsWeightLocked = false,
+                    Title = "Test Assessment",
+                    MaxScore = 100
+                });
 
             // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(() => _engine.EnterMarkAsync(command));

@@ -619,9 +619,6 @@ sudo nano /etc/docker/daemon.json
     "max-file": "5"
   },
   "storage-driver": "overlay2",
-  "storage-opts": [
-    "overlay2.override_kernel_check=true"
-  ],
   "live-restore": true,
   "iptables": true,
   "ip-forward": true
@@ -630,9 +627,17 @@ sudo nano /etc/docker/daemon.json
 
 **Explanation:**
 - `log-driver` / `log-opts`: Limits container log size to prevent disk exhaustion.
-- `storage-driver`: Uses `overlay2` (default and recommended).
+- `storage-driver`: Uses `overlay2` (default and recommended on modern kernels).
 - `live-restore`: Keeps containers running if Docker daemon restarts.
 - `iptables` / `ip-forward`: Required for container networking.
+
+**⚠️ Important Change from Previous Versions:**
+The option `"overlay2.override_kernel_check=true"` has been **removed** from this configuration. This option was historically needed on older kernels (pre-4.x) to force Docker to use the overlay2 storage driver. On Debian 13 (kernel 6.x), this option is:
+1. **Unnecessary** — The modern Linux kernel fully supports overlay2 natively.
+2. **Potentially problematic** — It tells Docker to skip kernel compatibility checks, which can mask real issues or, in some Docker versions, cause the daemon to fail on startup.
+3. **A common cause of Docker startup failures** — If Docker previously failed to restart after this configuration was created, this option is a likely culprit.
+
+If you are recovering from a Docker startup failure caused by this option, follow the recovery procedure in Section 22.1.
 
 ### 7.3 Validate the JSON Configuration
 
@@ -837,16 +842,126 @@ The following directory structure is used for the production deployment:
 
 The project is hosted at: `https://github.com/hudson254/SchoolManagementSystem.git`
 
-### 10.2 Clone the Repository
+### 10.2 Important: Understanding the Clone Target
+
+The production directory `/opt/sms` already contains runtime directories (`backups/`, `certs/`, `data/`, `docker/`, `logs/`, `scripts/`) created in Section 5.2. The Git repository must be merged **alongside** these existing directories, not replace them.
+
+**⚠️ `git clone` cannot clone directly into a non-empty directory.** The command:
 
 ```bash
-cd /opt/sms
 sudo -u sms_admin git clone https://github.com/hudson254/SchoolManagementSystem.git /opt/sms
 ```
 
-### 10.3 Authentication for Private Repository
+will fail with:
 
-If the repository is private, use one of the following methods:
+```
+fatal: destination path '/opt/sms' already exists and is not an empty directory.
+```
+
+This is expected behavior. The correct procedure is to clone into a temporary location first, then merge the repository contents into `/opt/sms`.
+
+### 10.3 Clone the Repository (Two-Step Procedure)
+
+#### Step 1: Clone into a temporary directory
+
+```bash
+cd /opt
+sudo -u sms_admin git clone https://github.com/hudson254/SchoolManagementSystem.git sms-source
+```
+
+**Expected output:**
+```
+Cloning into 'sms-source'...
+remote: Enumerating objects: ...
+remote: Counting objects: 100% (.../...), done.
+remote: Compressing objects: 100% (.../...), done.
+Receiving objects: 100% (.../...), ... MiB | ... MiB/s, done.
+Resolving deltas: 100% (.../...), done.
+```
+
+**If this fails:**
+- Check internet connectivity: `ping -c 4 github.com`
+- If the repository is private, see Section 10.4 for authentication options.
+- If the directory `/opt/sms-source` already exists from a previous attempt, remove it first:
+  ```bash
+  sudo rm -rf /opt/sms-source
+  ```
+
+#### Step 2: Inspect the repository structure
+
+```bash
+ls -la /opt/sms-source
+find /opt/sms-source -maxdepth 2 -type f | head -30
+```
+
+**Expected output:** The repository contains `src/`, `frontend/`, `docker/`, `scripts/`, `tests/`, `Documentation/`, `.env.example`, `README.md`, etc.
+
+#### Step 3: Merge repository files into /opt/sms (preserving existing production data)
+
+```bash
+# Copy all repository files to /opt/sms, but do NOT overwrite existing production directories
+# The --ignore-existing flag ensures production files (backups, certs, data, docker, logs, scripts)
+# are preserved even if the repository has different versions of these directories.
+cd /opt/sms-source
+sudo -u sms_admin rsync -av --ignore-existing \
+    --exclude='.git/' \
+    /opt/sms-source/ \
+    /opt/sms/
+```
+
+**Expected output:** A list of files being copied, showing that existing production directories are skipped.
+
+**Explanation:**
+- `rsync -av`: Archive mode with verbose output, preserves ownership and permissions.
+- `--ignore-existing`: Skips files that already exist in the destination. This protects `backups/`, `certs/`, `data/`, `docker/`, `logs/`, and `scripts/` from being overwritten.
+- `--exclude='.git/'`: Excludes the Git metadata directory from the initial copy (it will be handled separately).
+
+#### Step 4: Add the .git directory to /opt/sms
+
+```bash
+sudo -u sms_admin cp -a /opt/sms-source/.git /opt/sms/
+```
+
+**Expected output:** No output (success).
+
+**Explanation:** The `.git` directory is what makes `/opt/sms` a Git repository. It must be copied separately because `rsync --ignore-existing` would skip it if a `.git` directory already existed, and we excluded it in the previous step.
+
+#### Step 5: Verify the Git repository
+
+```bash
+sudo -u sms_admin git -C /opt/sms status
+```
+
+**Expected output:**
+```
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docker/docker-compose.prod.yml
+        modified:   scripts/deploy.sh
+        ...
+```
+
+**Explanation:** The modified files are expected — they are the production versions that were already in `/opt/sms/docker/` and `/opt/sms/scripts/` before the clone. These are local modifications that should not be committed.
+
+#### Step 6: Clean up the temporary clone
+
+```bash
+sudo rm -rf /opt/sms-source
+```
+
+#### Step 7: Checkout the correct branch (if needed)
+
+```bash
+sudo -u sms_admin git -C /opt/sms checkout main
+```
+
+### 10.4 Authentication for Private Repository
+
+If the repository is private, use one of the following methods with the clone command in Step 1:
 
 #### Option A: GitHub Fine-Grained Token (Recommended)
 
@@ -855,11 +970,11 @@ If the repository is private, use one of the following methods:
 3. Clone using the token:
 
 ```bash
-cd /opt/sms
-sudo -u sms_admin git clone https://github.com/hudson254/SchoolManagementSystem.git /opt/sms
+cd /opt
+sudo -u sms_admin git clone https://<YOUR_TOKEN>@github.com/hudson254/SchoolManagementSystem.git sms-source
 ```
 
-When prompted for a password, paste the token.
+Replace `<YOUR_TOKEN>` with the actual token value.
 
 #### Option B: SSH Deploy Key
 
@@ -879,21 +994,18 @@ sudo cat /home/sms_admin/.ssh/id_ed25519.pub
 4. Clone using SSH:
 
 ```bash
-sudo -u sms_admin git clone git@github.com:hudson254/SchoolManagementSystem.git /opt/sms
+cd /opt
+sudo -u sms_admin git clone git@github.com:hudson254/SchoolManagementSystem.git sms-source
 ```
 
-### 10.4 Verify the Clone
+### 10.5 Verify the Final State
 
 ```bash
 sudo -u sms_admin git -C /opt/sms status
 ls -la /opt/sms/
 ```
 
-### 10.5 Checkout the Correct Branch
-
-```bash
-sudo -u sms_admin git -C /opt/sms checkout main
-```
+**Expected output:** The directory should contain both the production runtime directories (`backups/`, `certs/`, `data/`, `docker/`, `logs/`, `scripts/`) and the repository files (`src/`, `frontend/`, `tests/`, `Documentation/`, `.env.example`, `README.md`, etc.), along with the `.git/` directory.
 
 ---
 
@@ -2783,7 +2895,46 @@ docker ps --filter "name=sms-cadvisor"
 curl -sf http://localhost:9090/api/v1/targets
 ```
 
-### 22.20 Firewall Blocks Required Traffic
+### 22.20 Git Clone Fails: "destination path already exists and is not an empty directory"
+
+**Symptoms:**
+```
+fatal: destination path '/opt/sms' already exists and is not an empty directory.
+```
+
+**Diagnostic command:**
+```bash
+ls -la /opt/sms/
+```
+
+**Likely cause:** The target directory `/opt/sms` already contains production runtime directories (`backups/`, `certs/`, `data/`, `docker/`, `logs/`, `scripts/`) created in Section 5.2. Git does not allow cloning into a non-empty directory.
+
+**Corrective action:**
+Do NOT delete the existing directories. Follow the two-step procedure in Section 10.3:
+
+```bash
+# Step 1: Clone into a temporary directory
+cd /opt
+sudo -u sms_admin git clone https://github.com/hudson254/SchoolManagementSystem.git sms-source
+
+# Step 2: Merge repository files (preserving existing production data)
+cd /opt/sms-source
+sudo -u sms_admin rsync -av --ignore-existing --exclude='.git/' /opt/sms-source/ /opt/sms/
+
+# Step 3: Add the .git directory
+sudo -u sms_admin cp -a /opt/sms-source/.git /opt/sms/
+
+# Step 4: Clean up
+sudo rm -rf /opt/sms-source
+```
+
+**Verification:**
+```bash
+sudo -u sms_admin git -C /opt/sms status
+ls -la /opt/sms/
+```
+
+### 22.21 Firewall Blocks Required Traffic
 
 **Symptoms:** Cannot access the application from LAN clients.
 

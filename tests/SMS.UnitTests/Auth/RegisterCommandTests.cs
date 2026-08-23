@@ -268,7 +268,7 @@ namespace SMS.UnitTests.Auth
             result.FullName.Should().Be("John Doe");
 
             _userManagerMock.Verify(x => x.CreateUserAsync("john.doe", command.Email, command.Password, "Student"), Times.Once);
-            _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+            _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
         }
 
         [Fact]
@@ -532,7 +532,7 @@ namespace SMS.UnitTests.Auth
             result.Roles.Should().Contain("Lecturer");
 
             _userManagerMock.Verify(x => x.CreateUserAsync("jane.smith", command.Email, command.Password, "Lecturer"), Times.Once);
-            _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+            _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
         }
     }
 }

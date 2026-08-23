@@ -36,10 +36,31 @@ namespace SMS.API.Middleware
             _options = options.Value;
         }
 
+        // Paths that are exempt from rate limiting (health checks, metrics, monitoring)
+        private static readonly string[] ExemptPaths = new[]
+        {
+            "/health",
+            "/health/live",
+            "/health/ready",
+            "/metrics",
+            "/alive"
+        };
+
         public async Task InvokeAsync(HttpContext context)
         {
-            var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             var path = context.Request.Path.Value ?? "/";
+
+            // Skip rate limiting for health check and monitoring endpoints
+            // These are called frequently by Docker health checks, reverse proxies,
+            // Prometheus, and uptime monitoring services. Blocking them would cause
+            // false-positive container restarts and monitoring alerts.
+            if (ExemptPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+            {
+                await _next(context);
+                return;
+            }
+
+            var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             var key = $"ratelimit_{clientIp}_{path}";
 
             var window = TimeSpan.FromMinutes(_options.WindowMinutes);
