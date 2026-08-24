@@ -1,25 +1,25 @@
 # Documentation Audit Report — Full Project Alignment
 
-> **Auditor:** Automated Documentation Audit System
-> **Date:** 23 August 2026
-> **Target:** `/Documentation/` folder — School Management System (SMS)
-> **Scope:** Complete documentation consistency and accuracy audit against source code
+> **Auditor:** Automated Documentation Audit System  
+> **Date:** 24 August 2026  
+> **Target:** `/Documentation/` folder — School Management System (SMS)  
+> **Scope:** Complete documentation consistency and accuracy audit against source code  
+> **Git Commit:** Current HEAD
 
 ---
 
 ## Executive Summary
 
-A comprehensive audit of all 25 documentation files in the `Documentation/` folder was performed against the actual source code, Docker configuration, scripts, and infrastructure files. **Significant discrepancies were found and corrected across most documents.**
+A comprehensive audit of all 29 files in the `Documentation/` folder was performed against the actual source code, Docker configuration, scripts, and infrastructure files. **Significant discrepancies were found and corrected across 12 documents.**
 
-The most critical issues were:
-1. **Database credentials**: 7 documents referenced wrong username (`sms_admin`) and database name (`sms_db`)
-2. **Docker commands**: 6 documents used the deprecated `docker-compose` (hyphenated) command
-3. **Role names**: Documents used `Coordinator` but source uses `COORDINATOR` (all caps)
-4. **Missing environment variables**: 15+ variables used in code/configuration were undocumented
-5. **Technology versions**: React version was documented as 18+ but actual is 19
-6. **API controller list**: Only 20 controllers documented, actual has 30+
+### Critical Issues Found and Corrected
 
-All issues have been corrected. The documentation now accurately reflects the current implementation.
+1. **Nonexistent health endpoints**: 2 documents documented `/health/ready` and `/health/live` which do not exist in `Program.cs`
+2. **Docker commands**: Deprecated `docker exec` pattern in 3 documents for migration/seed
+3. **Missing environment variables**: 12 variables from `.env.example` were undocumented
+4. **Rate limiting values**: Security guide documented `PermitLimit: 20` but production uses `100`
+5. **Port 5000 availability**: Assumed always available; production does not expose API port
+6. **Middleware pipeline order**: Outdated vs actual `Program.cs` implementation
 
 ---
 

@@ -283,17 +283,17 @@ The system follows **Clean Architecture** principles with the Command Query Resp
 User Browser/Nginx → API Gateway → Middleware Pipeline → Controller → MediatR Handler → Repository → Database
 ```
 
-### Middleware Pipeline (Order)
-1. CorrelationIdMiddleware
-2. LoggingEnrichmentMiddleware
-3. ExceptionHandlingMiddleware
-4. SecurityHeadersMiddleware
-5. CsrfProtectionMiddleware
-6. TenantResolutionMiddleware
-7. RateLimitingMiddleware
-8. MetricsMiddleware
-9. Authentication
-10. Authorization
+### Middleware Pipeline (Order — verified from `Program.cs`)
+1. CorrelationIdMiddleware      → Add correlation ID to requests/logs
+2. LoggingEnrichmentMiddleware  → Enrich logs with request context
+3. ExceptionHandlingMiddleware  → Handle exceptions, return consistent errors
+4. SecurityHeadersMiddleware    → Add security headers (HSTS, XSS, etc.)
+5. CsrfProtectionMiddleware     → Validate CSRF tokens for state-changing requests
+6. TenantResolutionMiddleware   → Resolve and set tenant context
+7. RateLimitingMiddleware       → Enforce rate limits
+8. MetricsMiddleware            → Collect Prometheus metrics
+9. UseAuthentication            → Authenticate JWT tokens
+10. UseAuthorization            → Authorize based on roles
 
 ### Authentication Flow
 ```

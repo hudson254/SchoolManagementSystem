@@ -123,13 +123,13 @@ docker compose restart postgres
 
 **Solutions:**
 ```bash
-# Check migration status
+# Check migration status (requires EF Core tools installed)
 docker compose exec api dotnet ef migrations list --project src/SMS.Persistence
 
 # Re-run migrations
 docker compose exec api dotnet SMS.API.dll migrate-database
 
-# Rollback last migration
+# Rollback last migration (requires EF Core tools installed)
 docker compose exec api dotnet ef migrations remove --project src/SMS.Persistence
 ```
 

@@ -43,10 +43,10 @@ The system supports multiple deployment environments:
 docker compose -f docker/docker-compose.dev.yml up -d
 
 # Run migrations
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Seed data
-docker exec sms-api dotnet run -- seed-data
+docker compose exec api dotnet SMS.API.dll seed-data
 ```
 
 ### Quick Start (Manual)
@@ -333,7 +333,7 @@ For internet-facing deployments with a public domain:
 ### Applying Migrations
 ```bash
 # Via Docker
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Via .NET CLI
 cd src/SMS.API
@@ -391,7 +391,10 @@ dotnet ef database update PreviousMigrationName
 
 6. **Verify deployment**
    ```bash
+   # If API port is exposed (dev):
    curl http://localhost:5000/health
+   # OR via Nginx (production):
+   curl http://localhost:8080/health
    ```
 
 ### Zero-Downtime Upgrade
@@ -430,7 +433,7 @@ For zero-downtime deployments, consider:
 
 5. **Verify rollback**
    ```bash
-   curl http://localhost:5000/health
+   curl http://localhost:8080/health  # or http://localhost:5000/health if API port is exposed
    ```
 
 ---

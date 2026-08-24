@@ -1241,20 +1241,20 @@ Backups are handled by the `sms-backup` container, which runs `pg_dump` on a sch
 
 ```bash
 cd /opt/sms
-sudo -u sms_admin docker exec sms-postgres pg_dump -U sms_user SchoolManagementSystem > /opt/sms/backups/manual_backup_$(date +%Y%m%d_%H%M%S).sql
+sudo -u sms_admin docker compose exec -T postgres pg_dump -U sms_user SchoolManagementSystem > /opt/sms/backups/manual_backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ### 12.8 Database Restore
 
 ```bash
 cd /opt/sms
-sudo -u sms_admin docker exec -i sms-postgres psql -U sms_user -d SchoolManagementSystem < /path/to/backup.sql
+sudo -u sms_admin docker compose exec -T postgres psql -U sms_user -d SchoolManagementSystem < /path/to/backup.sql
 ```
 
 ### 12.9 Database Health Check
 
 ```bash
-docker exec sms-postgres pg_isready -U sms_user -d SchoolManagementSystem
+docker compose exec postgres pg_isready -U sms_user -d SchoolManagementSystem
 ```
 
 **Expected output:** `/var/run/postgresql:5432 - accepting connections`
@@ -1674,7 +1674,7 @@ The `sms-backup` container automatically backs up the PostgreSQL database:
 
 ```bash
 cd /opt/sms
-sudo -u sms_admin docker exec sms-postgres pg_dump -U sms_user -d SchoolManagementSystem -F c -f /tmp/db_backup_$(date +%Y%m%d).dump
+sudo -u sms_admin docker compose exec postgres pg_dump -U sms_user -d SchoolManagementSystem -F c -f /tmp/db_backup_$(date +%Y%m%d).dump
 sudo -u sms_admin docker cp sms-postgres:/tmp/db_backup_$(date +%Y%m%d).dump /opt/sms/backups/
 ```
 
@@ -1729,7 +1729,7 @@ Periodically test the backup restoration process:
 ```bash
 # Restore database backup
 cd /opt/sms
-sudo -u sms_admin docker exec -i sms-postgres pg_restore -U sms_user -d SchoolManagementSystem -c < /opt/sms/backups/database/sms-db-2024-01-01.sql
+sudo -u sms_admin docker compose exec -T postgres pg_restore -U sms_user -d SchoolManagementSystem -c < /opt/sms/backups/database/sms-db-2024-01-01.sql
 ```
 
 ---
@@ -2307,7 +2307,7 @@ curl -sf http://localhost:5000/api/v1/health | python3 -m json.tool
 ### 20.33 Database Connectivity
 
 ```bash
-docker exec sms-postgres pg_isready -U sms_user -d SchoolManagementSystem
+docker compose exec postgres pg_isready -U sms_user -d SchoolManagementSystem
 ```
 
 **Expected:** `/var/run/postgresql:5432 - accepting connections`
@@ -2569,12 +2569,12 @@ docker ps --filter "name=sms-postgres" --format "{{.Ports}}"
 **Corrective action:**
 ```bash
 # Check if PostgreSQL is running on the correct port
-docker exec sms-postgres ss -tlnp | grep 5432
+docker compose exec postgres ss -tlnp | grep 5432
 ```
 
 **Verification:**
 ```bash
-docker exec sms-postgres pg_isready -U sms_user -d SchoolManagementSystem
+docker compose exec postgres pg_isready -U sms_user -d SchoolManagementSystem
 ```
 
 ### 22.7 Permission Denied Errors
@@ -2754,7 +2754,7 @@ sudo -u sms_admin docker logs sms-api 2>&1 | grep -i migration
 **Corrective action:**
 ```bash
 # Verify PostgreSQL is healthy
-docker exec sms-postgres pg_isready -U sms_user -d SchoolManagementSystem
+docker compose exec postgres pg_isready -U sms_user -d SchoolManagementSystem
 
 # Run migration manually
 sudo -u sms_admin docker compose -f docker/docker-compose.prod.yml --env-file env/.env run --rm api dotnet SMS.API.dll migrate-database
@@ -2762,7 +2762,7 @@ sudo -u sms_admin docker compose -f docker/docker-compose.prod.yml --env-file en
 
 **Verification:**
 ```bash
-docker exec sms-postgres psql -U sms_user -d SchoolManagementSystem -c "\dt" | wc -l
+docker compose exec postgres psql -U sms_user -d SchoolManagementSystem -c "\dt" | wc -l
 ```
 
 ### 22.15 Database Seed Failure
@@ -2788,7 +2788,7 @@ sudo -u sms_admin docker compose -f docker/docker-compose.prod.yml --env-file en
 
 **Verification:**
 ```bash
-docker exec sms-postgres psql -U sms_user -d SchoolManagementSystem -c "SELECT COUNT(*) FROM \"Users\";"
+docker compose exec postgres psql -U sms_user -d SchoolManagementSystem -c "SELECT COUNT(*) FROM \"Users\";"
 ```
 
 ### 22.16 Application Cannot Connect to PostgreSQL
@@ -2812,7 +2812,7 @@ docker ps --filter "name=sms-postgres"
 sudo -u sms_admin grep DB_PASSWORD /opt/sms/env/.env
 
 # Verify network connectivity
-docker exec sms-api ping -c 2 postgres
+docker compose exec api curl --silent --fail http://postgres/health 2>&1 || echo "Cannot reach postgres on HTTP (expected - PostgreSQL doesn't serve HTTP)"
 ```
 
 **Verification:**

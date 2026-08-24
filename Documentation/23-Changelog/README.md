@@ -58,21 +58,16 @@ The initial release of the School Management System.
 - End-to-end tests with Playwright
 - Zero npm vulnerabilities after React Router v7 upgrade
 
-#### Changed (Documentation Audit - 23 August 2026)
-- All documentation updated to match actual source code
-- Fixed database credentials: `sms_admin`/`sms_db` → `sms_user`/`SchoolManagementSystem`
-- Fixed Docker commands: `docker-compose` → `docker compose`
-- Fixed role names: `Coordinator` → `COORDINATOR` (matching authorization policies)
-- Added missing environment variables: `FRONTEND_URL`, `ADMIN_*`, `SMTP_*`, etc.
-- Updated React version from 18+ to 19
-- Updated PostgreSQL version to 16
-- Updated API controller list to match all 30+ controllers
-- Fixed port documentation for production vs development
-- Updated architecture diagram and middleware pipeline
-- Removed Hangfire references (not actually used)
-- Clarified Redis is optional, not required for production
-- Updated production security posture documentation
-- Corrected all credential references in troubleshooting commands
+#### Changed (Documentation Audit - 24 August 2026 - Second Pass)
+- Removed references to nonexistent `/health/ready` and `/health/live` endpoints (Operations, Maintenance guides)
+- Fixed middleware pipeline order to match actual `Program.cs` implementation
+- Updated Docker commands: `docker exec` → `docker compose exec` in DEBIAN13 backup/restore commands
+- Added missing environment variables to Configuration guide: `DB_NAME`, `DB_USER`, `ADMIN_*`, `ENABLE_*`, `Swagger__Enabled`, `SSL_PASSWORD`, `API_URL`, `GRAFANA_URL`, `RATE_LIMIT_*`
+- Fixed rate limiting documentation: production uses `PermitLimit: 100` (not 20)
+- Clarified port availability: port 5000 is dev-only; production uses Nginx port 8080/8443
+- Verified API controller list: 31 controllers match source code exactly
+- Verified frontend dependencies: React 19, Vite 8.1.5, React Router 7.18.2, TanStack Query 5.40+
+- Added note about Alertmanager SMTP being disabled by default for LAN-only deployment
 
 ---
 

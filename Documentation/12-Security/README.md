@@ -181,7 +181,7 @@ The `SecurityHeadersMiddleware` adds the following headers:
 
 ## Rate Limiting
 
-### Configuration
+### Configuration (Base `appsettings.json`)
 ```json
 {
   "RateLimiting": {
@@ -192,8 +192,19 @@ The `SecurityHeadersMiddleware` adds the following headers:
 }
 ```
 
+### Production Override (`appsettings.Production.json`)
+```json
+{
+  "RateLimiting": {
+    "PermitLimit": 100,
+    "WindowMinutes": 1
+  }
+}
+```
+
 ### Behavior
-- Maximum 20 requests per minute per client
+- **Development**: Maximum 20 requests per minute per client
+- **Production**: Maximum 100 requests per minute per client (configurable via `RATE_LIMIT_PERMIT` and `RATE_LIMIT_WINDOW` env vars)
 - Exceeding limit results in 429 Too Many Requests
 - Automatic ban for 15 minutes if limit exceeded
 - Applied after authentication

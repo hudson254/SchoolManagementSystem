@@ -38,11 +38,9 @@ This guide provides procedures for routine maintenance of the School Management 
 
 ### Health Endpoints
 
-The system provides health check endpoints:
+The system provides a single health check endpoint:
 
-- `/health` - Basic health check
-- `/health/ready` - Readiness check
-- `/health/live` - Liveness check
+- `/health` - Basic health check (no separate `/health/ready` or `/health/live` endpoints)
 
 ### Monitoring with Prometheus
 

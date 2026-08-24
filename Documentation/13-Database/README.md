@@ -156,7 +156,7 @@ Department 1—* Lecturers
 ### Applying Migrations
 ```bash
 # Via Docker
-docker exec sms-api dotnet run -- migrate-database
+docker compose exec api dotnet SMS.API.dll migrate-database
 
 # Via .NET CLI
 cd src/SMS.API

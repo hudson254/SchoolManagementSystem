@@ -100,6 +100,8 @@ Welcome to the School Management System (SMS) documentation. This is the **singl
 
 **This system is PRODUCTION READY.** All 423+ tests pass, security controls are verified, Docker production stack is validated, and the deployment guide is complete.
 
+> **Note:** Monitoring (Alertmanager) has SMTP disabled by default for LAN-only deployments. SMTP can be enabled by configuring the `ALERTMANAGER_SMTP_*` environment variables.
+
 See [Verification Report](99-Verification-Report.md) for full details.
 
 ## Documentation Audit

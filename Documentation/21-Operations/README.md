@@ -20,7 +20,7 @@ This guide provides the operational procedures for running the School Management
 ## Daily Operations
 
 ### Morning Checklist
-- [ ] Verify API health: `curl http://localhost:5000/health`
+- [ ] Verify API health: `curl http://localhost:8080/health` (via Nginx) or `curl http://localhost:5000/health` (direct dev access only)
 - [ ] Check database connectivity
 - [ ] Review overnight backup status
 - [ ] Check disk space: `df -h`
@@ -45,9 +45,7 @@ This guide provides the operational procedures for running the School Management
 ## Monitoring
 
 ### Health Endpoints
-- `/health` - Overall system health
-- `/health/ready` - Readiness check
-- `/health/live` - Liveness check
+- `/health` - Overall system health (single endpoint; no separate readiness/liveness endpoints)
 
 ### Key Metrics
 | Metric | Description | Alert Threshold |
