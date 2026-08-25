@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -409,6 +411,15 @@ builder.Services.AddIdentity<User, Role>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
+// Configure ASP.NET Core Data Protection for production key persistence.
+// Keys are stored in a Docker volume mounted at /app/dataprotection-keys
+// to survive container recreation. The directory is owned by the non-root
+// appuser (UID 1001) and is not accessible to other containers.
+var dataProtectionKeysDir = Environment.GetEnvironmentVariable("DATAPROTECTION_KEYS_DIR") ?? "/app/dataprotection-keys";
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysDir))
+    .SetApplicationName("SchoolManagementSystem");
+
 // Configure JWT
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
@@ -417,6 +428,14 @@ var jwtConfig = builder.Configuration.GetSection("JwtSettings");
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? jwtConfig["Secret"];
 if (string.IsNullOrWhiteSpace(jwtSecret))
     throw new InvalidOperationException("JWT Secret not configured. Set JWT_SECRET environment variable or configure JwtSettings:Secret in appsettings.");
+
+if (jwtSecret.Length < 64)
+    throw new InvalidOperationException($"JWT Secret must be at least 64 characters long (current length: {jwtSecret.Length}). Generate a strong secret using a cryptographically secure random generator.");
+
+// Validate UTF-8 byte length for HMAC-SHA256 key strength
+var jwtSecretBytes = Encoding.UTF8.GetBytes(jwtSecret);
+if (jwtSecretBytes.Length < 64)
+    throw new InvalidOperationException($"JWT Secret must provide at least 512 bits (64 bytes) of entropy when encoded as UTF-8. Current byte length: {jwtSecretBytes.Length}.");
 
 // Single source of truth: push the resolved secret back into configuration so that
 // JwtService (via IOptions<JwtSettings>) signs with the SAME key that this pipeline validates with.

@@ -2,19 +2,25 @@
 #
 # Production alert routing for the SMS monitoring stack.
 # Notification credentials should be provided via environment variables.
+#
+# SMTP is intentionally DISABLED for this LAN-only deployment.
+# Notification delivery uses webhook (if configured) or logs to console.
+#
+# To enable SMTP notification:
+#   Set ALERTMANAGER_SMTP_FROM, ALERTMANAGER_SMTP_SMART_HOST,
+#   ALERTMANAGER_SMTP_USERNAME, ALERTMANAGER_SMTP_PASSWORD
+#   AND set smtp_require_tls: true for production email.
 
 global:
   # Default timezone for notifications
   resolve_timeout: 5m
 
-  # Email notification configuration
-  # Configure via environment variables:
-  #   ALERTMANAGER_SMTP_SMART_HOST, ALERTMANAGER_SMTP_USERNAME,
-  #   ALERTMANAGER_SMTP_PASSWORD, ALERTMANAGER_SMTP_FROM
-  smtp_from: ${ALERTMANAGER_SMTP_FROM:-alertmanager@sms.local}
-  smtp_smarthost: ${ALERTMANAGER_SMTP_SMART_HOST:-localhost:25}
-  smtp_auth_username: ${ALERTMANAGER_SMTP_USERNAME:-}
-  smtp_auth_password: ${ALERTMANAGER_SMTP_PASSWORD:-}
+  # Email notification configuration (DISABLED by default for LAN deployment)
+  # To enable, set the below environment variables and change smtp_require_tls to true.
+  smtp_from: ""  # Intentionally empty - SMTP disabled
+  smtp_smarthost: ""  # Intentionally empty - SMTP disabled
+  smtp_auth_username: ""
+  smtp_auth_password: ""
   smtp_require_tls: false
 
 # Root route - default catch-all
@@ -64,14 +70,19 @@ inhibit_rules:
     equal: ["instance"]
 
 receivers:
-  # Default receiver - log to console only when no notification integration is configured
+  # Default receiver - logs to Alertmanager console and forwards to webhook if configured
   - name: "default"
     webhook_configs:
-      - url: http://localhost:9093/alertmanager/-/reload
+      - url: "http://localhost:9099/alertmanager/webhook"  # Configure your webhook receiver URL here
         send_resolved: true
+    # Include a slack_configs example for reference (commented out):
+    # slack_configs:
+    #   - api_url: ${ALERTMANAGER_SLACK_WEBHOOK_URL}
+    #     channel: "#alerts"
+    #     send_resolved: true
 
-  # Critical alerts receiver
+  # Critical alerts receiver - same destination but can be separate
   - name: "critical"
     webhook_configs:
-      - url: http://localhost:9093/alertmanager/-/reload
+      - url: "http://localhost:9099/alertmanager/webhook"  # Configure your webhook receiver URL here
         send_resolved: true

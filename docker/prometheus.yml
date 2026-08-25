@@ -25,7 +25,7 @@ alerting:
 
 # Rule files for alerting
 rule_files:
-  - "alerts.yml"
+  - "prometheus-alerts.yml"
 
 scrape_configs:
   # --- Prometheus self-monitoring ---

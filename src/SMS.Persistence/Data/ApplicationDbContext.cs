@@ -256,7 +256,7 @@ namespace SMS.Persistence.Data
 
                 // FIX: Add Department relationship configuration
                 entity.HasOne(l => l.Department)
-                    .WithMany()
+                    .WithMany(d => d.Lecturers)
                     .HasForeignKey(l => l.DepartmentId)
                     .OnDelete(DeleteBehavior.Restrict);
 
@@ -345,7 +345,7 @@ namespace SMS.Persistence.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(c => c.Department)
-                    .WithMany()
+                    .WithMany(d => d.Courses)
                     .HasForeignKey(c => c.DepartmentId)
                     .OnDelete(DeleteBehavior.Restrict);
 
@@ -788,7 +788,13 @@ namespace SMS.Persistence.Data
                 var isTenantAware = typeof(ITenantAwareEntity).IsAssignableFrom(entityType.ClrType);
                 if (tenantIdProperty != null && tenantIdProperty.ClrType == typeof(Guid) && isTenantAware)
                 {
-                    if (entityType.ClrType == typeof(User) || entityType.ClrType == typeof(Role))
+                    if (entityType.ClrType == typeof(User) || entityType.ClrType == typeof(Role) || entityType.ClrType == typeof(UserRole))
+                        continue;
+
+                    // Skip derived entity types in TPH hierarchies (e.g., UserRole is derived
+                    // from IdentityUserRole<string>) because query filters can only be applied
+                    // to root entity types in a TPH hierarchy.
+                    if (entityType.BaseType != null)
                         continue;
 
                     var parameter = System.Linq.Expressions.Expression.Parameter(entityType.ClrType, "e");
@@ -866,6 +872,10 @@ namespace SMS.Persistence.Data
                 {
                     case EntityState.Added:
                         entry.Entity.CreatedAt = DateTime.UtcNow;
+                        if (_tenantContext != null && Guid.TryParse(_tenantContext.TenantId, out var userTenantId))
+                        {
+                            entry.Entity.TenantId = userTenantId;
+                        }
                         break;
                     case EntityState.Modified:
                         entry.Entity.UpdatedAt = DateTime.UtcNow;
@@ -874,6 +884,19 @@ namespace SMS.Persistence.Data
                         entry.State = EntityState.Modified;
                         entry.Entity.IsDeleted = true;
                         entry.Entity.DeletedAt = DateTime.UtcNow;
+                        break;
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<UserRole>())
+            {
+                switch (entry.State)
+                {
+                    case EntityState.Added:
+                        if (_tenantContext != null && Guid.TryParse(_tenantContext.TenantId, out var urTenantId))
+                        {
+                            entry.Entity.TenantId = urTenantId;
+                        }
                         break;
                 }
             }

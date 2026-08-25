@@ -1,4 +1,3 @@
-version: '3.8'
 
 # Development override for docker-compose.yml / docker-compose.prod.yml
 #

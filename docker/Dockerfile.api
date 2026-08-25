@@ -49,6 +49,8 @@ RUN chown -R appuser:appgroup /app
 # crashes (including the HTTP endpoint) and nginx returns 502.
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:80
+ENV HTTP_PORTS=80
+ENV HTTPS_PORTS=
 
 # Switch to non-root user
 USER appuser

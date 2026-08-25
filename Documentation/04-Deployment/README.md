@@ -248,7 +248,7 @@ The system includes an Nginx reverse proxy that:
 ### Custom Domain Configuration
 
 For **LAN-only deployments** with Omada LAN DNS:
-1. Configure Omada LAN DNS entry (see [Debian 13 Server Preparation Guide](DEBIAN13_SERVER_PREPARATION_GUIDE.md))
+1. Configure Omada LAN DNS entry (see [Debian 13 Server Preparation Guide](../DEBIAN13_SERVER_PREPARATION_GUIDE.md))
 2. Configure SSL certificates (Internal CA for LAN)
 3. Update Nginx configuration with your internal hostname
 4. Restart Nginx: `docker compose restart nginx`
@@ -310,7 +310,7 @@ Use self-signed certificates for development only:
 ### Production SSL (LAN-Only Deployment)
 For LAN-only deployments (no public domain), use an **Internal Certificate Authority**:
 1. **Internal CA** (recommended for LAN) — Create your own CA and sign server certificates
-2. See the [Debian 13 Server Preparation Guide](DEBIAN13_SERVER_PREPARATION_GUIDE.md) Section 4 for complete instructions
+2. See the [Debian 13 Server Preparation Guide](../DEBIAN13_SERVER_PREPARATION_GUIDE.md) Section 4 for complete instructions
 
 ### Production SSL (Internet-Facing Deployment)
 For internet-facing deployments with a public domain:
@@ -466,7 +466,7 @@ Alertmanager handles alert routing:
 |---------|-------------|
 | [Installation Guide](../03-Installation/README.md) | Initial installation |
 | [Configuration Guide](../05-Configuration/README.md) | All configuration options |
-| [Debian 13 Server Preparation Guide](DEBIAN13_SERVER_PREPARATION_GUIDE.md) | LAN-only deployment with Omada DNS |
+| [Debian 13 Server Preparation Guide](../DEBIAN13_SERVER_PREPARATION_GUIDE.md) | Complete Debian 13 production deployment |
 | [Operations Guide](../21-Operations/README.md) | Operational procedures |
 | [Maintenance Guide](../15-Maintenance/README.md) | Routine maintenance |
 | [Troubleshooting Guide](../16-Troubleshooting/README.md) | Deployment troubleshooting |

@@ -7,7 +7,7 @@ using SMS.Application.Features.Approvals.Queries;
 namespace SMS.API.Controllers.v1
 {
     [ApiVersion("1.0")]
-    [Authorize(Roles = "Admin,Registrar,Coordinator,Receptionist")]
+    [Authorize(Policy = "ReceptionistAccess")]
     public class ApprovalController : BaseApiController
     {
         private readonly ILogger<ApprovalController> _logger;

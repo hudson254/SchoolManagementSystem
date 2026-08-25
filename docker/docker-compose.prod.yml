@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # PostgreSQL Database - Production
@@ -69,6 +68,7 @@ services:
       - api_logs:/app/logs
       - api_data:/app/data
       - api_uploads:/app/uploads
+      - api_dataprotection:/app/dataprotection-keys
     # Production: API port is not exposed to the host. nginx is the only entry point.
     expose:
       - "80"
@@ -299,7 +299,44 @@ services:
         reservations:
           memory: 128M
 
-  # Prometheus - Production: restricted to internal network
+  # Alertmanager - Production: restricted to internal network
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: sms-alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    expose:
+      - "9093"
+    restart: unless-stopped
+    networks:
+      - sms-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Alertmanager Webhook Receiver (optional - for notification delivery without SMTP)
+  # Uncomment and configure to receive webhook notifications from Alertmanager:
+  # alertmanager-webhook:
+  #   image: prometheuscommunity/alertmanager-webhook-receiver:latest
+  #   container_name: sms-alertmanager-webhook
+  #   expose:
+  #     - "9099"
+  #   restart: unless-stopped
+  #   networks:
+  #     - sms-network
   # Accessible to administrators via nginx reverse proxy or SSH tunnel
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -368,4 +405,5 @@ volumes:
   backup_data:
   prometheus_data:
   grafana_data:
+  api_dataprotection:
   alertmanager_data:

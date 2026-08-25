@@ -3,9 +3,10 @@ namespace SMS.Domain.Enums
     public enum RoleType
     {
         SystemAdministrator = 1,
-        Coordinator = 2,
-        Lecturer = 3,
-        Student = 4,
-        Receptionist = 5
+        Administrator = 2,
+        Coordinator = 3,
+        Lecturer = 4,
+        Student = 5,
+        Receptionist = 6
     }
 }
