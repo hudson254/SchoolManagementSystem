@@ -224,15 +224,6 @@ export const Login: React.FC = () => {
               Create Account
             </Button>
           </form>
-
-          <Box sx={{ mt: 3, textAlign: 'center' }}>
-            <Typography variant="caption" color="textSecondary">
-              Demo Credentials:
-            </Typography>
-            <Typography variant="caption" color="textSecondary" display="block">
-              admin@school.com / Admin123!
-            </Typography>
-          </Box>
         </Paper>
       </Box>
     </Container>
