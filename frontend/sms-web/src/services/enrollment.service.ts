@@ -58,8 +58,8 @@ export interface CourseHistory {
   totalCount: number;
 }
 
-const ENROLLMENT_BASE = "/api/v1/enrollment";
-const RETURNING_BASE = "/api/v1/returining";
+const ENROLLMENT_BASE = "/enrollment";
+const RETURNING_BASE = "/returning-user";
 
 export const enrollmentService = {
   submitEnrollment: (courseId: string, semesterId?: string) =>

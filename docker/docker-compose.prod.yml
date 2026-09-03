@@ -97,9 +97,11 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
+      args:
+        VITE_API_URL: ${API_URL:-/api/v1}
     container_name: sms-web
     environment:
-      VITE_API_URL: ${API_URL:-/api}
+      VITE_API_URL: ${API_URL:-/api/v1}
       VITE_APP_NAME: "School Management System"
     depends_on:
       api:
