@@ -51,6 +51,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:80
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD}"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required for seeding}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required for seeding}
+      ADMIN_FIRST_NAME: ${ADMIN_FIRST_NAME:-System}
+      ADMIN_LAST_NAME: ${ADMIN_LAST_NAME:-Administrator}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
       JWT__Issuer: ${JWT_ISSUER:-SMSAPI}
       JWT__Audience: ${JWT_AUDIENCE:-SMSWeb}
@@ -168,6 +172,7 @@ services:
       BACKUP_DIR: /backups
     volumes:
       - backup_data:/backups
+      - backup_metrics_data:/var/lib/node_exporter/textfile_collector
       - ../scripts:/scripts
     depends_on:
       postgres:
@@ -223,11 +228,13 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - backup_metrics_data:/var/lib/node_exporter/textfile_collector:ro
     command:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.textfile.directory=/var/lib/node_exporter/textfile_collector'
     expose:
       - "9100"
     restart: unless-stopped
@@ -301,33 +308,6 @@ services:
         reservations:
           memory: 128M
 
-  # Alertmanager - Production: restricted to internal network
-  alertmanager:
-    image: prom/alertmanager:v0.27.0
-    container_name: sms-alertmanager
-    volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
-      - alertmanager_data:/alertmanager
-    expose:
-      - "9093"
-    restart: unless-stopped
-    networks:
-      - sms-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
 
   # Alertmanager Webhook Receiver (optional - for notification delivery without SMTP)
   # Uncomment and configure to receive webhook notifications from Alertmanager:
@@ -345,7 +325,7 @@ services:
     container_name: sms-prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus-alerts.yml:/etc/prometheus/alerts.yml
+      - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml
       - prometheus_data:/prometheus
     # Production: Prometheus is not exposed to the host. Access via internal network.
     # For admin access, use SSH tunnel or Grafana (which is also internal-only).
@@ -405,6 +385,7 @@ volumes:
   api_data:
   api_uploads:
   backup_data:
+  backup_metrics_data:
   prometheus_data:
   grafana_data:
   api_dataprotection:

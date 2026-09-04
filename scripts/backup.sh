@@ -25,6 +25,16 @@ pg_dump -h "${DB_HOST}" -U "${DB_USER}" -d "${DB_NAME}" -Fc -f "${BACKUP_FILE}"
 
 echo "Backup created successfully: ${BACKUP_FILE}"
 
+# Publish backup success metric for Prometheus/node-exporter
+BACKUP_TIMESTAMP=$(date +%s)
+cat > /var/lib/node_exporter/textfile_collector/sms_backup.prom <<EOF
+# HELP sms_backup_last_success_timestamp_seconds Unix timestamp of the last successful database backup
+# TYPE sms_backup_last_success_timestamp_seconds gauge
+sms_backup_last_success_timestamp_seconds ${BACKUP_TIMESTAMP}
+EOF
+
+echo "Backup success metric updated."
+
 # Retention pruning
 echo "Pruning backups older than ${BACKUP_RETENTION_DAYS} days..."
 find "${BACKUP_DIR}" -type f -name "${DB_NAME}_*.dump" -mtime "+${BACKUP_RETENTION_DAYS}" -delete

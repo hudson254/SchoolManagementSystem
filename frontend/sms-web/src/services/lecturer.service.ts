@@ -60,26 +60,26 @@ interface PagedResponse<T> {
 
 export const lecturerService = {
   getLecturers: (params: GetLecturersParams) =>
-    api.get<PagedResponse<Lecturer>>('/lecturers', { params }),
+    api.get<PagedResponse<Lecturer>>('/lecturer', { params }),
 
   getLecturer: (id: string) =>
-    api.get<LecturerDetails>(`/lecturers/${id}`),
+    api.get<LecturerDetails>(`/lecturer/${id}`),
 
   createLecturer: (data: any) =>
-    api.post<Lecturer>('/lecturers', data),
+    api.post<Lecturer>('/lecturer', data),
 
   updateLecturer: (id: string, data: any) =>
-    api.put<Lecturer>(`/lecturers/${id}`, data),
+    api.put<Lecturer>(`/lecturer/${id}`, data),
 
   deleteLecturer: (id: string) =>
-    api.delete(`/lecturers/${id}`),
+    api.delete(`/lecturer/${id}`),
 
   verifyLecturer: (id: string) =>
-    api.post<Lecturer>(`/lecturers/${id}/verify`),
+    api.post<Lecturer>(`/lecturer/${id}/verify`),
 
   getUnits: (lecturerId: string) =>
-    api.get<UnitSummary[]>(`/lecturers/${lecturerId}/units`),
+    api.get<UnitSummary[]>(`/lecturer/${lecturerId}/units`),
 
   allocateUnit: (lecturerId: string, unitId: string, semesterId: string, isPrimary?: boolean) =>
-    api.post(`/lecturers/${lecturerId}/allocate-unit`, { unitId, semesterId, isPrimary }),
+    api.post(`/lecturer/${lecturerId}/allocate-unit`, { unitId, semesterId, isPrimary }),
 };

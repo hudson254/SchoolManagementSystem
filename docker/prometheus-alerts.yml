@@ -9,13 +9,13 @@ groups:
     rules:
       # --- API Availability ---
       - alert: APIUnavailable
-        expr: probe_success{job="sms-api-health"} == 0
+        expr: up{job="sms-api-metrics"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "SMS API is unavailable"
-          description: "The SMS API health check has failed for more than 1 minute."
+          description: "The SMS API Prometheus metrics endpoint has been unavailable for more than 1 minute."
 
       # --- Database Availability ---
       - alert: DatabaseUnavailable
@@ -29,13 +29,13 @@ groups:
 
       # --- Container Restart Loops ---
       - alert: ContainerRestartLoop
-        expr: rate(container_last_seen{name=~"sms-.*"}[5m]) > 0
+        expr: changes(container_start_time_seconds{name=~"sms-.*"}[15m]) > 1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Container {{ $labels.name }} is restarting frequently"
-          description: "Container {{ $labels.name }} has restarted multiple times in the last 5 minutes."
+          summary: "Container {{ $labels.name }} restarted repeatedly"
+          description: "Container {{ $labels.name }} has restarted more than once in the last 15 minutes."
 
       # --- Disk Space ---
       - alert: DiskSpaceCritical
@@ -98,10 +98,10 @@ groups:
 
       # --- Backup Status ---
       - alert: BackupNotRunning
-        expr: time() - node_time_seconds > 86400
-        for: 25h
+        expr: time() - sms_backup_last_success_timestamp_seconds > 86400
+        for: 1h
         labels:
           severity: warning
         annotations:
-          summary: "Backup may not have run in the last 24 hours"
-          description: "No backup completion metric detected in the last 24 hours."
+          summary: "Database backup has not completed in the last 24 hours"
+          description: "The last successful School Management System database backup was more than 24 hours ago."

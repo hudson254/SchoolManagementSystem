@@ -165,6 +165,9 @@ namespace SMS.Application.Features.Auth.Commands
                     UserId = typedUser.Id.ToString(),
                     Email = typedUser.Email,
                     Username = typedUser.UserName,
+                    FirstName = typedUser.FirstName ?? string.Empty,
+                    LastName = typedUser.LastName ?? string.Empty,
+                    FullName = typedUser.FullName ?? string.Empty,
                     Roles = rolesList
                 };
             }

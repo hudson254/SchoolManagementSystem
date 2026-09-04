@@ -224,6 +224,9 @@ export const Login: React.FC = () => {
               Create Account
             </Button>
           </form>
+          <Box sx={{ mt: 3, textAlign: 'center' }}>
+            {/* Demo credentials removed */}
+          </Box>
         </Paper>
       </Box>
     </Container>

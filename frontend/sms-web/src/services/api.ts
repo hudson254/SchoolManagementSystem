@@ -54,7 +54,7 @@ function processQueue(error: unknown, token: string | null = null): void {
     } else if (token) {
       // Mark as retried so the response interceptor does not re-enter
       // the refresh flow for this request.
-      item.config._retry = true;
+      (item.config as any)._retry = true;
       // Replay the request.  The new httpOnly cookies are sent
       // automatically by the browser.
       item.resolve(

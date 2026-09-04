@@ -60,8 +60,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // /auth/me endpoint; the backend reads the access_token cookie and
       // resolves the user. No token is read from browser storage.
       const response = await apiClient.get('/auth/me');
-      setUser(response.data);
-      storage.setUser(response.data);
+      setUser(response);
+      storage.setUser(response);
     } catch (error) {
       // 401 means no valid session cookie — silently clear any cached user.
       console.error('Failed to load user:', error);
@@ -86,10 +86,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Tokens are set as httpOnly cookies by the backend; the body only
       // carries the non-token user profile fields.
-      setUser(response.data);
-      storage.setUser(response.data);
+      setUser(response);
+      storage.setUser(response);
 
-      navigate('/dashboard');
+      // Calling component handles navigation
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
@@ -101,8 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await apiClient.post('/auth/register', data);
 
       // Tokens are set as httpOnly cookies by the backend.
-      setUser(response.data);
-      storage.setUser(response.data);
+      setUser(response);
+      storage.setUser(response);
 
       navigate('/dashboard');
     } catch (error) {

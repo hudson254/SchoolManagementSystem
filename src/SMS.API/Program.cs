@@ -658,15 +658,15 @@ builder.Services.AddCertificateModule();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdministratorAccess", policy =>
-        policy.RequireRole("Administrator"));
+        policy.RequireRole("SystemAdministrator", "Administrator"));
     options.AddPolicy("ModeratorAccess", policy =>
-        policy.RequireRole("Administrator", "Coordinator"));
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
     options.AddPolicy("LecturerAccess", policy =>
-        policy.RequireRole("Administrator", "Coordinator", "Lecturer"));
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
     options.AddPolicy("StudentAccess", policy =>
-        policy.RequireRole("Administrator", "Coordinator", "Lecturer", "Student"));
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student"));
     options.AddPolicy("ReceptionistAccess", policy =>
-        policy.RequireRole("Administrator", "Coordinator", "Receptionist"));
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Receptionist"));
     options.AddPolicy("SystemAdministratorAccess", policy =>
         policy.RequireRole("SystemAdministrator"));
 });

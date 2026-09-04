@@ -61,28 +61,28 @@ interface PagedResponse<T> {
 
 export const courseService = {
   getCourses: (params: GetCoursesParams) =>
-    api.get<PagedResponse<Course>>('/courses', { params }),
+    api.get<PagedResponse<Course>>('/course', { params }),
 
   getCourse: (id: string) =>
-    api.get<CourseDetails>(`/courses/${id}`),
+    api.get<CourseDetails>(`/course/${id}`),
 
   createCourse: (data: any) =>
-    api.post<Course>('/courses', data),
+    api.post<Course>('/course', data),
 
   updateCourse: (id: string, data: any) =>
-    api.put<Course>(`/courses/${id}`, data),
+    api.put<Course>(`/course/${id}`, data),
 
   deleteCourse: (id: string) =>
-    api.delete(`/courses/${id}`),
+    api.delete(`/course/${id}`),
 
   getUnits: (courseId: string) =>
-    api.get<UnitSummary[]>(`/courses/${courseId}/units`),
+    api.get<UnitSummary[]>(`/course/${courseId}/units`),
 
   getDepartments: () =>
     api.get<any[]>('/departments'),
 
   getProgrammes: (courseId?: string) =>
     courseId
-      ? api.get<ProgrammeSummary[]>(`/courses/${courseId}/programmes`)
+      ? api.get<ProgrammeSummary[]>(`/course/${courseId}/programmes`)
       : api.get<any[]>('/programmes'),
 };

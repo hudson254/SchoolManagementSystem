@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SMS.API.Options;
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -66,7 +67,7 @@ namespace SMS.API.Middleware
             var window = TimeSpan.FromMinutes(_options.WindowMinutes);
 
             // Check if client is banned
-            var banKey = $"banned_{clientIp}";
+            var banKey = $"banned_{clientIp}_{path}";
             if (_cache.TryGetValue(banKey, out bool _))
             {
                 context.Response.StatusCode = (int)HttpStatusCode.TooManyRequests;

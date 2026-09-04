@@ -112,13 +112,13 @@ const menuItems: MenuItem[] = [
     text: 'Certificates',
     icon: <WorkspacePremium />,
     path: '/certificates',
-    roles: ['Administrator', 'Coordinator'],
+    roles: ['SystemAdministrator', 'Administrator', 'Coordinator'],
   },
   {
     text: 'Certificate Templates',
     icon: <Description />,
     path: '/certificates/templates',
-    roles: ['Administrator'],
+    roles: ['SystemAdministrator', 'Administrator'],
   },
   {
     text: 'My Certificates',
@@ -130,7 +130,7 @@ const menuItems: MenuItem[] = [
     text: 'Users',
     icon: <Person />,
     path: '/users',
-    roles: ['Administrator'],
+    roles: ['SystemAdministrator', 'Administrator'],
   },
   {
     text: 'Notifications',
@@ -142,7 +142,7 @@ const menuItems: MenuItem[] = [
     text: 'Settings',
     icon: <Settings />,
     path: '/settings',
-    roles: ['Administrator'],
+    roles: ['SystemAdministrator', 'Administrator'],
   },
 ];
 

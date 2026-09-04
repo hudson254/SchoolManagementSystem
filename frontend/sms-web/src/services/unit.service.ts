@@ -56,25 +56,25 @@ interface PagedResponse<T> {
 
 export const unitService = {
   getUnits: (params: GetUnitsParams) =>
-    api.get<PagedResponse<Unit>>('/units', { params }),
+    api.get<PagedResponse<Unit>>('/unit', { params }),
 
   getUnit: (id: string) =>
-    api.get<UnitDetails>(`/units/${id}`),
+    api.get<UnitDetails>(`/unit/${id}`),
 
   createUnit: (data: any) =>
-    api.post<Unit>('/units', data),
+    api.post<Unit>('/unit', data),
 
   updateUnit: (id: string, data: any) =>
-    api.put<Unit>(`/units/${id}`, data),
+    api.put<Unit>(`/unit/${id}`, data),
 
   deleteUnit: (id: string) =>
-    api.delete(`/units/${id}`),
+    api.delete(`/unit/${id}`),
 
   getLecturers: (unitId: string) =>
-    api.get<LecturerSummary[]>(`/units/${unitId}/lecturers`),
+    api.get<LecturerSummary[]>(`/unit/${unitId}/lecturers`),
 
   getStudents: (unitId: string) =>
-    api.get<StudentSummary[]>(`/units/${unitId}/students`),
+    api.get<StudentSummary[]>(`/unit/${unitId}/students`),
 };
 
 interface StudentSummary {

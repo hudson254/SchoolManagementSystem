@@ -19,7 +19,8 @@ namespace SMS.API.Middleware
         {
             // Skip tenant resolution for health check and other public endpoints
             var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
-            if (path == "/health" || path == "/health/")
+            if (path == "/health" || path == "/health/" ||
+    		path == "/metrics" || path == "/metrics/")
             {
                 await _next(context);
                 return;

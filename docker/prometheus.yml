@@ -53,19 +53,7 @@ scrape_configs:
           service: "sms-api"
 
   # --- SMS API availability (infrastructure-level probe) ---
-  - job_name: "sms-api-health"
-    metrics_path: "/health"
-    scheme: http
-    scrape_interval: 30s
-    scrape_timeout: 5s
-    static_configs:
-      - targets:
-          - "api:80"
-        labels:
-          application: "sms-api"
-          environment: "production"
-          component: "health-check"
-          service: "sms-api"
+
 
   # --- Node Exporter (host-level metrics) ---
   - job_name: "node"
@@ -78,7 +66,6 @@ scrape_configs:
           application: "host-metrics"
           environment: "production"
           service: "node-exporter"
-
   # --- PostgreSQL Exporter (database metrics) ---
   - job_name: "postgresql"
     scrape_interval: 30s

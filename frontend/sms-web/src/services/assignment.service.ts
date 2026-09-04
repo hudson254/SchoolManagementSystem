@@ -69,32 +69,32 @@ interface PagedResponse<T> {
 
 export const assignmentService = {
   getAssignments: (params: GetAssignmentsParams) =>
-    api.get<PagedResponse<Assignment>>('/assignments', { params }),
+    api.get<PagedResponse<Assignment>>('/assignment', { params }),
 
   getAssignment: (id: string) =>
-    api.get<Assignment>(`/assignments/${id}`),
+    api.get<Assignment>(`/assignment/${id}`),
 
   createAssignment: (data: any) =>
-    api.post<Assignment>('/assignments', data),
+    api.post<Assignment>('/assignment', data),
 
   updateAssignment: (id: string, data: any) =>
-    api.put<Assignment>(`/assignments/${id}`, data),
+    api.put<Assignment>(`/assignment/${id}`, data),
 
   deleteAssignment: (id: string) =>
-    api.delete(`/assignments/${id}`),
+    api.delete(`/assignment/${id}`),
 
   getSubmissions: (assignmentId: string) =>
-    api.get<AssignmentSubmission[]>(`/assignments/${assignmentId}/submissions`),
+    api.get<AssignmentSubmission[]>(`/assignment/${assignmentId}/submissions`),
 
   getSubmission: (submissionId: string) =>
-    api.get<AssignmentSubmission>(`/assignments/submissions/${submissionId}`),
+    api.get<AssignmentSubmission>(`/assignment/submissions/${submissionId}`),
 
   submitAssignment: (data: { assignmentId: string; studentId: string; filePath: string; fileName: string; fileSize: number; comments?: string }) =>
-    api.post<AssignmentSubmission>('/assignments/submit', data),
+    api.post<AssignmentSubmission>('/assignment/submit', data),
 
   gradeSubmission: (submissionId: string, score: number, feedback?: string) =>
-    api.put<AssignmentSubmission>(`/assignments/submissions/${submissionId}/grade`, { score, feedback }),
+    api.put<AssignmentSubmission>(`/assignment/submissions/${submissionId}/grade`, { score, feedback }),
 
   getStudentAssignments: (studentId: string, semesterId?: string) =>
-    api.get<Assignment[]>(`/assignments/student/${studentId}`, { params: { semesterId } }),
+    api.get<Assignment[]>(`/assignment/student/${studentId}`, { params: { semesterId } }),
 };
