@@ -21,18 +21,23 @@ const Register = loadPage(() => import('./pages/Register'), 'Register');
 const Dashboard = loadPage(() => import('./pages/Dashboard'), 'Dashboard');
 const Students = loadPage(() => import('./pages/Students'), 'Students');
 const StudentDetail = loadPage(() => import('./pages/StudentDetail'), 'StudentDetail');
+const AddStudentPage = loadPage(() => import('./pages/AddStudentPage'), 'AddStudentPage');
 const Lecturers = loadPage(() => import('./pages/Lecturers'), 'Lecturers');
+const AddLecturerPage = loadPage(() => import('./pages/AddLecturerPage'), 'AddLecturerPage');
 const Courses = loadPage(() => import('./pages/Courses'), 'Courses');
+const AddCoursePage = loadPage(() => import('./pages/AddCoursePage'), 'AddCoursePage');
 const CourseOfferings = loadPage(() => import('./pages/CourseOfferings'), 'CourseOfferings');
 const CourseOfferingDetail = loadPage(() => import('./pages/CourseOfferingDetail'), 'CourseOfferingDetail');
 const CourseOfferingFormPage = loadPage(() => import('./pages/CourseOfferingFormPage'), 'CourseOfferingFormPage');
 const Units = loadPage(() => import('./pages/Units'), 'Units');
+const AddUnitPage = loadPage(() => import('./pages/AddUnitPage'), 'AddUnitPage');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
 const Assignments = loadPage(() => import('./pages/Assignments'), 'Assignments');
 const Grades = loadPage(() => import('./pages/Grades'), 'Grades');
 const Reports = loadPage(() => import('./pages/Reports'), 'Reports');
 const Users = loadPage(() => import('./pages/Users'), 'Users');
+const AddUserPage = loadPage(() => import('./pages/AddUserPage'), 'AddUserPage');
 const Settings = loadPage(() => import('./pages/Settings'), 'Settings');
 const Profile = loadPage(() => import('./pages/Profile'), 'Profile');
 const Calendar = loadPage(() => import('./pages/Calendar'), 'Calendar');
@@ -43,6 +48,7 @@ const CertificateTemplates = loadPage(() => import('./pages/CertificateTemplates
 const CourseSelectionPage = loadPage(() => import('./pages/CourseSelectionPage'), 'CourseSelectionPage');
 const EnrollmentStatusPage = loadPage(() => import('./pages/EnrollmentStatusPage'), 'EnrollmentStatusPage');
 const CourseHistoryPage = loadPage(() => import('./pages/CourseHistoryPage'), 'CourseHistoryPage');
+const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const NotFound = loadPage(() => import('./pages/NotFound'), 'NotFound');
 
 const queryClient = new QueryClient({
@@ -77,37 +83,43 @@ function App() {
                     }
                   >
                     <Routes>
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/register" element={<Register />} />
-                      <Route path="/verify" element={<CertificateVerification />} />
-                      <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                        <Route index element={<Navigate to="/dashboard" />} />
-                        <Route path="dashboard" element={<Dashboard />} />
-                        <Route path="students" element={<Students />} />
-                        <Route path="students/:id" element={<StudentDetail />} />
-                        <Route path="lecturers" element={<Lecturers />} />
-                        <Route path="courses" element={<Courses />} />
-                        <Route path="course-offerings" element={<CourseOfferings />} />
-                        <Route path="course-offerings/new" element={<CourseOfferingFormPage />} />
-                        <Route path="course-offerings/:id" element={<CourseOfferingDetail />} />
-                        <Route path="course-offerings/:id/edit" element={<CourseOfferingFormPage />} />
-                        <Route path="units" element={<Units />} />
-                        <Route path="timetable" element={<Timetable />} />
-                        <Route path="accommodation" element={<Accommodation />} />
-                        <Route path="assignments" element={<Assignments />} />
-                        <Route path="grades" element={<Grades />} />
-                        <Route path="reports" element={<Reports />} />
-                        <Route path="users" element={<Users />} />
-                        <Route path="settings" element={<Settings />} />
-                        <Route path="profile" element={<Profile />} />
-                        <Route path="calendar" element={<Calendar />} />
-                        <Route path="certificates" element={<Certificates />} />
-                        <Route path="certificates/templates" element={<CertificateTemplates />} />
-                        <Route path="my-certificates" element={<MyCertificates />} />
-                        <Route path="course-selection" element={<CourseSelectionPage />} />
-                        <Route path="enrollment-status" element={<EnrollmentStatusPage />} />
-                        <Route path="course-history" element={<CourseHistoryPage />} />
-                        <Route path="*" element={<NotFound />} />
+                      <Route path='/login' element={<Login />} />
+                      <Route path='/register' element={<Register />} />
+                      <Route path='/verify' element={<CertificateVerification />} />
+                      <Route path='/*' element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                        <Route index element={<Navigate to='/dashboard' />} />
+                        <Route path='dashboard' element={<Dashboard />} />
+                        <Route path='students' element={<Students />} />
+                        <Route path='students/new' element={<AddStudentPage />} />
+                        <Route path='students/:id' element={<StudentDetail />} />
+                        <Route path='lecturers' element={<Lecturers />} />
+                        <Route path='lecturers/new' element={<AddLecturerPage />} />
+                        <Route path='courses' element={<Courses />} />
+                        <Route path='courses/new' element={<AddCoursePage />} />
+                        <Route path='course-offerings' element={<CourseOfferings />} />
+                        <Route path='course-offerings/new' element={<CourseOfferingFormPage />} />
+                        <Route path='course-offerings/:id' element={<CourseOfferingDetail />} />
+                        <Route path='course-offerings/:id/edit' element={<CourseOfferingFormPage />} />
+                        <Route path='units' element={<Units />} />
+                        <Route path='units/new' element={<AddUnitPage />} />
+                        <Route path='classes' element={<Classes />} />
+                        <Route path='timetable' element={<Timetable />} />
+                        <Route path='accommodation' element={<Accommodation />} />
+                        <Route path='assignments' element={<Assignments />} />
+                        <Route path='grades' element={<Grades />} />
+                        <Route path='reports' element={<Reports />} />
+                        <Route path='users' element={<Users />} />
+                        <Route path='users/new' element={<AddUserPage />} />
+                        <Route path='settings' element={<Settings />} />
+                        <Route path='profile' element={<Profile />} />
+                        <Route path='calendar' element={<Calendar />} />
+                        <Route path='certificates' element={<Certificates />} />
+                        <Route path='certificates/templates' element={<CertificateTemplates />} />
+                        <Route path='my-certificates' element={<MyCertificates />} />
+                        <Route path='course-selection' element={<CourseSelectionPage />} />
+                        <Route path='enrollment-status' element={<EnrollmentStatusPage />} />
+                        <Route path='course-history' element={<CourseHistoryPage />} />
+                        <Route path='*' element={<NotFound />} />
                       </Route>
                     </Routes>
                   </Suspense>
@@ -123,4 +135,3 @@ function App() {
 }
 
 export default App;
-
