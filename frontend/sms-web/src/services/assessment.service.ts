@@ -81,5 +81,5 @@ export const assessmentService = {
   lockUnit:(unitId: string) => api.post(`/assessment/units/${unitId}/lock`, { reason: undefined }),
   unlockUnit:(unitId: string) => api.post(`/assessment/units/${unitId}/unlock`, { reason: undefined }),
   getStudentResults:(studentId: string) => api.get<StudentResult[]>(`/assessment/student/${studentId}/results`),
-  getCertificateEligibility:(studentId: string) => api.get<CertificateEligibility>(`/assessment/student/${studentId}/certificate-eligibility`),
+  getCertificateEligibility: (studentId: string) => api.get<CertificateEligibility>(`/assessment/certificate-eligibility/student/${studentId}`),
 }  

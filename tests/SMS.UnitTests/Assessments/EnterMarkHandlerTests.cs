@@ -31,7 +31,7 @@ namespace SMS.UnitTests.Assessments
 
             var handler = new EnterMarkHandler(engine.Object, repo.Object, MarkRepo().Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
+            await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => handler.Handle(
                 new EnterMarkCommand { AssessmentId = Guid.NewGuid(), StudentId = Guid.NewGuid(), Score = 101m, MaxScore = 100m, IsDraft = false },
                 CancellationToken.None));
         }

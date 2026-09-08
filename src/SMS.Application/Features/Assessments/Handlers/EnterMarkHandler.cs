@@ -42,7 +42,7 @@ namespace SMS.Application.Features.Assessments.Handlers
                 throw new NotFoundException("Assessment", request.AssessmentId);
 
             if (request.Score < 0 || request.Score > assessment.MaxScore)
-                throw new InvalidOperationException($"Score must be between 0 and {assessment.MaxScore}.");
+                throw new FluentValidation.ValidationException($"Score must be between 0 and {assessment.MaxScore}.");
 
             // Duplicate grading prevention - report as HTTP 409 Conflict.
             var existingMark = await _markRepository.GetByAssessmentAndStudentAsync(
