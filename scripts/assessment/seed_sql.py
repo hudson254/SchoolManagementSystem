@@ -3,8 +3,8 @@
 # NOTE: The Tenants primary-key column is lowercase "id" (BaseEntity maps
 # [Column("id")]); all SQL here uses REAL quotes and the correct column names.
 
-TENANT_EXPR = "COALESCE((SELECT \"id\" FROM \"Tenants\" WHERE \"IsActive\" = true ORDER BY \"CreatedDate\" LIMIT 1), '00000000-0000-0000-0000-000000000000')"
-SET_TENANT = "SELECT set_config('app.tenant_id', COALESCE((SELECT \"id\"::text FROM \"Tenants\" WHERE \"IsActive\" = true ORDER BY \"CreatedDate\" LIMIT 1), ''), false);"
+TENANT_EXPR = "COALESCE((SELECT \"id\" FROM \"Tenants\" WHERE \"IsActive\" = true ORDER BY \"created_date\" LIMIT 1), '00000000-0000-0000-0000-000000000000')"
+SET_TENANT = "SELECT set_config('app.tenant_id', COALESCE((SELECT \"id\"::text FROM \"Tenants\" WHERE \"IsActive\" = true ORDER BY \"created_date\" LIMIT 1), ''), false);"
 
 TYPES = [
     ("Assignment", "ASSIGNMENT", "Written assignments", 1, 1),
