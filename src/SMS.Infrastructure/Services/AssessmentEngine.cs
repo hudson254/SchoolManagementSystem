@@ -285,7 +285,8 @@ public async Task<StudentAssessmentMark> UpdateMarkAsync(
                 .OrderByDescending(b => b.MinPercentage)
                 .FirstOrDefault(b => finalPercentage >= b.MinPercentage && finalPercentage <= b.MaxPercentage);
 
-            var unitResult = await _unitResultRepository.GetByStudentAndUnitAsync(studentId, unitId, ct)
+            var existingResult = await _unitResultRepository.GetByStudentAndUnitAsync(studentId, unitId, ct);
+            var unitResult = existingResult
                 ?? new UnitResult { StudentId = studentId, UnitId = unitId, CourseOfferingId = courseOfferingId };
 
             unitResult.FinalPercentage = finalPercentage;
@@ -296,7 +297,7 @@ public async Task<StudentAssessmentMark> UpdateMarkAsync(
             unitResult.IsRecalculated = true;
             unitResult.LastCalculatedDate = DateTime.UtcNow;
 
-            if (unitResult.Id == Guid.Empty)
+            if (existingResult == null)
                 await _unitResultRepository.AddAsync(unitResult, ct);
             else
                 await _unitResultRepository.UpdateAsync(unitResult, ct);
@@ -338,7 +339,8 @@ public async Task<StudentAssessmentMark> UpdateMarkAsync(
         {
             var rule = await _certificateRuleRepository.GetActiveRuleAsync(ct);
             var unitResults = (await _unitResultRepository.GetByStudentAsync(studentId, ct)).Where(r => r.IsPublished).ToList();
-            var eligibility = await _eligibilityRepository.GetByStudentAsync(studentId, ct)
+            var existingEligibility = await _eligibilityRepository.GetByStudentAsync(studentId, ct);
+            var eligibility = existingEligibility
                 ?? new StudentCertificateEligibility { StudentId = studentId };
 
             var overallPercentage = unitResults.Count > 0 ? unitResults.Average(r => r.FinalPercentage) : 0m;
@@ -363,7 +365,7 @@ public async Task<StudentAssessmentMark> UpdateMarkAsync(
             eligibility.EvaluatedDate = DateTime.UtcNow;
             eligibility.CertificateRuleId = rule?.Id;
 
-            if (eligibility.Id == Guid.Empty)
+            if (existingEligibility == null)
                 await _eligibilityRepository.AddAsync(eligibility, ct);
             else
                 await _eligibilityRepository.UpdateAsync(eligibility, ct);
