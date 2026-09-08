@@ -13,6 +13,14 @@ namespace SMS.UnitTests.Assessments
 {
     public class EnterMarkHandlerTests
     {
+        private static Mock<IStudentAssessmentMarkRepository> MarkRepo()
+        {
+            var markRepo = new Mock<IStudentAssessmentMarkRepository>();
+            markRepo.Setup(x => x.GetByAssessmentAndStudentAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((StudentAssessmentMark?)null);
+            return markRepo;
+        }
+
         [Fact]
         public async Task ScoreOutsideAssessmentMaximum_ShouldReject()
         {
@@ -21,10 +29,28 @@ namespace SMS.UnitTests.Assessments
             repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new Assessment { Title = "A1", MaxScore = 100m });
 
-            var handler = new EnterMarkHandler(engine.Object, repo.Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
+            var handler = new EnterMarkHandler(engine.Object, repo.Object, MarkRepo().Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
                 new EnterMarkCommand { AssessmentId = Guid.NewGuid(), StudentId = Guid.NewGuid(), Score = 101m, MaxScore = 100m, IsDraft = false },
+                CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task DuplicateMark_ShouldThrowConflict()
+        {
+            var engine = new Mock<IAssessmentEngine>();
+            var repo = new Mock<IAssessmentRepository>();
+            repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Assessment { Title = "A1", MaxScore = 100m });
+            var markRepo = new Mock<IStudentAssessmentMarkRepository>();
+            markRepo.Setup(x => x.GetByAssessmentAndStudentAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new StudentAssessmentMark { Id = Guid.NewGuid() });
+
+            var handler = new EnterMarkHandler(engine.Object, repo.Object, markRepo.Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
+
+            await Assert.ThrowsAsync<SMS.Application.Exceptions.ConflictException>(() => handler.Handle(
+                new EnterMarkCommand { AssessmentId = Guid.NewGuid(), StudentId = Guid.NewGuid(), Score = 85m, MaxScore = 100m, IsDraft = false },
                 CancellationToken.None));
         }
 
@@ -40,7 +66,7 @@ namespace SMS.UnitTests.Assessments
             repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new Assessment { Title = "A1", MaxScore = 100m, Weight = 10m });
 
-            var handler = new EnterMarkHandler(engine.Object, repo.Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
+            var handler = new EnterMarkHandler(engine.Object, repo.Object, MarkRepo().Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
 
             var result = await handler.Handle(
                 new EnterMarkCommand { AssessmentId = mark.AssessmentId, StudentId = mark.StudentId, Score = 85m, MaxScore = 100m, IsDraft = false },
@@ -62,7 +88,7 @@ namespace SMS.UnitTests.Assessments
             repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new Assessment { Title = "A1", MaxScore = 100m, Weight = 10m });
 
-            var handler = new EnterMarkHandler(engine.Object, repo.Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
+            var handler = new EnterMarkHandler(engine.Object, repo.Object, MarkRepo().Object, Mock.Of<Microsoft.Extensions.Logging.ILogger<EnterMarkHandler>>());
 
             var result = await handler.Handle(
                 new EnterMarkCommand { AssessmentId = mark.AssessmentId, StudentId = mark.StudentId, Score = 60m, MaxScore = 100m, IsDraft = true },
