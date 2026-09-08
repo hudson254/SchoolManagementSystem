@@ -347,9 +347,12 @@ public async Task<StudentAssessmentMark> UpdateMarkAsync(
             var hasOutstandingIncomplete = unitResults.Any(r => !r.IsPublished);
             var hasFailedRequiredUnits = unitResults.Any(r => r.FinalPercentage < (rule?.MinimumPassingPercentage ?? 50m));
 
+            // NOTE: parenthesize the ?? before || - C# binds ?? looser than ||,
+            // so (!rule?.X ?? true || Y) would evaluate (!rule.X) ?? (true || Y)
+            // and collapse to false whenever the rule requires the condition.
             var isEligible = unitResults.Count > 0
-                && (!rule?.RequireAllRequiredUnits ?? true || !hasFailedRequiredUnits)
-                && (!rule?.RequireNoOutstandingIncomplete ?? true || !hasOutstandingIncomplete)
+                && ((!rule?.RequireAllRequiredUnits ?? true) || !hasFailedRequiredUnits)
+                && ((!rule?.RequireNoOutstandingIncomplete ?? true) || !hasOutstandingIncomplete)
                 && overallPercentage >= (rule?.MinimumPassingPercentage ?? 50m);
 
             eligibility.OverallPercentage = Math.Round(overallPercentage, 2);

@@ -2,7 +2,7 @@
 import subprocess
 
 bash = r"""
-if ps -p 1427536 > /dev/null 2>&1; then
+if ps -p 1434538 > /dev/null 2>&1; then
   echo "BUILD_STILL_RUNNING"
   tail -3 /tmp/api_build6.log
 else
