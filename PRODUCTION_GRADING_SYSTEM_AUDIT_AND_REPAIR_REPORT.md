@@ -393,3 +393,38 @@ declaring the production grading system ready for real academic use.---
 4. Never delete the pre-repair backup or the AuditLogs / GradeChangeHistories rows.
 ---
 
+## Deployment Attempt Log (2026-09-08, post-audit)
+
+A deployment run was attempted immediately after the audit report was produced.
+The production host was not reachable:
+
+| Check | Result |
+|---|---|
+| SSH `sms_admin@192.168.110.161:22` (15 s / 20 s / key auth) | Connection timed out (all attempts) |
+| HTTPS `https://192.168.110.161/` and `/health` | No response (`HTTPS:000`) |
+| TCP ports 22, 2222, 443, 8443, 5000, 5433 on `.161` | All closed / no response |
+| `tracert -h 6 -w 2000 192.168.110.161` | `Hop 1 (NCAICTLT49741.KWS.local [192.168.110.60]) -> Destination host unreachable` |
+| ARP table for subnet 192.168.110.0/24 | **No entry** for `.161` (host not answering ARP) |
+| Alternate IP from `~/.ssh/known_hosts` (`192.168.110.42`) | Also unreachable (TCP 22/443 no response) |
+| DNS name `sms-server` (Omada LAN DNS) | Does not resolve from this workstation |
+
+**Conclusion:** the production server is physically absent from the LAN at the time
+of the attempt (no ARP response, unreachable at layer 2/3). This is not fixable
+from this workstation.
+
+**Status:** deployment, database migration, and production acceptance testing
+remain **BLOCKED**. The repair branch `grading-system-repair` (commit `b96c50c`,
+report commit `a509f26`) is ready. The operator should:
+
+1. Restore the host to the network (power / network / firewall), or provide an
+   alternative reachable address and/or tunnel.
+2. Confirming the host responds to `ping` and `ssh sms_admin@192.168.110.161`,
+   run the Section 14 checklist exactly (build image, `up -d sms-api`, verify
+   migration + seed visibility, then the Phase 33 acceptance scenario).
+3. If the seeded configuration is not visible to the resolved tenant, apply the
+   corrective tenant-alignment UPDATE noted in Section 14 before proceeding.
+
+Once deployment executes, evidence can be appended to this report and the
+NOT TESTABLE rows re-graded to PASS/FAIL.
+---
+
