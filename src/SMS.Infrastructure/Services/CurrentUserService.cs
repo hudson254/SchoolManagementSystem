@@ -22,7 +22,7 @@ namespace SMS.Infrastructure.Services
 
         public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 
-        public IEnumerable<string> Roles => _httpContextAccessor.HttpContext?.User?.FindAll(ClaimTypes.Role)
+        public IEnumerable<string> Roles => _httpContextAccessor.HttpContext?.User?.FindAll("role")
             ?.Select(c => c.Value) ?? new List<string>();
     }
 }

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -387,7 +388,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(
         {
             npgsqlOptions.EnableRetryOnFailure(3);
             npgsqlOptions.CommandTimeout(60);
-        }),
+        })
+        .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)),
     contextLifetime: ServiceLifetime.Scoped,
     optionsLifetime: ServiceLifetime.Scoped);
 

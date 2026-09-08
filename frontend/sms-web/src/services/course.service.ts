@@ -8,9 +8,9 @@ interface Course {
   duration: number;
   totalCredits: number;
   isActive: boolean;
-  departmentId: string;
-  departmentName: string;
-  departmentCode: string;
+  departmentId?: string;
+  departmentName?: string;
+  departmentCode?: string;
   createdDate: string;
 }
 
@@ -61,28 +61,28 @@ interface PagedResponse<T> {
 
 export const courseService = {
   getCourses: (params: GetCoursesParams) =>
-    api.get<PagedResponse<Course>>('/course', { params }),
+    api.get<PagedResponse<Course>>('/courses', { params }),
 
   getCourse: (id: string) =>
-    api.get<CourseDetails>(`/course/${id}`),
+    api.get<CourseDetails>(`/courses/${id}`),
 
   createCourse: (data: any) =>
-    api.post<Course>('/course', data),
+    api.post<Course>('/courses', data),
 
   updateCourse: (id: string, data: any) =>
-    api.put<Course>(`/course/${id}`, data),
+    api.put<Course>(`/courses/${id}`, data),
 
   deleteCourse: (id: string) =>
-    api.delete(`/course/${id}`),
+    api.delete(`/courses/${id}`),
 
   getUnits: (courseId: string) =>
-    api.get<UnitSummary[]>(`/course/${courseId}/units`),
+    api.get<UnitSummary[]>(`/courses/${courseId}/units`),
 
   getDepartments: () =>
     api.get<any[]>('/departments'),
 
   getProgrammes: (courseId?: string) =>
     courseId
-      ? api.get<ProgrammeSummary[]>(`/course/${courseId}/programmes`)
+      ? api.get<ProgrammeSummary[]>(`/courses/${courseId}/programmes`)
       : api.get<any[]>('/programmes'),
 };

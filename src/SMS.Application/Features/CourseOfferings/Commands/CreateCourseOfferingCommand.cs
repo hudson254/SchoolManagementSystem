@@ -12,8 +12,8 @@ namespace SMS.Application.Features.CourseOfferings.Commands
     public class CreateCourseOfferingCommand : IRequest<CourseOfferingDto>
     {
         public Guid CourseId { get; set; }
-        public Guid AcademicYearId { get; set; }
-        public Guid SemesterId { get; set; }
+        public string AcademicYearName { get; set; } = string.Empty;
+        public string SemesterName { get; set; } = string.Empty;
         public string? Intake { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
@@ -30,11 +30,13 @@ namespace SMS.Application.Features.CourseOfferings.Commands
             RuleFor(x => x.CourseId)
                 .NotEmpty().WithMessage("Course ID is required");
 
-            RuleFor(x => x.AcademicYearId)
-                .NotEmpty().WithMessage("Academic Year ID is required");
+            RuleFor(x => x.AcademicYearName)
+                .NotEmpty().WithMessage("Academic Year is required")
+                .MaximumLength(50).WithMessage("Academic Year must not exceed 50 characters");
 
-            RuleFor(x => x.SemesterId)
-                .NotEmpty().WithMessage("Semester ID is required");
+            RuleFor(x => x.SemesterName)
+                .NotEmpty().WithMessage("Semester is required")
+                .MaximumLength(50).WithMessage("Semester must not exceed 50 characters");
 
             RuleFor(x => x.StartDate)
                 .NotEmpty().WithMessage("Start date is required");
@@ -77,7 +79,7 @@ namespace SMS.Application.Features.CourseOfferings.Commands
             var sequence = await _courseOfferingRepository.GetNextSequenceForCourseAsync(
                 request.CourseId,
                 request.StartDate.Year,
-                request.SemesterId.GetHashCode(),
+                request.SemesterName.GetHashCode(),
                 cancellationToken);
 
             var offeringCode = await _courseOfferingRepository.GenerateOfferingCodeAsync(
@@ -89,15 +91,11 @@ namespace SMS.Application.Features.CourseOfferings.Commands
 
             var offering = new CourseOffering
             {
-                // Explicitly assign a new Guid to guarantee a non-empty Id.
-                // BaseEntity initialises Id with Guid.NewGuid(), but we make it
-                // explicit here so the returned DTO (and any subsequent requests
-                // that reference this offering) always has a valid identifier.
                 Id = Guid.NewGuid(),
                 OfferingCode = offeringCode,
                 CourseId = request.CourseId,
-                AcademicYearId = request.AcademicYearId,
-                SemesterId = request.SemesterId,
+                AcademicYearName = request.AcademicYearName,
+                SemesterName = request.SemesterName,
                 Intake = request.Intake,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
@@ -120,8 +118,8 @@ namespace SMS.Application.Features.CourseOfferings.Commands
                 Id = offering.Id,
                 OfferingCode = offering.OfferingCode,
                 CourseId = offering.CourseId,
-                AcademicYearId = offering.AcademicYearId,
-                SemesterId = offering.SemesterId,
+                AcademicYearName = offering.AcademicYearName,
+                SemesterName = offering.SemesterName,
                 Intake = offering.Intake,
                 StartDate = offering.StartDate,
                 EndDate = offering.EndDate,

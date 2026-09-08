@@ -71,7 +71,7 @@ export interface CreateLaneRequest {
 }
 
 export interface UpdateLaneRequest {
-  id: string;
+  id?: string;
   laneName: string;
   description?: string;
   isActive: boolean;

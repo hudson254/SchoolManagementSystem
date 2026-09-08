@@ -52,7 +52,7 @@ export const studentService = {
     api.get<Transcript>(`/students/${studentId}/transcript`),
 
   getTimetable: (studentId: string, semesterId?: string) =>
-    api.get(`/students/${studentId}/timetable`, { params: { semesterId } }),
+    api.get(`/timetables/student/${studentId}`, { params: { semesterId } }),
 
   enrollStudent: (studentId: string, unitId: string, semesterId: string) =>
     api.post(`/students/${studentId}/enroll`, { unitId, semesterId }),

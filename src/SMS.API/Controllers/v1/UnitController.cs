@@ -10,6 +10,7 @@ namespace SMS.API.Controllers.v1
 {
     [ApiVersion("1.0")]
     [Authorize]
+    [Route("api/v{version:apiVersion}/units")]
     public class UnitController : BaseApiController
     {
         private readonly ILogger<UnitController> _logger;

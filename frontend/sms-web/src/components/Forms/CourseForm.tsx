@@ -4,11 +4,6 @@ import {
   TextField,
   Button,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
   CircularProgress,
   Typography,
   Divider,
@@ -31,7 +26,6 @@ const courseSchema = z.object({
   description: z.string().optional(),
   duration: z.number().min(1, 'Duration must be at least 1 month'),
   totalCredits: z.number().min(1, 'Total credits must be at least 1'),
-  departmentId: z.string().min(1, 'Department is required'),
   admissionRequirements: z.string().optional(),
   objectives: z.string().optional(),
   isActive: z.boolean().default(true),
@@ -66,7 +60,6 @@ export const CourseForm: React.FC<CourseFormProps> = ({
       description: '',
       duration: 48,
       totalCredits: 120,
-      departmentId: '',
       admissionRequirements: '',
       objectives: '',
       isActive: true,
@@ -78,12 +71,6 @@ export const CourseForm: React.FC<CourseFormProps> = ({
     queryKey: ['course', courseId],
     queryFn: () => courseService.getCourse(courseId!),
     enabled: !!courseId,
-  });
-
-  // Fetch departments for dropdown
-  const { data: departments } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => courseService.getDepartments(),
   });
 
   // Create/Update mutation
@@ -108,7 +95,6 @@ export const CourseForm: React.FC<CourseFormProps> = ({
         description: course.description || '',
         duration: course.duration,
         totalCredits: course.totalCredits,
-        departmentId: course.departmentId,
         admissionRequirements: course.admissionRequirements || '',
         objectives: course.objectives || '',
         isActive: course.isActive,
@@ -228,25 +214,6 @@ export const CourseForm: React.FC<CourseFormProps> = ({
                 error={!!errors.totalCredits}
                 helperText={errors.totalCredits?.message}
               />
-            )}
-          />
-        </Grid>
-        <Grid item xs={12}>
-          <Controller
-            name="departmentId"
-            control={control}
-            render={({ field }) => (
-              <FormControl fullWidth required error={!!errors.departmentId}>
-                <InputLabel>Department</InputLabel>
-                <Select {...field} label="Department">
-                  {departments?.map((d: any) => (
-                    <MenuItem key={d.id} value={d.id}>
-                      {d.name} ({d.code})
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.departmentId && <FormHelperText>{errors.departmentId.message}</FormHelperText>}
-              </FormControl>
             )}
           />
         </Grid>

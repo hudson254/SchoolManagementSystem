@@ -22,7 +22,7 @@ namespace SMS.Domain.Entities
         public string? Objectives { get; set; }
 
         // Navigation properties
-        public virtual Department Department { get; set; }
+        public virtual Department? Department { get; set; }
         public virtual Programme Programme { get; set; }
         public virtual Semester Semester { get; set; }
         public virtual ICollection<Unit> Units { get; set; } = new List<Unit>();

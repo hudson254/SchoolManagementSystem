@@ -27,6 +27,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpGet("activities")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(IEnumerable<ActivityDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRecentActivities(
             [FromQuery] int count = 10,

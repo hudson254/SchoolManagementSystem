@@ -303,7 +303,7 @@ export const Courses: React.FC = () => {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">{course.departmentName}</Typography>
+                      <Typography variant="body2">{course.departmentName || 'N/A'}</Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">{course.duration} months</Typography>

@@ -10,7 +10,7 @@ namespace SMS.API.Controllers.v1
 {
     [ApiVersion("1.0")]
     [Authorize]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/timetables")]
     public class TimetableController : BaseApiController
     {
         private readonly ILogger<TimetableController> _logger;

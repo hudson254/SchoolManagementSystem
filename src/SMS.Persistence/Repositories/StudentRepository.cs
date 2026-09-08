@@ -76,8 +76,20 @@ namespace SMS.Persistence.Repositories
                 .Include(s => s.Programme)
                 .Include(s => s.CurrentSemester)
                 .Include(s => s.Enrollments)
+                    .ThenInclude(e => e.Unit)
+                .Include(s => s.Enrollments)
+                    .ThenInclude(e => e.Semester)
                 .Include(s => s.Grades)
-.Include(s => s.Attendances)
+                    .ThenInclude(g => g.Enrollment)
+                        .ThenInclude(e => e.Unit)
+                .Include(s => s.Grades)
+                    .ThenInclude(g => g.Enrollment)
+                        .ThenInclude(e => e.Semester)
+                .Include(s => s.Grades)
+                    .ThenInclude(g => g.Unit)
+                .Include(s => s.Grades)
+                    .ThenInclude(g => g.Semester)
+                .Include(s => s.Attendances)
                 .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted, cancellationToken);
         }
 

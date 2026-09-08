@@ -1,198 +1,282 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
   Typography,
-  Grid,
-  Card,
-  CardContent,
+  TextField,
   Button,
   IconButton,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tab,
-  Tabs,
   Alert,
-  LinearProgress,
-  Tooltip,
+  CircularProgress,
+  Card,
+  CardContent,
+  Grid,
   Divider,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Refresh as RefreshIcon,
-  Search as SearchIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  Bed as BedIcon,
-  Apartment as BuildingIcon,
   Home as HomeIcon,
-  Person as PersonIcon,
-  SwapHoriz as TransferIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
+  Refresh as RefreshIcon,
+  Hotel as HotelIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accommodationService } from '../services/accommodation.service';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-const TabPanel = (props: TabPanelProps) => {
-  const { children, value, index, ...other } = props;
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`accommodation-tabpanel-${index}`}
-      aria-labelledby={`accommodation-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-};
-
-const a11yProps = (index: number) => ({
-  id: `accommodation-tab-${index}`,
-  'aria-controls': `accommodation-tabpanel-${index}`,
-});
-
 export const Accommodation: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [tabValue, setTabValue] = useState(0);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [filterBuilding, setFilterBuilding] = useState<string>('');
-  const [filterBlock, setFilterBlock] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<string>('');
-  const [selectedSemester, setSelectedSemester] = useState<string>('');
 
-  const { data: rooms, isLoading, isError, refetch } = useQuery({
-    queryKey: ['rooms', page, rowsPerPage, searchTerm, filterBuilding, filterBlock, filterStatus],
-    queryFn: () =>
-      accommodationService.getRooms({
-        page: page + 1,
-        pageSize: rowsPerPage,
-        searchTerm: searchTerm || undefined,
-        buildingId: filterBuilding || undefined,
-        blockId: filterBlock || undefined,
-        isAvailable: filterStatus === 'available' ? true : filterStatus === 'occupied' ? false : undefined,
-      }),
+  // Lane state
+  const [laneDialogOpen, setLaneDialogOpen] = useState(false);
+  const [editingLaneId, setEditingLaneId] = useState<string | null>(null);
+  const [laneName, setLaneName] = useState('');
+  const [laneDescription, setLaneDescription] = useState('');
+  const [laneError, setLaneError] = useState('');
+  const [deleteLaneConfirmOpen, setDeleteLaneConfirmOpen] = useState(false);
+  const [laneToDelete, setLaneToDelete] = useState<string | null>(null);
+
+  // House/Room state
+  const [roomDialogOpen, setRoomDialogOpen] = useState(false);
+  const [selectedLaneId, setSelectedLaneId] = useState<string | null>(null);
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [roomNumber, setRoomNumber] = useState('');
+  const [roomError, setRoomError] = useState('');
+  const [deleteRoomConfirmOpen, setDeleteRoomConfirmOpen] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState<string | null>(null);
+
+  // Success/Error messages
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Fetch lanes
+  const { data: lanes, isLoading: lanesLoading, isError: lanesError, refetch: refetchLanes } = useQuery({
+    queryKey: ['lanes'],
+    queryFn: () => accommodationService.getLanes(),
   });
 
-  const { data: buildings } = useQuery({
-    queryKey: ['buildings'],
-    queryFn: () => accommodationService.getBuildings(),
+  // Fetch all houses/rooms
+  const { data: houses, isLoading: housesLoading } = useQuery({
+    queryKey: ['houses'],
+    queryFn: () => accommodationService.getHouses(),
   });
 
-  const assignMutation = useMutation({
-    mutationFn: (data: { roomId: string; studentId: string; semesterId: string }) =>
-      accommodationService.assignRoom(data),
+  // Create Lane mutation
+  const createLaneMutation = useMutation({
+    mutationFn: (data: { laneName: string; description?: string }) =>
+      accommodationService.createLane({ ...data, numberOfHouses: 0, startingHouseNumber: 1 }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rooms'] });
-      setAssignDialogOpen(false);
-      setSelectedRoom(null);
-      setSelectedStudent('');
-      setSelectedSemester('');
+      queryClient.invalidateQueries({ queryKey: ['lanes'] });
+      setSuccessMessage('Lane created successfully');
+      handleCloseLaneDialog();
+    },
+    onError: (err: any) => {
+      setLaneError(err?.response?.data?.message || 'Failed to create lane');
     },
   });
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  // Update Lane mutation
+  const updateLaneMutation = useMutation({
+    mutationFn: (data: { id: string; laneName: string; description?: string }) =>
+      accommodationService.updateLane(data.id, { laneName: data.laneName, description: data.description, isActive: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lanes'] });
+      setSuccessMessage('Lane updated successfully');
+      handleCloseLaneDialog();
+    },
+    onError: (err: any) => {
+      setLaneError(err?.response?.data?.message || 'Failed to update lane');
+    },
+  });
+
+  // Delete Lane mutation
+  const deleteLaneMutation = useMutation({
+    mutationFn: (id: string) => accommodationService.deleteLane(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lanes'] });
+      queryClient.invalidateQueries({ queryKey: ['houses'] });
+      setSuccessMessage('Lane deleted successfully');
+      setDeleteLaneConfirmOpen(false);
+      setLaneToDelete(null);
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.response?.data?.message || 'Failed to delete lane');
+      setDeleteLaneConfirmOpen(false);
+      setLaneToDelete(null);
+    },
+  });
+
+  // Create House/Room mutation
+  const createHouseMutation = useMutation({
+    mutationFn: (data: { laneId: string; houseNumber: string }) =>
+      accommodationService.createHouses({ laneId: data.laneId, numberOfHouses: 1, startingHouseNumber: parseInt(data.houseNumber) || 1 }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['houses'] });
+      setSuccessMessage('Room added successfully');
+      handleCloseRoomDialog();
+    },
+    onError: (err: any) => {
+      setRoomError(err?.response?.data?.message || 'Failed to add room');
+    },
+  });
+
+  // Update House/Room mutation
+  const updateHouseMutation = useMutation({
+    mutationFn: (data: { id: string; houseNumber: string }) =>
+      accommodationService.updateHouse(data.id, { houseNumber: data.houseNumber }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['houses'] });
+      setSuccessMessage('Room updated successfully');
+      handleCloseRoomDialog();
+    },
+    onError: (err: any) => {
+      setRoomError(err?.response?.data?.message || 'Failed to update room');
+    },
+  });
+
+  // Delete House/Room mutation
+  const deleteHouseMutation = useMutation({
+    mutationFn: (id: string) => accommodationService.deleteHouse(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['houses'] });
+      setSuccessMessage('Room deleted successfully');
+      setDeleteRoomConfirmOpen(false);
+      setRoomToDelete(null);
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.response?.data?.message || 'Failed to delete room');
+      setDeleteRoomConfirmOpen(false);
+      setRoomToDelete(null);
+    },
+  });
+
+  // Lane dialog handlers
+  const handleOpenAddLane = () => {
+    setEditingLaneId(null);
+    setLaneName('');
+    setLaneDescription('');
+    setLaneError('');
+    setLaneDialogOpen(true);
   };
 
-  const handleSearch = () => {
-    setSearchTerm(searchInput);
-    setPage(0);
+  const handleOpenEditLane = (lane: any) => {
+    setEditingLaneId(lane.id);
+    setLaneName(lane.laneName);
+    setLaneDescription(lane.description || '');
+    setLaneError('');
+    setLaneDialogOpen(true);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
+  const handleCloseLaneDialog = () => {
+    setLaneDialogOpen(false);
+    setEditingLaneId(null);
+    setLaneName('');
+    setLaneDescription('');
+    setLaneError('');
+  };
+
+  const handleSaveLane = () => {
+    if (!laneName.trim()) {
+      setLaneError('Lane name is required');
+      return;
+    }
+    setLaneError('');
+    if (editingLaneId) {
+      updateLaneMutation.mutate({ id: editingLaneId, laneName: laneName.trim(), description: laneDescription.trim() || undefined });
+    } else {
+      createLaneMutation.mutate({ laneName: laneName.trim(), description: laneDescription.trim() || undefined });
     }
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
+  const handleDeleteLaneClick = (laneId: string) => {
+    setLaneToDelete(laneId);
+    setDeleteLaneConfirmOpen(true);
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const handleAssignRoom = (roomId: string) => {
-    setSelectedRoom(roomId);
-    setAssignDialogOpen(true);
-  };
-
-  const handleAssignConfirm = () => {
-    if (selectedRoom && selectedStudent && selectedSemester) {
-      assignMutation.mutate({
-        roomId: selectedRoom,
-        studentId: selectedStudent,
-        semesterId: selectedSemester,
-      });
+  const handleDeleteLaneConfirm = () => {
+    if (laneToDelete) {
+      deleteLaneMutation.mutate(laneToDelete);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Available':
-        return 'success';
-      case 'Occupied':
-        return 'warning';
-      case 'Maintenance':
-        return 'error';
-      case 'Reserved':
-        return 'info';
-      default:
-        return 'default';
+  // Room dialog handlers
+  const handleOpenAddRoom = (laneId: string) => {
+    setSelectedLaneId(laneId);
+    setEditingRoomId(null);
+    setRoomNumber('');
+    setRoomError('');
+    setRoomDialogOpen(true);
+  };
+
+  const handleOpenEditRoom = (house: any) => {
+    setSelectedLaneId(house.laneId);
+    setEditingRoomId(house.id);
+    setRoomNumber(house.houseNumber);
+    setRoomError('');
+    setRoomDialogOpen(true);
+  };
+
+  const handleCloseRoomDialog = () => {
+    setRoomDialogOpen(false);
+    setSelectedLaneId(null);
+    setEditingRoomId(null);
+    setRoomNumber('');
+    setRoomError('');
+  };
+
+  const handleSaveRoom = () => {
+    if (!roomNumber.trim()) {
+      setRoomError('Room number is required');
+      return;
+    }
+    setRoomError('');
+    if (editingRoomId) {
+      updateHouseMutation.mutate({ id: editingRoomId, houseNumber: roomNumber.trim() });
+    } else if (selectedLaneId) {
+      createHouseMutation.mutate({ laneId: selectedLaneId, houseNumber: roomNumber.trim() });
     }
   };
 
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
+  const handleDeleteRoomClick = (houseId: string) => {
+    setRoomToDelete(houseId);
+    setDeleteRoomConfirmOpen(true);
+  };
 
-  if (isError) {
+  const handleDeleteRoomConfirm = () => {
+    if (roomToDelete) {
+      deleteHouseMutation.mutate(roomToDelete);
+    }
+  };
+
+  // Clear messages after timeout
+  useEffect(() => {
+    if (successMessage || errorMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage('');
+        setErrorMessage('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage, errorMessage]);
+
+  const isAdmin = user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Administrator');
+
+  if (lanesLoading || housesLoading) return <LoadingSpinner />;
+
+  if (lanesError) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">
           Failed to load accommodation data. Please try again.
-          <Button size="small" onClick={() => refetch()} sx={{ ml: 2 }}>
+          <Button size="small" onClick={() => refetchLanes()} sx={{ ml: 2 }}>
             Retry
           </Button>
         </Alert>
@@ -200,376 +284,285 @@ export const Accommodation: React.FC = () => {
     );
   }
 
-  const roomList = rooms?.items || [];
-  const totalCount = rooms?.totalCount || 0;
+  const laneList = lanes || [];
+  const houseList = houses || [];
 
   return (
     <Box>
+      {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" fontWeight={600}>
-          Accommodation Management
+          Accommodation
         </Typography>
         <Box>
-          {(user?.roles?.includes('Receptionist') || user?.roles?.includes('Administrator')) && (
+          {isAdmin && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
+              onClick={handleOpenAddLane}
               sx={{ mr: 1 }}
             >
-              Add Building
+              Add Lane
             </Button>
           )}
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={() => refetch()}
+            onClick={() => {
+              refetchLanes();
+              queryClient.invalidateQueries({ queryKey: ['houses'] });
+            }}
           >
             Refresh
           </Button>
         </Box>
       </Box>
 
-      <Paper sx={{ mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          aria-label="accommodation tabs"
-          sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
-        >
-          <Tab label="Rooms" {...a11yProps(0)} />
-          <Tab label="Buildings" {...a11yProps(1)} />
-          <Tab label="Assignments" {...a11yProps(2)} />
-          <Tab label="Reports" {...a11yProps(3)} />
-        </Tabs>
-      </Paper>
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>
+          {successMessage}
+        </Alert>
+      )}
+      {errorMessage && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage('')}>
+          {errorMessage}
+        </Alert>
+      )}
 
-      <TabPanel value={tabValue} index={0}>
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={3}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Search by room number..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  endAdornment: (
-                    <Button size="small" onClick={handleSearch}>
-                      Search
-                    </Button>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Building</InputLabel>
-                <Select
-                  value={filterBuilding}
-                  onChange={(e) => setFilterBuilding(e.target.value)}
-                  label="Building"
-                >
-                  <MenuItem value="">All</MenuItem>
-                  {buildings?.map((b: any) => (
-                    <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  label="Status"
-                >
-                  <MenuItem value="">All</MenuItem>
-                  <MenuItem value="available">Available</MenuItem>
-                  <MenuItem value="occupied">Occupied</MenuItem>
-                  <MenuItem value="maintenance">Maintenance</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => {
-                  setFilterBuilding('');
-                  setFilterBlock('');
-                  setFilterStatus('');
-                  setSearchInput('');
-                  setSearchTerm('');
-                }}
-              >
-                Clear Filters
-              </Button>
-            </Grid>
-            <Grid item xs={12} sm={2}>
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {}}
-              >
-                Add Room
-              </Button>
-            </Grid>
-          </Grid>
+      {/* Lanes List */}
+      {laneList.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <HotelIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+          <Typography variant="h6" color="textSecondary" gutterBottom>
+            No Lanes Found
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Create your first lane to start managing accommodation.
+          </Typography>
+          {isAdmin && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddLane}>
+              Add Lane
+            </Button>
+          )}
         </Paper>
-
-        <Paper>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Room</TableCell>
-                  <TableCell>Block</TableCell>
-                  <TableCell>Building</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Capacity</TableCell>
-                  <TableCell>Price</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Occupant</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {roomList.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                      <Typography variant="body1" color="textSecondary">
-                        No rooms found
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  roomList.map((room: any) => (
-                    <TableRow key={room.id} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <BedIcon sx={{ color: '#576426' }} />
-                          <Typography variant="body2" fontWeight={500}>
-                            {room.roomNumber}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>{room.blockName}</TableCell>
-                      <TableCell>{room.buildingName}</TableCell>
-                      <TableCell>{room.roomType || 'Standard'}</TableCell>
-                      <TableCell>{room.capacity}</TableCell>
-                      <TableCell>
-                        {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(room.pricePerSemester)}
-                      </TableCell>
-                      <TableCell>
+      ) : (
+        <Grid container spacing={3}>
+          {laneList.map((lane: any) => {
+            const laneRooms = houseList.filter((h: any) => h.laneId === lane.id);
+            return (
+              <Grid item xs={12} key={lane.id}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <HomeIcon sx={{ color: '#576426' }} />
+                        <Typography variant="h6" fontWeight={600}>
+                          {lane.laneName}
+                        </Typography>
                         <Chip
-                          label={room.status}
-                          color={getStatusColor(room.status)}
+                          label={lane.isActive ? 'Active' : 'Inactive'}
+                          color={lane.isActive ? 'success' : 'default'}
                           size="small"
                         />
-                      </TableCell>
-                      <TableCell>
-                        {room.currentOccupant || 'Vacant'}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="View">
-                          <IconButton size="small">
-                            <ViewIcon />
+                        <Chip
+                          label={`${laneRooms.length} room`}
+                          variant="outlined"
+                          size="small"
+                        />
+                      </Box>
+                      {isAdmin && (
+                        <Box>
+                          <IconButton size="small" onClick={() => handleOpenEditLane(lane)} title="Edit Lane">
+                            <EditIcon fontSize="small" />
                           </IconButton>
-                        </Tooltip>
-                        {(user?.roles?.includes('Receptionist') || user?.roles?.includes('Administrator')) && (
-                          <>
-                            {room.status === 'Available' && (
-                              <Tooltip title="Assign">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleAssignRoom(room.id)}
-                                >
-                                  <PersonIcon />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            <Tooltip title="Edit">
-                              <IconButton size="small">
-                                <EditIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            component="div"
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-          />
-        </Paper>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={1}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          Buildings Overview
-        </Typography>
-        <Grid container spacing={3}>
-          {buildings?.map((building: any) => (
-            <Grid item xs={12} md={6} lg={4} key={building.id}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <BuildingIcon sx={{ fontSize: 40, color: '#576426' }} />
-                    <Box>
-                      <Typography variant="h6">{building.name}</Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {building.address || 'No address'}
-                      </Typography>
+                          <IconButton size="small" onClick={() => handleDeleteLaneClick(lane.id)} title="Delete Lane" color="error">
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      )}
                     </Box>
-                  </Box>
-                  <Divider sx={{ mb: 2 }} />
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="textSecondary">
-                        Floors
+                    {lane.description && (
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        {lane.description}
                       </Typography>
-                      <Typography variant="body1" fontWeight={500}>
-                        {building.totalFloors}
+                    )}
+
+                    <Divider sx={{ mb: 2 }} />
+
+                    {/* Rooms in this lane */}
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                      Rooms
+                    </Typography>
+                    {laneRooms.length === 0 ? (
+                      <Typography variant="body2" color="textSecondary" sx={{ ml: 2, mb: 1 }}>
+                        No rooms added yet.
                       </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="textSecondary">
-                        Blocks
-                      </Typography>
-                      <Typography variant="body1" fontWeight={500}>
-                        {building.blocks?.length || 0}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="textSecondary">
-                        Total Rooms
-                      </Typography>
-                      <Typography variant="body1" fontWeight={500}>
-                        {building.totalRooms || 0}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="textSecondary">
-                        Occupancy
-                      </Typography>
-                      <Typography variant="body1" fontWeight={500}>
-                        {building.occupancyRate?.toFixed(1) || 0}%
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+                    ) : (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                        {laneRooms.map((house: any) => (
+                          <Chip
+                            key={house.id}
+                            label={house.houseNumber}
+                            variant="outlined"
+                            color={house.isOccupied ? 'error' : 'success'}
+                            onDelete={isAdmin ? () => handleDeleteRoomClick(house.id) : undefined}
+                            onClick={isAdmin ? () => handleOpenEditRoom(house) : undefined}
+                            title={`Room ${house.houseNumber} - ${house.isOccupied ? 'Occupied' : house.status || 'Vacant'}`}
+                          />
+                        ))}
+                      </Box>
+                    )}
+
+                    {isAdmin && (
+                      <Button
+                        size="small"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleOpenAddRoom(lane.id)}
+                      >
+                        Add Room
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
         </Grid>
-      </TabPanel>
+      )}
 
-      <TabPanel value={tabValue} index={2}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          Current Assignments
-        </Typography>
-        <Alert severity="info" sx={{ mb: 2 }}>
-          View and manage room assignments for students.
-        </Alert>
-        {/* Assignment list would go here */}
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={3}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          Occupancy Reports
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight={500}>
-                  Overall Occupancy
-                </Typography>
-                <Typography variant="h3" color="primary">
-                  {rooms?.totalCount ? ((rooms.totalCount - (roomList.filter((r: any) => r.status === 'Available').length)) / rooms.totalCount * 100).toFixed(1) : 0}%
-                </Typography>
-                <Typography variant="caption" color="textSecondary">
-                  {roomList.filter((r: any) => r.status === 'Occupied').length} occupied of {rooms?.totalCount || 0} rooms
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight={500}>
-                  Available Rooms
-                </Typography>
-                <Typography variant="h3" color="success">
-                  {roomList.filter((r: any) => r.status === 'Available').length}
-                </Typography>
-                <Typography variant="caption" color="textSecondary">
-                  Ready for assignment
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </TabPanel>
-
-      {/* Assign Room Dialog */}
-      <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Assign Room</DialogTitle>
+      {/* Lane Add/Edit Dialog */}
+      <Dialog open={laneDialogOpen} onClose={handleCloseLaneDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingLaneId ? 'Edit Lane' : 'Add Lane'}</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="body2" color="textSecondary">
-              Room: {selectedRoom}
-            </Typography>
-            <FormControl fullWidth>
-              <InputLabel>Student</InputLabel>
-              <Select
-                value={selectedStudent}
-                onChange={(e) => setSelectedStudent(e.target.value)}
-                label="Student"
-              >
-                <MenuItem value="">Select Student</MenuItem>
-                {/* Student list would be loaded from API */}
-                <MenuItem value="student1">John Doe (STU-2024-0001)</MenuItem>
-                <MenuItem value="student2">Jane Smith (STU-2024-0002)</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>Semester</InputLabel>
-              <Select
-                value={selectedSemester}
-                onChange={(e) => setSelectedSemester(e.target.value)}
-                label="Semester"
-              >
-                <MenuItem value="">Select Semester</MenuItem>
-                <MenuItem value="sem1">Fall 2024</MenuItem>
-                <MenuItem value="sem2">Spring 2025</MenuItem>
-              </Select>
-            </FormControl>
+          {laneError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {laneError}
+            </Alert>
+          )}
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              fullWidth
+              label="Lane Name"
+              value={laneName}
+              onChange={(e) => setLaneName(e.target.value)}
+              error={!!laneError && laneError.includes('name')}
+              helperText={laneError && laneError.includes('name') ? laneError : 'e.g. Lane A, North Wing, Male Lane'}
+              autoFocus
+            />
+            <TextField
+              fullWidth
+              label="Description (optional)"
+              value={laneDescription}
+              onChange={(e) => setLaneDescription(e.target.value)}
+              multiline
+              rows={2}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleCloseLaneDialog}>Cancel</Button>
           <Button
             variant="contained"
-            onClick={handleAssignConfirm}
-            disabled={!selectedStudent || !selectedSemester || assignMutation.isPending}
+            onClick={handleSaveLane}
+            disabled={!laneName.trim() || createLaneMutation.isPending || updateLaneMutation.isPending}
           >
-            {assignMutation.isPending ? 'Assigning...' : 'Assign Room'}
+            {createLaneMutation.isPending || updateLaneMutation.isPending ? (
+              <CircularProgress size={24} />
+            ) : editingLaneId ? (
+              'Update Lane'
+            ) : (
+              'Create Lane'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Lane Confirmation */}
+      <Dialog open={deleteLaneConfirmOpen} onClose={() => setDeleteLaneConfirmOpen(false)}>
+        <DialogTitle>Delete Lane</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this lane? This action cannot be undone.
+            {laneToDelete && houseList.filter((h: any) => h.laneId === laneToDelete).length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Alert severity="warning">
+                  This lane contains {houseList.filter((h: any) => h.laneId === laneToDelete).length} room(s).
+                  Deleting the lane will also delete all associated rooms.
+                </Alert>
+              </Box>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteLaneConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteLaneConfirm}
+            disabled={deleteLaneMutation.isPending}
+          >
+            {deleteLaneMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Room Add/Edit Dialog */}
+      <Dialog open={roomDialogOpen} onClose={handleCloseRoomDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingRoomId ? 'Edit Room' : 'Add Room'}</DialogTitle>
+        <DialogContent>
+          {roomError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {roomError}
+            </Alert>
+          )}
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              fullWidth
+              label="Room Number"
+              value={roomNumber}
+              onChange={(e) => setRoomNumber(e.target.value)}
+              error={!!roomError && roomError.includes('number')}
+              helperText={roomError && roomError.includes('number') ? roomError : 'e.g. 001, 101, A1, Room 1'}
+              autoFocus
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseRoomDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveRoom}
+            disabled={!roomNumber.trim() || createHouseMutation.isPending || updateHouseMutation.isPending}
+          >
+            {createHouseMutation.isPending || updateHouseMutation.isPending ? (
+              <CircularProgress size={24} />
+            ) : editingRoomId ? (
+              'Update Room'
+            ) : (
+              'Add Room'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Room Confirmation */}
+      <Dialog open={deleteRoomConfirmOpen} onClose={() => setDeleteRoomConfirmOpen(false)}>
+        <DialogTitle>Delete Room</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this room? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteRoomConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteRoomConfirm}
+            disabled={deleteHouseMutation.isPending}
+          >
+            {deleteHouseMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

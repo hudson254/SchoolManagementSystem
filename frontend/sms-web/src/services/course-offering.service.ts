@@ -28,10 +28,8 @@ export interface CourseOffering {
   courseId: string;
   courseName?: string;
   courseCode?: string;
-  academicYearId: string;
-  academicYearName?: string;
-  semesterId: string;
-  semesterName?: string;
+  academicYearName: string;
+  semesterName: string;
   intake?: string;
   startDate: string;
   endDate: string;

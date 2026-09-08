@@ -14,7 +14,7 @@ namespace SMS.Application.Features.Courses.Commands
         public string? Description { get; set; }
         public int Duration { get; set; }
         public int TotalCredits { get; set; }
-        public Guid DepartmentId { get; set; }
+        public Guid? DepartmentId { get; set; }
         public string? AdmissionRequirements { get; set; }
         public string? Objectives { get; set; }
         public bool IsActive { get; set; }
@@ -36,9 +36,6 @@ namespace SMS.Application.Features.Courses.Commands
 
             RuleFor(x => x.TotalCredits)
                 .GreaterThan(0).WithMessage("Total credits must be greater than 0");
-
-            RuleFor(x => x.DepartmentId)
-                .NotEmpty().WithMessage("Department ID is required");
         }
     }
 
@@ -72,10 +69,17 @@ namespace SMS.Application.Features.Courses.Commands
                 throw new NotFoundException("Course", request.Id);
             }
 
-            var department = await _departmentRepository.GetByIdAsync(request.DepartmentId, cancellationToken);
-            if (department == null)
+            string? departmentName = null;
+            string? departmentCode = null;
+            if (request.DepartmentId.HasValue)
             {
-                throw new NotFoundException("Department", request.DepartmentId);
+                var department = await _departmentRepository.GetByIdAsync(request.DepartmentId.Value, cancellationToken);
+                if (department == null)
+                {
+                    throw new NotFoundException("Department", request.DepartmentId.Value);
+                }
+                departmentName = department.Name;
+                departmentCode = department.Code;
             }
 
             course.Name = request.Name;
@@ -104,8 +108,8 @@ namespace SMS.Application.Features.Courses.Commands
                 TotalCredits = course.TotalCredits,
                 IsActive = course.IsActive,
                 DepartmentId = course.DepartmentId,
-                DepartmentName = department.Name,
-                DepartmentCode = department.Code,
+                DepartmentName = departmentName,
+                DepartmentCode = departmentCode,
                 CreatedDate = course.CreatedDate ?? DateTime.UtcNow
             };
         }

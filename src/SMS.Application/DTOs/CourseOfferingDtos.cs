@@ -11,10 +11,8 @@ namespace SMS.Application.DTOs
         public Guid CourseId { get; set; }
         public string? CourseName { get; set; }
         public string? CourseCode { get; set; }
-        public Guid AcademicYearId { get; set; }
-        public string? AcademicYearName { get; set; }
-        public Guid SemesterId { get; set; }
-        public string? SemesterName { get; set; }
+        public string AcademicYearName { get; set; } = string.Empty;
+        public string SemesterName { get; set; } = string.Empty;
         public string? Intake { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }

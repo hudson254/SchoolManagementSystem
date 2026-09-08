@@ -69,40 +69,40 @@ export interface LoginHistory {
 
 export const userService = {
   getUsers: (params: GetUsersParams) =>
-    api.get<PagedResponse<UserDetail>>('/user', { params }),
+    api.get<PagedResponse<UserDetail>>('/users', { params }),
 
   getUser: (id: string) =>
-    api.get<UserDetail>(`/user/${id}`),
+    api.get<UserDetail>(`/users/${id}`),
 
   createUser: (data: CreateUserRequest) =>
-    api.post<UserDetail>('/user', data),
+    api.post<UserDetail>('/users', data),
 
   updateUser: (id: string, data: UpdateUserRequest) =>
-    api.put<UserDetail>(`/user/${id}`, data),
+    api.put<UserDetail>(`/users/${id}`, data),
 
   deleteUser: (id: string) =>
-    api.delete(`/user/${id}`),
+    api.delete(`/users/${id}`),
 
   getUserRoles: (id: string) =>
-    api.get<string[]>(`/user/${id}/roles`),
+    api.get<string[]>(`/users/${id}/roles`),
 
   assignRoles: (data: AssignRolesRequest) =>
-    api.post(`/user/${data.userId}/roles`, { roles: data.roles }),
+    api.post(`/users/${data.userId}/roles`, { roles: data.roles }),
 
   removeRoles: (userId: string, roles: string[]) =>
-    api.delete(`/user/${userId}/roles`, { data: { roles } }),
+    api.delete(`/users/${userId}/roles`, { data: { roles } }),
 
   activateUser: (id: string) =>
-    api.post(`/user/${id}/activate`),
+    api.post(`/users/${id}/activate`),
 
   deactivateUser: (id: string) =>
-    api.post(`/user/${id}/deactivate`),
+    api.post(`/users/${id}/deactivate`),
 
   resetPassword: (userId: string, newPassword: string) =>
-    api.post(`/user/${userId}/reset-password`, { newPassword }),
+    api.post(`/users/${userId}/reset-password`, { newPassword }),
 
   getLoginHistory: (userId: string, params?: { page?: number; pageSize?: number }) =>
-    api.get<PagedResponse<LoginHistory>>(`/user/${userId}/login-history`, { params }),
+    api.get<PagedResponse<LoginHistory>>(`/users/${userId}/login-history`, { params }),
 
   getProfile: () =>
     api.get<UserDetail>('/auth/me'),

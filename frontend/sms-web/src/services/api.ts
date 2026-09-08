@@ -2,6 +2,11 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { normalizeError } from '../utils/errors';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+// Note: In production this value must be "/api/v1" (relative path) so that nginx
+// can route requests to the API backend. Using absolute URLs like
+// "https://sms-server.school.internal" will cause requests to bypass the
+// nginx /api/ location block and go to the frontend container instead,
+// resulting in "Invalid username/email or password" errors on login.
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000');
 
 // Paths that must never trigger a cookie-refresh attempt.

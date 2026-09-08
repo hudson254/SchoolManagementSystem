@@ -55,33 +55,33 @@ export interface UpdateGradeRequest {
 
 export const gradeService = {
   getGrades: (params: GetGradesParams) =>
-    api.get<PagedResponse<Grade>>('/grade', { params }),
+    api.get<PagedResponse<Grade>>('/grades', { params }),
 
   getGrade: (id: string) =>
-    api.get<Grade>(`/grade/${id}`),
+    api.get<Grade>(`/grades/${id}`),
 
   getUnitGrades: (unitId: string, semesterId?: string) =>
-    api.get<Grade[]>(`/grade/unit/${unitId}`, { params: { semesterId } }),
+    api.get<Grade[]>(`/grades/unit/${unitId}`, { params: { semesterId } }),
 
   getStudentGrades: (studentId: string, semesterId?: string) =>
     api.get<Grade[]>(`/students/${studentId}/grades`, { params: { semesterId } }),
 
   createGrade: (data: CreateGradeRequest) =>
-    api.post<Grade>('/grade', data),
+    api.post<Grade>('/grades', data),
 
   updateGrade: (id: string, data: UpdateGradeRequest) =>
-    api.put<Grade>(`/grade/${id}`, data),
+    api.put<Grade>(`/grades/${id}`, data),
 
   deleteGrade: (id: string) =>
-    api.delete(`/grade/${id}`),
+    api.delete(`/grades/${id}`),
 
   publishGrade: (id: string) =>
-    api.post<Grade>(`/grade/${id}/publish`),
+    api.post<Grade>(`/grades/${id}/publish`),
 
   publishAll: (unitId: string, semesterId: string) =>
-    api.post<{ published: number }>('/grade/publish-all', { unitId, semesterId }),
+    api.post<{ published: number }>('/grades/publish-all', { unitId, semesterId }),
 
   exportGrades: (params: GetGradesParams) =>
-    api.get<Blob>('/grade/export', { params, responseType: 'blob' }),
+    api.get<Blob>('/grades/export', { params, responseType: 'blob' }),
 };
 

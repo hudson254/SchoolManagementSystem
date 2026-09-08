@@ -59,8 +59,7 @@ namespace SMS.UnitTests.Courses
                 Name = "",
                 Code = "invalid code",
                 Duration = 0,
-                TotalCredits = 0,
-                DepartmentId = Guid.Empty
+                TotalCredits = 0
             };
 
             // Act
@@ -71,7 +70,6 @@ namespace SMS.UnitTests.Courses
             result.ShouldHaveValidationErrorFor(x => x.Code);
             result.ShouldHaveValidationErrorFor(x => x.Duration);
             result.ShouldHaveValidationErrorFor(x => x.TotalCredits);
-            result.ShouldHaveValidationErrorFor(x => x.DepartmentId);
         }
 
         [Fact]
@@ -123,7 +121,7 @@ namespace SMS.UnitTests.Courses
                 .ReturnsAsync((Course?)null);
 
             _departmentRepositoryMock
-                .Setup(x => x.GetByIdAsync(command.DepartmentId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdAsync(command.DepartmentId!.Value, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Department?)null);
 
             var handler = new CreateCourseCommandHandler(
@@ -164,7 +162,7 @@ namespace SMS.UnitTests.Courses
                 .ReturnsAsync((Course?)null);
 
             _departmentRepositoryMock
-                .Setup(x => x.GetByIdAsync(command.DepartmentId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdAsync(command.DepartmentId!.Value, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(department);
 
             _courseRepositoryMock

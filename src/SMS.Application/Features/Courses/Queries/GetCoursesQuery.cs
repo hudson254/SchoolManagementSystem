@@ -59,8 +59,8 @@ namespace SMS.Application.Features.Courses.Queries
                 TotalCredits = c.TotalCredits,
                 IsActive = c.IsActive,
                 DepartmentId = c.DepartmentId,
-                DepartmentName = c.Department.Name,
-                DepartmentCode = c.Department.Code,
+                DepartmentName = c.Department != null ? c.Department.Name : null,
+                DepartmentCode = c.Department != null ? c.Department.Code : null,
                 CreatedDate = c.CreatedDate ?? DateTime.UtcNow
             }).ToList();
 

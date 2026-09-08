@@ -26,8 +26,8 @@ import { api } from '../../services/api';
 
 const courseOfferingSchema = z.object({
   courseId: z.string().min(1, 'Course is required'),
-  academicYearId: z.string().min(1, 'Academic Year is required'),
-  semesterId: z.string().min(1, 'Semester is required'),
+  academicYearName: z.string().min(1, 'Academic Year is required'),
+  semesterName: z.string().min(1, 'Semester is required'),
   intake: z.string().optional(),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
@@ -85,14 +85,13 @@ export const CourseOfferingForm: React.FC<CourseOfferingFormProps> = ({
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isDirty, isSubmitting },
   } = useForm<CourseOfferingFormData>({
     resolver: zodResolver(courseOfferingSchema),
     defaultValues: {
       courseId: '',
-      academicYearId: '',
-      semesterId: '',
+      academicYearName: '',
+      semesterName: '',
       intake: '',
       startDate: '',
       endDate: '',
@@ -103,8 +102,6 @@ export const CourseOfferingForm: React.FC<CourseOfferingFormProps> = ({
       isActive: true,
     },
   });
-
-  const watchedAcademicYearId = watch('academicYearId');
 
   // Fetch offering data if in edit mode
   const { data: offering, isLoading: offeringLoading } = useQuery({
@@ -117,19 +114,6 @@ export const CourseOfferingForm: React.FC<CourseOfferingFormProps> = ({
   const { data: courses } = useQuery({
     queryKey: ['courses', 'active'],
     queryFn: () => courseService.getCourses({ isActive: true, pageSize: 100 }),
-  });
-
-  // Fetch academic years
-  const { data: academicYears } = useQuery({
-    queryKey: ['academicyears'],
-    queryFn: () => api.get<AcademicYear[]>('/academicyears'),
-  });
-
-  // Fetch semesters filtered by academic year
-  const { data: semesters } = useQuery({
-    queryKey: ['semesters', watchedAcademicYearId],
-    queryFn: () => api.get<Semester[]>('/semesters', { params: { academicYearId: watchedAcademicYearId || undefined } }),
-    enabled: !!watchedAcademicYearId,
   });
 
   // Create/Update mutation
@@ -150,8 +134,8 @@ export const CourseOfferingForm: React.FC<CourseOfferingFormProps> = ({
     if (offering) {
       reset({
         courseId: offering.courseId,
-        academicYearId: offering.academicYearId,
-        semesterId: offering.semesterId,
+        academicYearName: offering.academicYearName || '',
+        semesterName: offering.semesterName || '',
         intake: offering.intake || '',
         startDate: offering.startDate ? offering.startDate.slice(0, 10) : '',
         endDate: offering.endDate ? offering.endDate.slice(0, 10) : '',
@@ -232,39 +216,35 @@ export const CourseOfferingForm: React.FC<CourseOfferingFormProps> = ({
         </Grid>
         <Grid item xs={12} sm={6}>
           <Controller
-            name="academicYearId"
+            name="academicYearName"
             control={control}
             render={({ field }) => (
-              <FormControl fullWidth required error={!!errors.academicYearId}>
-                <InputLabel>Academic Year</InputLabel>
-                <Select {...field} label="Academic Year">
-                  {(academicYears || []).map((ay: AcademicYear) => (
-                    <MenuItem key={ay.id} value={ay.id}>
-                      {ay.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.academicYearId && <FormHelperText>{errors.academicYearId.message}</FormHelperText>}
-              </FormControl>
+              <TextField
+                {...field}
+                fullWidth
+                required
+                label="Academic Year"
+                placeholder="e.g. 2026/2027"
+                error={!!errors.academicYearName}
+                helperText={errors.academicYearName?.message || 'Enter academic year (e.g. 2026/2027)'}
+              />
             )}
           />
         </Grid>
         <Grid item xs={12} sm={6}>
           <Controller
-            name="semesterId"
+            name="semesterName"
             control={control}
             render={({ field }) => (
-              <FormControl fullWidth required error={!!errors.semesterId}>
-                <InputLabel>Semester</InputLabel>
-                <Select {...field} label="Semester">
-                  {(semesters || []).map((s: Semester) => (
-                    <MenuItem key={s.id} value={s.id}>
-                      {s.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.semesterId && <FormHelperText>{errors.semesterId.message}</FormHelperText>}
-              </FormControl>
+              <TextField
+                {...field}
+                fullWidth
+                required
+                label="Semester"
+                placeholder="e.g. Semester 1"
+                error={!!errors.semesterName}
+                helperText={errors.semesterName?.message || 'Enter semester (e.g. Semester 1)'}
+              />
             )}
           />
         </Grid>

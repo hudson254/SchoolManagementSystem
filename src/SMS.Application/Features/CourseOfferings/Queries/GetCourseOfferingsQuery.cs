@@ -9,8 +9,8 @@ namespace SMS.Application.Features.CourseOfferings.Queries
     public class GetCourseOfferingsQuery : IRequest<IEnumerable<CourseOfferingDto>>
     {
         public Guid? CourseId { get; set; }
-        public Guid? AcademicYearId { get; set; }
-        public Guid? SemesterId { get; set; }
+        public string? AcademicYearName { get; set; }
+        public string? SemesterName { get; set; }
         public string? SearchTerm { get; set; }
         public bool IncludeInactive { get; set; }
     }
@@ -44,16 +44,16 @@ namespace SMS.Application.Features.CourseOfferings.Queries
                 return byCourse.Select(MapToDto).ToList();
             }
 
-            if (request.AcademicYearId.HasValue)
+            if (!string.IsNullOrWhiteSpace(request.AcademicYearName))
             {
-                var byYear = await _courseOfferingRepository.GetByAcademicYearAsync(request.AcademicYearId.Value, cancellationToken);
-                return byYear.Select(MapToDto).ToList();
+                var allByYear = await _courseOfferingRepository.GetAllAsync(cancellationToken);
+                return allByYear.Where(o => o.AcademicYearName == request.AcademicYearName).Select(MapToDto).ToList();
             }
 
-            if (request.SemesterId.HasValue)
+            if (!string.IsNullOrWhiteSpace(request.SemesterName))
             {
-                var bySemester = await _courseOfferingRepository.GetBySemesterAsync(request.SemesterId.Value, cancellationToken);
-                return bySemester.Select(MapToDto).ToList();
+                var allBySemester = await _courseOfferingRepository.GetAllAsync(cancellationToken);
+                return allBySemester.Where(o => o.SemesterName == request.SemesterName).Select(MapToDto).ToList();
             }
 
             // Fallback: return all from the repository (already filtered by tenant & soft-delete)
@@ -85,10 +85,8 @@ namespace SMS.Application.Features.CourseOfferings.Queries
                 CourseId = o.CourseId,
                 CourseName = o.Course?.Name,
                 CourseCode = o.Course?.Code,
-                AcademicYearId = o.AcademicYearId,
-                AcademicYearName = o.AcademicYear?.Name,
-                SemesterId = o.SemesterId,
-                SemesterName = o.Semester?.Name,
+                AcademicYearName = o.AcademicYearName,
+                SemesterName = o.SemesterName,
                 Intake = o.Intake,
                 StartDate = o.StartDate,
                 EndDate = o.EndDate,

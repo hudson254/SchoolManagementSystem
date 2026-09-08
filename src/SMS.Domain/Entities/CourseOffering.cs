@@ -32,16 +32,30 @@ namespace SMS.Domain.Entities
         public Guid CourseId { get; set; }
 
         /// <summary>
-        /// Academic year in which this offering is held.
+        /// Academic year (e.g. "2026/2027").
+        /// Added as free-text alongside the legacy AcademicYearId FK.
         /// </summary>
         [Required]
-        public Guid AcademicYearId { get; set; }
+        [MaxLength(50)]
+        public string AcademicYearName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Semester or term in which this offering is held.
+        /// Semester (e.g. "Semester 1").
+        /// Added as free-text alongside the legacy SemesterId FK.
         /// </summary>
         [Required]
-        public Guid SemesterId { get; set; }
+        [MaxLength(50)]
+        public string SemesterName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Legacy Academic Year ID (FK to AcademicYears table).
+        /// </summary>
+        public Guid? AcademicYearId { get; set; }
+
+        /// <summary>
+        /// Legacy Semester ID (FK to Semesters table).
+        /// </summary>
+        public Guid? SemesterId { get; set; }
 
         /// <summary>
         /// Optional intake/cohort name (e.g. "2026 Main Intake").
@@ -88,8 +102,8 @@ namespace SMS.Domain.Entities
 
         // Navigation properties
         public virtual Course Course { get; set; } = null!;
-        public virtual AcademicYear AcademicYear { get; set; } = null!;
-        public virtual Semester Semester { get; set; } = null!;
+        public virtual AcademicYear? AcademicYear { get; set; }
+        public virtual Semester? Semester { get; set; }
 
         /// <summary>
         /// Units configured for this offering (snapshots of the course

@@ -45,9 +45,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT__Issuer: ${JWT_ISSUER:-SMSAPI}
       JWT__Audience: ${JWT_AUDIENCE:-SMSWeb}
-      JWT__ExpiryMinutes: 60 
-      FRONTEND_URL: http://192.168.110.161
-      Cors__AllowedOrigins__0: http://192.168.110.161
+      JWT__ExpiryMinutes: 
+      FRONTEND_URL: http://192.168.110.161${JWT_EXPIRY:-60}
     depends_on:
       postgres:
         condition: service_healthy

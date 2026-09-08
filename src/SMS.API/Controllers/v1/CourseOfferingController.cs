@@ -21,7 +21,7 @@ namespace SMS.API.Controllers.v1
         // ===== Course Offerings =====
 
         [HttpGet]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(IEnumerable<CourseOfferingDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetCourseOfferings(
             [FromQuery] Guid? courseId = null,
@@ -34,8 +34,8 @@ namespace SMS.API.Controllers.v1
             var query = new GetCourseOfferingsQuery
             {
                 CourseId = courseId,
-                AcademicYearId = academicYearId,
-                SemesterId = semesterId,
+                AcademicYearName = academicYearId?.ToString(),
+                SemesterName = semesterId?.ToString(),
                 SearchTerm = searchTerm,
                 IncludeInactive = includeInactive
             };
@@ -44,7 +44,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpGet("{id}")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(CourseOfferingDetailsDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetCourseOffering(Guid id, CancellationToken cancellationToken)

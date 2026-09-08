@@ -31,6 +31,7 @@ import {
   Alert,
   Switch,
   FormControlLabel,
+  Snackbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,6 +46,7 @@ import {
   LockOpen as LockOpenIcon,
   Verified as VerifiedIcon,
   Security as SecurityIcon,
+  VpnKey as VpnKeyIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -72,6 +74,17 @@ export const Users: React.FC = () => {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [selectedUserRoles, setSelectedUserRoles] = useState<string[]>([]);
   const [roleUser, setRoleUser] = useState<string | null>(null);
+
+  // Password Reset Dialog state
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState('');
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['users', page, rowsPerPage, searchTerm, orderBy, orderDirection, filterRole, filterActive],
@@ -119,6 +132,56 @@ export const Users: React.FC = () => {
       setSelectedUserRoles([]);
     },
   });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
+      userService.resetPassword(userId, password),
+    onSuccess: () => {
+      setResetPasswordSuccess('Password has been reset successfully. The user can now log in using the new password.');
+      setResetPasswordError('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSnackbarMessage('Password reset successful');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || error?.message || 'Failed to reset password. Please try again.';
+      setResetPasswordError(message);
+      setSnackbarMessage(message);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    },
+  });
+
+  const handleResetPassword = () => {
+    if (newPassword.length < 8) {
+      setResetPasswordError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetPasswordError('Passwords do not match.');
+      return;
+    }
+    setResetPasswordError('');
+    if (resetPasswordUserId) {
+      resetPasswordMutation.mutate({ userId: resetPasswordUserId, password: newPassword });
+    }
+  };
+
+  const handleOpenResetPassword = (userId: string) => {
+    setResetPasswordUserId(userId);
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetPasswordError('');
+    setResetPasswordSuccess('');
+    setResetPasswordDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbarOpen(false);
+  };
 
   const handleSearch = () => {
     setSearchTerm(searchInput);
@@ -457,6 +520,9 @@ export const Users: React.FC = () => {
         <MenuItem onClick={() => { if (selectedUserId) handleManageRoles(selectedUserId, []); }}>
           <SecurityIcon fontSize="small" sx={{ mr: 1 }} /> Manage Roles
         </MenuItem>
+        <MenuItem onClick={() => { if (selectedUserId) handleOpenResetPassword(selectedUserId); }}>
+          <VpnKeyIcon fontSize="small" sx={{ mr: 1 }} /> Reset Password
+        </MenuItem>
         {users.find((u: any) => u.id === selectedUserId)?.isActive ? (
           <MenuItem onClick={() => { if (selectedUserId) handleToggleActive(selectedUserId, true); }}>
             <LockIcon fontSize="small" sx={{ mr: 1 }} /> Deactivate
@@ -525,6 +591,71 @@ export const Users: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Password Reset Dialog */}
+      <Dialog open={resetPasswordDialogOpen} onClose={() => setResetPasswordDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Reset Password</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Enter a new password for the selected user. The user will be able to log in using this new password.
+          </Typography>
+          {resetPasswordError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {resetPasswordError}
+            </Alert>
+          )}
+          {resetPasswordSuccess && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {resetPasswordSuccess}
+            </Alert>
+          )}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              fullWidth
+              label="New Password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              error={!!resetPasswordError && resetPasswordError.includes('match')}
+              helperText="Minimum 8 characters"
+              disabled={!!resetPasswordSuccess}
+            />
+            <TextField
+              fullWidth
+              label="Confirm Password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              error={!!resetPasswordError && resetPasswordError.includes('match')}
+              disabled={!!resetPasswordSuccess}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetPasswordDialogOpen(false)}>Close</Button>
+          {!resetPasswordSuccess && (
+            <Button
+              variant="contained"
+              onClick={handleResetPassword}
+              disabled={!newPassword || !confirmPassword || resetPasswordMutation.isPending}
+            >
+              {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} variant="filled">
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

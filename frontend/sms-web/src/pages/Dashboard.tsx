@@ -373,7 +373,8 @@ export const Dashboard: React.FC = () => {
             </Paper>
           )}
 
-          {/* Recent Activity */}
+          {/* Recent Activity - visible only to SystemAdministrator, Administrator, Coordinator */}
+          {user?.roles?.some(r => ['SystemAdministrator', 'Administrator', 'Coordinator'].includes(r)) && (
           <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
               Recent Activity
@@ -417,6 +418,7 @@ export const Dashboard: React.FC = () => {
               </List>
             )}
           </Paper>
+          )}
         </Grid>
 
         <Grid item xs={12} md={4}>

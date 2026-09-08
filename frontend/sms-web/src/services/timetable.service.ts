@@ -78,36 +78,36 @@ export interface Venue {
 
 export const timetableService = {
   getTimetables: (params: GetTimetablesParams) =>
-    api.get<PagedResponse<TimetableEntry>>('/timetable', { params }),
+    api.get<PagedResponse<TimetableEntry>>('/timetables', { params }),
 
   getTimetable: (id: string) =>
-    api.get<TimetableEntry>(`/timetable/${id}`),
+    api.get<TimetableEntry>(`/timetables/${id}`),
 
   createTimetable: (data: CreateTimetableRequest) =>
-    api.post<TimetableEntry>('/timetable', data),
+    api.post<TimetableEntry>('/timetables', data),
 
   updateTimetable: (id: string, data: UpdateTimetableRequest) =>
-    api.put<TimetableEntry>(`/timetable/${id}`, data),
+    api.put<TimetableEntry>(`/timetables/${id}`, data),
 
   deleteTimetable: (id: string) =>
-    api.delete(`/timetable/${id}`),
+    api.delete(`/timetables/${id}`),
 
   getClassTimetable: (classId: string, semesterId?: string) =>
-    api.get<TimetableEntry[]>(`/timetable/class/${classId}`, { params: { semesterId } }),
+    api.get<TimetableEntry[]>(`/timetables/class/${classId}`, { params: { semesterId } }),
 
   getLecturerTimetable: (lecturerId: string, semesterId?: string) =>
-    api.get<TimetableEntry[]>(`/timetable/lecturer/${lecturerId}`, { params: { semesterId } }),
+    api.get<TimetableEntry[]>(`/timetables/lecturer/${lecturerId}`, { params: { semesterId } }),
 
   getStudentTimetable: (studentId: string, semesterId?: string) =>
-    api.get<TimetableEntry[]>(`/timetable/student/${studentId}`, { params: { semesterId } }),
+    api.get<TimetableEntry[]>(`/timetables/student/${studentId}`, { params: { semesterId } }),
 
   getWeeklyTimetable: (semesterId: string, weekStart?: string) =>
-    api.get<TimetableEntry[]>('/timetable/weekly', { params: { semesterId, weekStart } }),
+    api.get<TimetableEntry[]>('/timetables/weekly', { params: { semesterId, weekStart } }),
 
   getAvailableVenues: (params: { dayOfWeek?: string; startTime?: string; endTime?: string; semesterId?: string }) =>
-    api.get<Venue[]>('/timetable/venues/available', { params }),
+    api.get<Venue[]>('/timetables/venues/available', { params }),
 
   checkConflicts: (params: ConflictCheckRequest) =>
-    api.get<ConflictCheckResponse>('/timetable/conflicts', { params }),
+    api.get<ConflictCheckResponse>('/timetables/conflicts', { params }),
 };
 
