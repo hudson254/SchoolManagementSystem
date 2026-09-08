@@ -22,6 +22,7 @@ namespace SMS.Application.Features.Assessments.Handlers
             IAssessmentRepository assessmentRepository,
             IGradingScaleRepository gradingScaleRepository,
             ICertificateRuleRepository certificateRuleRepository,
+            IAssessmentEngine assessmentEngine,
             bool onlyPublishedMarks,
             CancellationToken ct)
         {
@@ -86,6 +87,11 @@ namespace SMS.Application.Features.Assessments.Handlers
                     continue;
                 dto.AssessmentMarks.Add(EnterMarkHandler.Map(mark, assessment));
             }
+
+            // Certificate eligibility comes from the centralized engine
+            // so the same authoritative result data drives certificates.
+            var eligibility = await assessmentEngine.EvaluateCertificateEligibilityAsync(result.StudentId, ct);
+            dto.IsEligibleForCertificate = eligibility.Status == SMS.Domain.Enums.CertificateEligibilityStatus.Eligible;
 
             return dto;
         }

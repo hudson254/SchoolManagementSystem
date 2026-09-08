@@ -20,15 +20,18 @@ namespace SMS.Application.Features.Assessments.Handlers
     {
         private readonly IAssessmentEngine _engine;
         private readonly IAssessmentRepository _assessmentRepository;
+        private readonly IStudentAssessmentMarkRepository _markRepository;
         private readonly ILogger<EnterMarkHandler> _logger;
 
         public EnterMarkHandler(
             IAssessmentEngine engine,
             IAssessmentRepository assessmentRepository,
+            IStudentAssessmentMarkRepository markRepository,
             ILogger<EnterMarkHandler> logger)
         {
             _engine = engine;
             _assessmentRepository = assessmentRepository;
+            _markRepository = markRepository;
             _logger = logger;
         }
 
@@ -40,6 +43,12 @@ namespace SMS.Application.Features.Assessments.Handlers
 
             if (request.Score < 0 || request.Score > assessment.MaxScore)
                 throw new InvalidOperationException($"Score must be between 0 and {assessment.MaxScore}.");
+
+            // Duplicate grading prevention - report as HTTP 409 Conflict.
+            var existingMark = await _markRepository.GetByAssessmentAndStudentAsync(
+                request.AssessmentId, request.StudentId, cancellationToken);
+            if (existingMark != null && !existingMark.IsDeleted)
+                throw new ConflictException("StudentAssessmentMark", "StudentId", request.StudentId);
 
             var mark = request.IsDraft
                 ? await _engine.SaveDraftMarkAsync(request.AssessmentId, request.StudentId, request.Score, request.Feedback, cancellationToken)

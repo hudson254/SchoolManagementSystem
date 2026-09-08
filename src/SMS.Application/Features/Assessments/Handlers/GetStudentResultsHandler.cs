@@ -22,6 +22,7 @@ namespace SMS.Application.Features.Assessments.Handlers
         private readonly IAssessmentRepository _assessmentRepository;
         private readonly IGradingScaleRepository _gradingScaleRepository;
         private readonly ICertificateRuleRepository _certificateRuleRepository;
+        private readonly IAssessmentEngine _engine;
 
         public GetStudentResultsHandler(
             IUnitResultRepository unitResultRepository,
@@ -30,7 +31,8 @@ namespace SMS.Application.Features.Assessments.Handlers
             IStudentAssessmentMarkRepository markRepository,
             IAssessmentRepository assessmentRepository,
             IGradingScaleRepository gradingScaleRepository,
-            ICertificateRuleRepository certificateRuleRepository)
+            ICertificateRuleRepository certificateRuleRepository,
+            IAssessmentEngine engine)
         {
             _unitResultRepository = unitResultRepository;
             _unitRepository = unitRepository;
@@ -39,6 +41,7 @@ namespace SMS.Application.Features.Assessments.Handlers
             _assessmentRepository = assessmentRepository;
             _gradingScaleRepository = gradingScaleRepository;
             _certificateRuleRepository = certificateRuleRepository;
+            _engine = engine;
         }
 
         public async Task<IEnumerable<StudentResultDto>> Handle(GetStudentResultsQuery request, CancellationToken cancellationToken)
@@ -51,7 +54,7 @@ namespace SMS.Application.Features.Assessments.Handlers
                 var unit = await _unitRepository.GetByIdAsync(r.UnitId, cancellationToken);
                 dtos.Add(await UnitResultMapper.MapAsync(
                     r, unit, _studentRepository, _markRepository, _assessmentRepository,
-                    _gradingScaleRepository, _certificateRuleRepository, true, cancellationToken));
+                    _gradingScaleRepository, _certificateRuleRepository, _engine, true, cancellationToken));
             }
 
             return dtos;

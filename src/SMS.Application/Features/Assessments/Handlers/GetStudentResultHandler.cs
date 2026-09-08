@@ -51,7 +51,7 @@ namespace SMS.Application.Features.Assessments.Handlers
 
             return await UnitResultMapper.MapAsync(
                 result, unit, _studentRepository, _markRepository, _assessmentRepository,
-                _gradingScaleRepository, _certificateRuleRepository, false, cancellationToken);
+                _gradingScaleRepository, _certificateRuleRepository, _engine, false, cancellationToken);
         }
     }
 }
