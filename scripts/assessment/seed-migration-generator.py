@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import sys, os, io
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from seed_data import *
+from seed_sql import *
 def cs_sql(indent, sql):
     """Convert a multi-line SQL string into a C# concatenated-string expression.
 
-    For the C# SOURCE we must:
-      - escape every double quote as \\" (so the runtime SQL keeps real quotes)
-      - emit \\n for line separators (so the runtime SQL keeps real newlines)
+    Idempotent escaping: remove any existing backslashes, then escape every
+    double quote exactly once as \\" so the runtime SQL keeps real quotes.
+    Emit \\n between lines so the runtime SQL keeps real newlines.
     """
     pad = " " * indent
     lines = sql.split("\n")
@@ -16,7 +16,7 @@ def cs_sql(indent, sql):
     for i, ln in enumerate(lines):
         if ln == "":
             continue
-        esc = ln.replace('"', '\\"')
+        esc = __import__("re").sub(r"\\+", "", ln).replace('"', '\\"')
         if i < n - 1:
             parts.append(pad + '"' + esc + '\\n"')
         else:

@@ -606,6 +606,10 @@ builder.Services.AddScoped<IUnitResultRepository, UnitResultRepository>();
 builder.Services.AddScoped<IModerationRecordRepository, ModerationRecordRepository>();
 builder.Services.AddScoped<IAssessmentExemptionRepository, AssessmentExemptionRepository>();
 builder.Services.AddScoped<ICertificateRuleRepository, CertificateRuleRepository>();
+// Register the centralized Assessment Engine - the single authority for all
+// assessment, weighting, grading, moderation, publication, certificate
+// eligibility and reporting calculations.
+builder.Services.AddScoped<IAssessmentEngine, AssessmentEngine>();
 
 // Register Certificate repositories
 builder.Services.AddScoped<ICertificateRepository, CertificateRepository>();
