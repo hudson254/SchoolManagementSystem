@@ -97,6 +97,18 @@ const menuItems: MenuItem[] = [
     roles: ['all'],
   },
   {
+    text: 'Assessments',
+    icon: <EventNote />,
+    path: '/assessment',
+    roles: ['Lecturer', 'Coordinator', 'Administrator', 'SystemAdministrator'],
+  },
+  {
+    text: 'My Results',
+    icon: <Grading />,
+    path: '/my-results',
+    roles: ['Student'],
+  },
+  {
     text: 'Accommodation',
     icon: <Bed />,
     path: '/accommodation',

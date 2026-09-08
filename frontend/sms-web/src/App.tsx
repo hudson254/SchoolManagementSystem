@@ -45,6 +45,8 @@ const CertificateTemplates = loadPage(() => import('./pages/CertificateTemplates
 const CourseSelectionPage = loadPage(() => import('./pages/CourseSelectionPage'), 'CourseSelectionPage');
 const EnrollmentStatusPage = loadPage(() => import('./pages/EnrollmentStatusPage'), 'EnrollmentStatusPage');
 const CourseHistoryPage = loadPage(() => import('./pages/CourseHistoryPage'), 'CourseHistoryPage');
+const AssessmentWorkspace = loadPage(() => import('./pages/AssessmentWorkspace'), 'AssessmentWorkspace');
+const StudentResults = loadPage(() => import('./pages/StudentResults'), 'StudentResults');
 const NotFound = loadPage(() => import('./pages/NotFound'), 'NotFound');
 
 const queryClient = new QueryClient({
@@ -100,6 +102,8 @@ function App() {
                         <Route path="accommodation" element={<Accommodation />} />
                         <Route path="assignments" element={<Assignments />} />
                         <Route path="grades" element={<Grades />} />
+                        <Route path="assessment" element={<AssessmentWorkspace />} />
+                        <Route path="my-results" element={<StudentResults />} />
                         <Route path="reports" element={<Reports />} />
                         <Route path="users" element={<Users />} />
                         <Route path="settings" element={<Settings />} />
