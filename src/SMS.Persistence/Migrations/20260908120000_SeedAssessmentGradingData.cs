@@ -1,5 +1,7 @@
 using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using SMS.Persistence.Data;
 
 #nullable disable
 
@@ -12,6 +14,8 @@ namespace SMS.Persistence.Migrations
     /// rows are modified or deleted. Inserts are aligned to the resolved
     /// tenant so PostgreSQL Row Level Security is honoured.
     /// </summary>
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260908120000_SeedAssessmentGradingData")]
     public partial class SeedAssessmentGradingData : Migration
     {
         /// <inheritdoc />
