@@ -17,17 +17,23 @@ namespace SMS.Application.Features.Assignments.Commands
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IAssessmentRepository _assessmentRepository;
+        private readonly IAssessmentEngine _assessmentEngine;
         private readonly ILogger<GradeAssignmentCommandHandler> _logger;
 
         public GradeAssignmentCommandHandler(
             IAssignmentRepository assignmentRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IAssessmentRepository assessmentRepository,
+            IAssessmentEngine assessmentEngine,
             ILogger<GradeAssignmentCommandHandler> logger)
         {
             _assignmentRepository = assignmentRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _assessmentRepository = assessmentRepository;
+            _assessmentEngine = assessmentEngine;
             _logger = logger;
         }
 
@@ -55,6 +61,39 @@ namespace SMS.Application.Features.Assignments.Commands
 
             await _assignmentRepository.UpdateSubmission(submission, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // ── Online assessment bridge ──────────────────────────────────────
+            // When this assignment is linked to a centralized Assessment, the
+            // graded mark flows automatically into the assessment engine (which
+            // records the mark, recalculates the unit result, grade and eligibility,
+            // and audits the change). This keeps the engine the single grading
+            // authority and prevents any duplicate independent final-score calculation.
+            var linkedAssessments = (await _assessmentRepository.GetByLinkedAssignmentAsync(assignment.Id, cancellationToken))
+                .Where(a => !a.IsDeleted && a.IsActive)
+                .ToList();
+            if (linkedAssessments.Any() && submission.StudentId != Guid.Empty)
+            {
+                foreach (var linkedAssessment in linkedAssessments)
+                {
+                    try
+                    {
+                        // The engine persists the mark if it does not exist yet and
+                        // recalculates the unit result for the student. The engine's
+                        // duplicate-prevention guard raises when a finalized mark
+                        // already exists, so re-grading is a no-op (safe).
+                        await _assessmentEngine.CalculateAndSaveMarkAsync(
+                            linkedAssessment.Id, submission.StudentId, request.Score, cancellationToken);
+                        await _assessmentEngine.CalculateFinalUnitScoreAsync(
+                            submission.StudentId, linkedAssessment.UnitId, linkedAssessment.CourseOfferingId, cancellationToken);
+                    }
+                    catch (Exception bridgeEx) when (!(bridgeEx is InvalidOperationException) && !(bridgeEx is ArgumentOutOfRangeException))
+                    {
+                        _logger.LogWarning(bridgeEx,
+                            "Online assessment bridge skipped for submission {SubmissionId}",
+                            submission.Id);
+                    }
+                }
+            }
 
             var allSubmissions = await _assignmentRepository.GetSubmissionsAsync(assignment.Id, cancellationToken);
             var allGraded = allSubmissions.All(s => s.Status == "Graded");

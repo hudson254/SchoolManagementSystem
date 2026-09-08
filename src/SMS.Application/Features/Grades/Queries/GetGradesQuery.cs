@@ -2,7 +2,13 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using SMS.Application.Common;
 using SMS.Application.DTOs;
+using SMS.Application.Features.Grades;
 using SMS.Domain.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SMS.Application.Features.Grades.Queries
 {
@@ -16,22 +22,27 @@ namespace SMS.Application.Features.Grades.Queries
         public bool? IsPublished { get; set; }
     }
 
+    /// <summary>
+    /// Staff-facing paged grades feed backed by the authoritative grading engine
+    /// (UnitResults.( No independent grade calculation or hard-coded grade points
+    /// exist on this path; every row is mapped through <see cref="AuthoritativeGradeMapper"/>.
+    /// </summary>
     public class GetGradesQueryHandler : IRequestHandler<GetGradesQuery, PagedResult<GradeDto>>
     {
-        private readonly IGradeRepository _gradeRepository;
+        private readonly IUnitResultRepository _unitResultRepository;
         private readonly ILogger<GetGradesQueryHandler> _logger;
 
-        public GetGradesQueryHandler(IGradeRepository gradeRepository, ILogger<GetGradesQueryHandler> logger)
+        public GetGradesQueryHandler(IUnitResultRepository unitResultRepository, ILogger<GetGradesQueryHandler> logger)
         {
-            _gradeRepository = gradeRepository;
+            _unitResultRepository = unitResultRepository;
             _logger = logger;
         }
 
         public async Task<PagedResult<GradeDto>> Handle(GetGradesQuery request, CancellationToken cancellationToken)
         {
-            var allGrades = await _gradeRepository.GetAllGradesAsync(cancellationToken);
-            var query = allGrades.AsQueryable();
+            var all = (await _unitResultRepository.GetAllWithDetailsAsync(cancellationToken)).ToList();
 
+            var query = all.AsQueryable();
             if (request.StudentId.HasValue)
                 query = query.Where(g => g.StudentId == request.StudentId.Value);
             if (request.UnitId.HasValue)
@@ -45,27 +56,11 @@ namespace SMS.Application.Features.Grades.Queries
             var totalCount = list.Count;
 
             var pagedItems = list
+                .OrderByDescending(g => g.CreatedDate)
                 .Skip((request.Page - 1) * request.PageSize)
                 .Take(request.PageSize)
-                .Select(g => new GradeDto
-                {
-                    Id = g.Id,
-                    StudentId = g.StudentId,
-                    EnrollmentId = g.EnrollmentId ?? Guid.Empty,
-                    GradeValue = g.GradeValue,
-                    Score = g.Score,
-                    Remarks = g.Remarks,
-                    GradedDate = g.GradedDate,
-                    IsPublished = g.IsPublished,
-                    PublishedDate = g.PublishedDate,
-                    StudentName = g.Student != null ? $"{g.Student.FirstName} {g.Student.LastName}" : string.Empty,
-                    StudentNumber = g.Student?.StudentNumber ?? string.Empty,
-                    UnitName = g.Unit?.Name ?? string.Empty,
-                    UnitCode = g.Unit?.Code ?? string.Empty,
-                    Credits = g.Unit?.Credits ?? 0,
-                    GradePoints = g.GradeValue != null ? GetGradePoints(g.GradeValue) : null
-                })
-                .ToList();
+.Select(g => AuthoritativeGradeMapper.MapToGradeDto(g, g.Unit, g.Student))
+.ToList();
 
             return new PagedResult<GradeDto>
             {
@@ -73,27 +68,6 @@ namespace SMS.Application.Features.Grades.Queries
                 TotalCount = totalCount,
                 Page = request.Page,
                 TotalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize)
-            };
-        }
-
-        private static int? GetGradePoints(string? gradeValue)
-        {
-            return gradeValue switch
-            {
-                "A" => 12,
-                "A-" => 11,
-                "B+" => 10,
-                "B" => 9,
-                "B-" => 8,
-                "C+" => 7,
-                "C" => 6,
-                "C-" => 5,
-                "D+" => 4,
-                "D" => 3,
-                "D-" => 2,
-                "E" => 1,
-                "F" => 0,
-                _ => null
             };
         }
     }

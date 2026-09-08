@@ -44,6 +44,9 @@ namespace SMS.Persistence.Repositories
 
         public async Task<IEnumerable<Assessment>> GetBySemesterAsync(Guid semesterId, CancellationToken ct = default)
             => await _dbSet.Where(a => a.SemesterId == semesterId && !a.IsDeleted).ToListAsync(ct);
+
+        public async Task<IEnumerable<Assessment>> GetByLinkedAssignmentAsync(Guid assignmentId, CancellationToken ct = default)
+            => await _dbSet.Where(a => a.LinkedAssignmentId == assignmentId && !a.IsDeleted).ToListAsync(ct);
     }
 
     public class StudentAssessmentMarkRepository : BaseRepository<StudentAssessmentMark>, IStudentAssessmentMarkRepository
@@ -177,6 +180,12 @@ namespace SMS.Persistence.Repositories
 
         public async Task<IEnumerable<UnitResult>> GetByStatusAsync(ResultPublicationStatus status, CancellationToken ct = default)
             => await _dbSet.Where(r => r.PublicationStatus == status && !r.IsDeleted).Include(r => r.Student).Include(r => r.Unit).ToListAsync(ct);
+
+        public async Task<IEnumerable<UnitResult>> GetAllWithDetailsAsync(CancellationToken ct = default)
+            => await _dbSet.Where(r => !r.IsDeleted).Include(r => r.Student).Include(r => r.Unit).ToListAsync(ct);
+
+        public async Task<UnitResult?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default)
+            => await _dbSet.FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, ct);
     }
 
     public class ModerationRecordRepository : BaseRepository<ModerationRecord>, IModerationRecordRepository

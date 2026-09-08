@@ -1,10 +1,14 @@
-using FluentValidation;
-using SMS.Shared.DTOs;
-using SMS.Domain.Interfaces;
-using SMS.Multitenancy.Interfaces;
-using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
+using SMS.Application.DTOs;
+using SMS.Application.Features.Grades;
+using SMS.Domain.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace SMS.Application.Features.Students.Queries
 {
     public class GetStudentGradesQuery : IRequest<IEnumerable<GradeDto>>
@@ -14,19 +18,27 @@ namespace SMS.Application.Features.Students.Queries
         public bool? IsPublished { get; set; }
     }
 
+    /// <summary>
+    /// Student-facing grades feed backed by the authoritative grading engine.
+    /// Returns only PUBLISHED UnitResults (draft/pending/approved-but-unpublished
+    /// results are never exposed to students) mapped through
+    /// <see cref="AuthoritativeGradeMapper"/>, so no independent grade math exists
+    /// on this path and legacy hard-coded grade points are not used.
+
+    /// </summary>
     public class GetStudentGradesQueryHandler : IRequestHandler<GetStudentGradesQuery, IEnumerable<GradeDto>>
     {
         private readonly IStudentRepository _studentRepository;
-        private readonly IGradeRepository _gradeRepository;
+        private readonly IUnitResultRepository _unitResultRepository;
         private readonly ILogger<GetStudentGradesQueryHandler> _logger;
 
         public GetStudentGradesQueryHandler(
             IStudentRepository studentRepository,
-            IGradeRepository gradeRepository,
+            IUnitResultRepository unitResultRepository,
             ILogger<GetStudentGradesQueryHandler> logger)
         {
             _studentRepository = studentRepository;
-            _gradeRepository = gradeRepository;
+            _unitResultRepository = unitResultRepository;
             _logger = logger;
         }
 
@@ -34,56 +46,18 @@ namespace SMS.Application.Features.Students.Queries
         {
             var student = await _studentRepository.GetByIdAsync(request.StudentId, cancellationToken);
             if (student == null)
-            {
                 throw new NotFoundException("Student", request.StudentId);
-            }
 
-            var grades = await _gradeRepository.GetStudentGradesAsync(request.StudentId);
+            var results = (await _unitResultRepository.GetPublishedByStudentAsync(request.StudentId, cancellationToken))
+                .Where(r => !r.IsDeleted)
+.ToList();
 
-            return grades.Select(g => new GradeDto
-            {
-                Id = g.Id,
-                StudentId = g.StudentId,
-                EnrollmentId = g.EnrollmentId ?? Guid.Empty,
-                GradeValue = g.GradeValue,
-                Score = g.Score,
-                Remarks = g.Remarks,
-                GradedDate = g.GradedDate,
-                IsPublished = g.IsPublished,
-                PublishedDate = g.PublishedDate,
-                StudentName = g.Student?.User?.FullName ?? "",
-                StudentNumber = g.Student?.StudentNumber ?? "",
-                UnitName = g.Enrollment?.Unit?.Name ?? g.Unit?.Name ?? "",
-                UnitCode = g.Unit?.Code ?? "",
-                Credits = g.Unit?.Credits ?? 0,
-                GradePoints = g.GradeValue != null ?
-                                GetGradePoints(g.GradeValue) : null
-            });
-        }
+            if (request.SemesterId.HasValue)
+                results = results.Where(r => r.SemesterId == request.SemesterId.Value).ToList();
 
-        private static int? GetGradePoints(string? gradeValue)
-        {
-            return gradeValue switch
-            {
-                "A" => 12,
-                "A-" => 11,
-                "B+" => 10,
-                "B" => 9,
-                "B-" => 8,
-                "C+" => 7,
-                "C" => 6,
-                "C-" => 5,
-                "D+" => 4,
-                "D" => 3,
-                "D-" => 2,
-                "E" => 1,
-                "F" => 0,
-                _ => null
-            };
+            _logger.LogInformation("Loaded {Count} published unit results for student {StudentId}", results.Count, request.StudentId);
+
+            return results.Select(r => AuthoritativeGradeMapper.MapToGradeDto(r, null, student)).ToList();
         }
     }
 }
-
-
-
-

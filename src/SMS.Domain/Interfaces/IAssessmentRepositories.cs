@@ -14,6 +14,7 @@ namespace SMS.Domain.Interfaces
         Task<decimal> GetTotalWeightForUnitAsync(Guid unitId, Guid? courseOfferingId, CancellationToken ct = default);
         Task<bool> HasGradingStartedAsync(Guid unitId, Guid? courseOfferingId, CancellationToken ct = default);
         Task<IEnumerable<Assessment>> GetBySemesterAsync(Guid semesterId, CancellationToken ct = default);
+        Task<IEnumerable<Assessment>> GetByLinkedAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
     }
 
     public interface IStudentAssessmentMarkRepository : IRepository<StudentAssessmentMark>
@@ -73,6 +74,8 @@ namespace SMS.Domain.Interfaces
         Task<IEnumerable<UnitResult>> GetByCourseOfferingAsync(Guid courseOfferingId, CancellationToken ct = default);
         Task<IEnumerable<UnitResult>> GetPublishedByStudentAsync(Guid studentId, CancellationToken ct = default);
         Task<IEnumerable<UnitResult>> GetByStatusAsync(SMS.Domain.Enums.ResultPublicationStatus status, CancellationToken ct = default);
+        Task<IEnumerable<UnitResult>> GetAllWithDetailsAsync(CancellationToken ct = default);
+        Task<UnitResult?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default);
     }
 
     public interface IModerationRecordRepository : IRepository<ModerationRecord>
