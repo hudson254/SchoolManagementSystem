@@ -14,7 +14,8 @@ public class CertificateEligibilityService : ICertificateEligibilityService
 {
     private readonly ICourseOfferingRepository _courseOfferingRepository;
     private readonly IEnrollmentRepository _enrollmentRepository;
-    private readonly IGradeRepository _gradeRepository;
+    private readonly IAssessmentEngine _assessmentEngine;
+    private readonly IUnitResultRepository _unitResultRepository;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ICertificateRepository _certificateRepository;
     private readonly ICertificateRuleRepository _certificateRuleRepository;
@@ -23,7 +24,8 @@ public class CertificateEligibilityService : ICertificateEligibilityService
     public CertificateEligibilityService(
         ICourseOfferingRepository courseOfferingRepository,
         IEnrollmentRepository enrollmentRepository,
-        IGradeRepository gradeRepository,
+        IAssessmentEngine assessmentEngine,
+        IUnitResultRepository unitResultRepository,
         IAssignmentRepository assignmentRepository,
         ICertificateRepository certificateRepository,
         ICertificateRuleRepository certificateRuleRepository,
@@ -31,7 +33,8 @@ public class CertificateEligibilityService : ICertificateEligibilityService
     {
         _courseOfferingRepository = courseOfferingRepository;
         _enrollmentRepository = enrollmentRepository;
-        _gradeRepository = gradeRepository;
+        _assessmentEngine = assessmentEngine;
+        _unitResultRepository = unitResultRepository;
         _assignmentRepository = assignmentRepository;
         _certificateRepository = certificateRepository;
         _certificateRuleRepository = certificateRuleRepository;
@@ -83,25 +86,32 @@ public class CertificateEligibilityService : ICertificateEligibilityService
                 return result;
             }
 
-            // Check if final grade exists
-            var grades = await _gradeRepository.GetStudentGradesAsync(studentId, cancellationToken);
-            if (!grades.Any())
+            // Authoritative gate: the centralized assessment engine owns eligibility
+            // (driven by published UnitResults and the configured certificate rule).
+            // No component computes eligibility independently.
+            var engineEligibility = await _assessmentEngine.EvaluateCertificateEligibilityAsync(studentId, cancellationToken);
+            if (engineEligibility.Status != SMS.Domain.Enums.CertificateEligibilityStatus.Eligible)
             {
                 result.IsEligible = false;
-                result.IneligibilityReasons.Add("No grades recorded for student");
+                result.IneligibilityReasons.Add(
+                    engineEligibility.Status == SMS.Domain.Enums.CertificateEligibilityStatus.PendingCompletion
+                        ? "No published unit results yet (incomplete programme)"
+                        : "Authoritative eligibility check failed - see StudentCertificateEligibility");
                 return result;
             }
 
-            // Get final grade (assuming there's a final grade calculation)
-            var finalGrade = grades.FirstOrDefault(g => !string.IsNullOrEmpty(g.LetterGrade));
-            if (finalGrade == null)
+            // Enrich from the authoritative UnitResults store (engine persisted).
+            var unitResults = (await _unitResultRepository.GetByStudentAsync(studentId, cancellationToken))
+                .Where(r => !r.IsDeleted && r.IsPublished)
+                .ToList();
+            if (!unitResults.Any())
             {
                 result.IsEligible = false;
-                result.IneligibilityReasons.Add("Final grade has not been calculated");
+                result.IneligibilityReasons.Add("No published unit results recorded for student");
                 return result;
             }
 
-            var gradeValue = finalGrade.LetterGrade ?? finalGrade.GradeValue;
+            var gradeValue = unitResults.OrderByDescending(r => r.FinalPercentage).FirstOrDefault()?.GradeLetter ?? "N/A";
             result.FinalGrade = gradeValue;
             result.Classification = CalculateClassification(gradeValue);
 
@@ -270,17 +280,19 @@ public class CertificateEligibilityService : ICertificateEligibilityService
     {
         try
         {
-            // Check if student has any incomplete grades
-            var grades = await _gradeRepository.GetStudentGradesAsync(studentId, cancellationToken);
-            if (!grades.Any())
+            // Check if student has any published unit results (authoritative store)
+            var unitResults = (await _unitResultRepository.GetPublishedByStudentAsync(studentId, cancellationToken))
+                .Where(r => !r.IsDeleted)
+                .ToList();
+            if (!unitResults.Any())
                 return true;
 
             // Check if there are any active assignments for the student with no submission
             var assignments = await _assignmentRepository.GetAssignmentsByStudentAsync(studentId);
             var activeAssignments = assignments.Where(a => a.IsActive).ToList();
 
-            // If there are active assignments and student has no grades, they have outstanding work
-            return activeAssignments.Any() && !grades.Any(g => !string.IsNullOrEmpty(g.LetterGrade));
+            // If there are active assignments and student has no published results, they have outstanding work
+            return activeAssignments.Any() && !unitResults.Any(r => !string.IsNullOrWhiteSpace(r.GradeLetter));
         }
         catch (Exception ex)
         {

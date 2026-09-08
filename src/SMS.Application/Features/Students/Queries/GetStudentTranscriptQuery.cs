@@ -104,7 +104,7 @@ namespace SMS.Application.Features.Students.Queries
                 .Select(g => new SemesterTranscriptDto
                 {
                     SemesterName = string.IsNullOrWhiteSpace(g.First().SemesterName) ? "No Semester" : g.First().SemesterName!,
-                    SemesterNumber = g.First().SemesterId.HasValue ? g.First().SemesterId.Value.GetHashCode() : 0,
+                    SemesterNumber = g.First().SemesterId.GetValueOrDefault().GetHashCode(),
                     Credits = g.Sum(x => x.Credits),
                     GPA = CalculateGpa(g.ToList(), pointsBySummary, minPass),
                     Grades = g.ToList(),

@@ -238,20 +238,35 @@ namespace SMS.Application.Features.Reports.Queries
 
     public class GetGradeDistributionReportHandler : IRequestHandler<GetGradeDistributionReportQuery, GradeDistributionReportDto>
     {
-        private readonly IGradeRepository _gradeRepository;
+        private readonly IUnitResultRepository _unitResultRepository;
+        private readonly IUnitRepository _unitRepository;
+        private readonly ICertificateRuleRepository _certificateRuleRepository;
         private readonly ILogger<GetGradeDistributionReportHandler> _logger;
 
         public GetGradeDistributionReportHandler(
-            IGradeRepository gradeRepository,
+            IUnitResultRepository unitResultRepository,
+            IUnitRepository unitRepository,
+            ICertificateRuleRepository certificateRuleRepository,
             ILogger<GetGradeDistributionReportHandler> logger)
         {
-            _gradeRepository = gradeRepository;
+            _unitResultRepository = unitResultRepository;
+            _unitRepository = unitRepository;
+            _certificateRuleRepository = certificateRuleRepository;
             _logger = logger;
         }
 
         public async Task<GradeDistributionReportDto> Handle(GetGradeDistributionReportQuery request, CancellationToken cancellationToken)
         {
-            var allGrades = await _gradeRepository.GetAllGradesAsync(cancellationToken);
+            var allGrades = (await _unitResultRepository.GetAllWithDetailsAsync(cancellationToken))
+                .Select(r => new
+                {
+                    r.SemesterId,
+                    r.UnitId,
+                    LetterGrade = string.IsNullOrWhiteSpace(r.GradeLetter) ? "N/A" : r.GradeLetter,
+                    Score = r.FinalPercentage,
+                    r.StudentId
+                })
+                .ToList();
 
             var grades = allGrades.AsQueryable();
             if (request.SemesterId.HasValue)
@@ -260,6 +275,10 @@ namespace SMS.Application.Features.Reports.Queries
                 grades = grades.Where(g => g.UnitId == request.UnitId.Value);
 
             var gradeList = grades.ToList();
+
+            var activeRule = await _certificateRuleRepository.GetActiveRuleAsync(cancellationToken);
+            var minPass = activeRule?.MinimumPassingPercentage ?? 50m;
+
             var distribution = new Dictionary<string, int>();
             foreach (var grade in gradeList)
             {
@@ -270,7 +289,7 @@ namespace SMS.Application.Features.Reports.Queries
                     distribution[letterGrade] = 1;
             }
 
-            var passed = gradeList.Count(g => g.Score >= 40);
+            var passed = gradeList.Count(g => g.Score >= minPass);
 
             var report = new GradeDistributionReportDto
             {
