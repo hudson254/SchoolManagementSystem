@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
-import io
-import gen_data as G
-
+import sys, os, io
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from seed_data import *
 def cs_sql(indent, sql):
     """Convert a multi-line SQL string into a C# concatenated-string expression.
-    Double quotes inside are escaped as \\\" (valid in normal C# strings)."""
+
+    For the C# SOURCE we must:
+      - escape every double quote as \\" (so the runtime SQL keeps real quotes)
+      - emit \\n for line separators (so the runtime SQL keeps real newlines)
+    """
     pad = " " * indent
     lines = sql.split("\n")
     parts = []
+    n = len(lines)
     for i, ln in enumerate(lines):
         if ln == "":
             continue
-        escaped = ln.replace("\\\"", "\\\"")
-        suffix = "\\n\"" if i < len(lines) - 1 else "\""
-        parts.append(pad + "\"" + escaped + suffix)
+        esc = ln.replace('"', '\\"')
+        if i < n - 1:
+            parts.append(pad + '"' + esc + '\\n"')
+        else:
+            parts.append(pad + '"' + esc + '"')
     return "\n" + (" +\n".join(parts))
 
 head = """using System;
@@ -68,13 +75,13 @@ namespace SMS.Persistence.Migrations
 
 body = (
     "            // 13 institutional assessment types (configurable; admins may add more).\n"
-    "            migrationBuilder.Sql(" + cs_sql(16, G.TYPES_SQL) + ");\n"
+    "            migrationBuilder.Sql(" + cs_sql(16, TYPES_SQL) + ");\n"
     "\n"
     "            // Default grading scale with 4 bands.\n"
-    "            migrationBuilder.Sql(" + cs_sql(16, G.SCALES_SQL + G.BANDS_SQL) + ");\n"
+    "            migrationBuilder.Sql(" + cs_sql(16, SCALES_SQL + BANDS_SQL) + ");\n"
     "\n"
     "            // Default certificate eligibility rule.\n"
-    "            migrationBuilder.Sql(" + cs_sql(16, G.RULES_SQL) + ");\n"
+    "            migrationBuilder.Sql(" + cs_sql(16, RULES_SQL) + ");\n"
 )
 
 tail = """        }
