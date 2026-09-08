@@ -1,4 +1,4 @@
-﻿using SMS.Domain.Common;
+using SMS.Domain.Common;
 using SMS.Domain.Enums;
 using System;
 
@@ -12,11 +12,16 @@ namespace SMS.Domain.Entities
         public Guid AssessmentId { get; set; }
         public Guid? CourseOfferingId { get; set; }
         public Guid? UnitId { get; set; }
+        public Guid? StudentId { get; set; }
+        public Guid? MarkId { get; set; }
+        public decimal? OriginalScore { get; set; }
+        public decimal? RevisedScore { get; set; }
         public ModerationStatus Status { get; set; } = ModerationStatus.PendingReview;
         public string? Comments { get; set; }
         public string? ModeratedBy { get; set; }
         public DateTime? ModeratedDate { get; set; }
         public string? ReturnedReason { get; set; }
+        public string? ReviewerComments { get; set; }
         public DateTime? ReturnedDate { get; set; }
         public string? ApprovedBy { get; set; }
         public DateTime? ApprovedDate { get; set; }

@@ -26,17 +26,20 @@ namespace SMS.Application.Features.Grades.Commands
     public class UpdateGradeCommandHandler : IRequestHandler<UpdateGradeCommand, GradeDto>
     {
         private readonly IGradeRepository _gradeRepository;
+        private readonly IAssessmentEngine _assessmentEngine;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
         private readonly ILogger<UpdateGradeCommandHandler> _logger;
 
         public UpdateGradeCommandHandler(
             IGradeRepository gradeRepository,
+            IAssessmentEngine assessmentEngine,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
             ILogger<UpdateGradeCommandHandler> logger)
         {
             _gradeRepository = gradeRepository;
+            _assessmentEngine = assessmentEngine;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
             _logger = logger;
@@ -49,7 +52,7 @@ namespace SMS.Application.Features.Grades.Commands
                 throw new NotFoundException("Grade", request.Id);
 
             grade.Score = request.Score;
-            grade.GradeValue = CalculateLetterGrade(request.Score);
+            grade.GradeValue = (await _assessmentEngine.AssignGradeAsync(request.Score, cancellationToken)).GradeLetter;
             grade.Remarks = request.Remarks;
 
             await _gradeRepository.UpdateAsync(grade, cancellationToken);
@@ -78,24 +81,5 @@ namespace SMS.Application.Features.Grades.Commands
             };
         }
 
-        private static string CalculateLetterGrade(decimal score)
-        {
-            return score switch
-            {
-                >= 80 => "A",
-                >= 75 => "A-",
-                >= 70 => "B+",
-                >= 65 => "B",
-                >= 60 => "B-",
-                >= 55 => "C+",
-                >= 50 => "C",
-                >= 45 => "C-",
-                >= 40 => "D+",
-                >= 35 => "D",
-                >= 30 => "D-",
-                >= 25 => "E",
-                _ => "F"
-            };
-        }
     }
 }

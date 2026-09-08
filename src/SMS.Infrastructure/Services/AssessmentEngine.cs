@@ -26,6 +26,7 @@ namespace SMS.Infrastructure.Services
         private readonly IUnitResultRepository _unitResultRepository;
         private readonly ICertificateRuleRepository _certificateRuleRepository;
         private readonly IStudentCertificateEligibilityRepository _eligibilityRepository;
+private readonly IGradeChangeHistoryRepository _gradeChangeHistoryRepository;
         private readonly IAuditService _auditService;
         private readonly ILogger<AssessmentEngine> _logger;
 
@@ -38,6 +39,7 @@ namespace SMS.Infrastructure.Services
             IGradingScaleRepository gradingScaleRepository,
             IUnitResultRepository unitResultRepository,
             ICertificateRuleRepository certificateRuleRepository,
+IGradeChangeHistoryRepository gradeChangeHistoryRepository,
             IStudentCertificateEligibilityRepository eligibilityRepository,
             IAuditService auditService,
             ILogger<AssessmentEngine> logger)
@@ -48,6 +50,7 @@ namespace SMS.Infrastructure.Services
             _gradingScaleRepository = gradingScaleRepository;
             _unitResultRepository = unitResultRepository;
             _certificateRuleRepository = certificateRuleRepository;
+_gradeChangeHistoryRepository = gradeChangeHistoryRepository;
             _eligibilityRepository = eligibilityRepository;
             _auditService = auditService;
             _logger = logger;
@@ -123,6 +126,125 @@ namespace SMS.Infrastructure.Services
             return markEntity;
         }
 
+// ============================================================
+        // DRAFT MARK ENTRY
+        // ============================================================
+
+        public async Task<StudentAssessmentMark> SaveDraftMarkAsync(
+            Guid assessmentId, Guid studentId, decimal mark, string? feedback = null, CancellationToken ct = default)
+        {
+            var assessment = await _assessmentRepository.GetByIdAsync(assessmentId, ct)
+                ?? throw new InvalidOperationException($"Assessment {assessmentId} not found");
+
+            if (mark < 0 || mark > assessment.MaxScore)
+                throw new ArgumentOutOfRangeException(nameof(mark), $"Mark must be between 0 and {assessment.MaxScore}");
+
+            // Prevent duplicate grading
+            var existing = await _markRepository.GetByAssessmentAndStudentAsync(assessmentId, studentId, ct);
+            if (existing != null && !existing.IsDraft)
+                throw new InvalidOperationException($"Mark already exists for assessment {assessmentId} and student {studentId}");
+
+            var percentage = (mark / assessment.MaxScore) * 100m;
+            var weightedScore = await CalculateWeightedScoreAsync(mark, assessment.MaxScore, assessment.Weight);
+
+            var markEntity = existing ?? new StudentAssessmentMark
+            {
+                AssessmentId = assessmentId,
+                StudentId = studentId,
+                CourseOfferingId = assessment.CourseOfferingId,
+                IsDraft = true
+            };
+
+            markEntity.Mark = mark;
+            markEntity.Percentage = Math.Round(percentage, 2);
+            markEntity.WeightedScore = weightedScore;
+            markEntity.Feedback = feedback;
+            markEntity.IsDraft = true;
+            markEntity.GradedDate = DateTime.UtcNow;
+            markEntity.EntrySource = MarkEntrySource.ManualEntry;
+
+            if (existing == null)
+                await _markRepository.AddAsync(markEntity, ct);
+            else
+                await _markRepository.UpdateAsync(markEntity, ct);
+
+            await _dbContext.SaveChangesAsync(ct);
+            await _auditService.LogDataChangeAsync("StudentAssessmentMark", markEntity.Id.ToString(), "MarksDraftSaved",
+                $"Assessment: {assessmentId}, Student: {studentId}, Draft mark: {mark}");
+
+            return markEntity;
+        }
+
+        // ============================================================
+        // MARK UPDATE / GRADE CHANGE
+        // ============================================================
+        // ============================================================
+public async Task<StudentAssessmentMark> UpdateMarkAsync(
+            Guid markId, decimal newScore, string? reason = null, string? feedback = null,
+            bool isDraft = false, string? changedBy = null, CancellationToken ct = default)
+        {
+            var mark = await _markRepository.GetByIdAsync(markId, ct)
+                ?? throw new InvalidOperationException($"Mark {markId} not found");
+
+            var assessment = await _assessmentRepository.GetByIdAsync(mark.AssessmentId, ct)
+                ?? throw new InvalidOperationException($"Assessment {mark.AssessmentId} not found");
+
+            if (assessment.IsWeightLocked)
+                throw new InvalidOperationException("Assessment is locked. Cannot update marks.");
+
+            if (newScore < 0 || newScore > assessment.MaxScore)
+                throw new ArgumentOutOfRangeException(nameof(newScore), $"Mark must be between 0 and {assessment.MaxScore}");
+
+            // Post-publication / non-draft changes must always carry a reason.
+            if (!mark.IsDraft && !isDraft && string.IsNullOrWhiteSpace(reason))
+                throw new InvalidOperationException("A reason is required when changing a published mark.");
+
+            var previousScore = mark.Mark;
+            var percentage = (newScore / assessment.MaxScore) * 100m;
+            var weightedScore = await CalculateWeightedScoreAsync(newScore, assessment.MaxScore, assessment.Weight);
+            var previousGrade = await AssignGradeAsync((previousScore / assessment.MaxScore) * 100m, ct);
+            var newGrade = await AssignGradeAsync(percentage, ct);
+
+            mark.Mark = newScore;
+            mark.Percentage = Math.Round(percentage, 2);
+            mark.WeightedScore = weightedScore;
+            mark.Feedback = feedback;
+            mark.IsDraft = isDraft;
+            mark.GradedDate = DateTime.UtcNow;
+
+            await _markRepository.UpdateAsync(mark, ct);
+
+            // Immutable grade change history record.
+            var history = new GradeChangeHistory
+            {
+                AssessmentId = mark.AssessmentId,
+                StudentAssessmentMarkId = mark.Id,
+                StudentId = mark.StudentId,
+                UnitId = assessment.UnitId,
+                CourseOfferingId = assessment.CourseOfferingId ?? mark.CourseOfferingId,
+                PreviousScore = previousScore,
+                NewScore = newScore,
+                PreviousGradeLetter = previousGrade.GradeLetter,
+                NewGradeLetter = newGrade.GradeLetter,
+                ChangeReason = GradeChangeReason.Correction,
+                Reason = reason,
+                ChangedBy = changedBy ?? string.Empty,
+                ChangedDate = DateTime.UtcNow
+            };
+            await _gradeChangeHistoryRepository.AddAsync(history, ct);
+
+            await _dbContext.SaveChangesAsync(ct);
+            await _auditService.LogDataChangeAsync("StudentAssessmentMark", mark.Id.ToString(), "MarkChanged",
+                $"Assessment: {assessment.Id}, Student: {mark.StudentId}, Previous: {previousScore}, New: {newScore}, Reason: {reason}");
+
+            if (!isDraft)
+                await RecalculateAfterGradeChangeAsync(mark.StudentId, assessment.UnitId, ct);
+
+            return mark;
+        }
+
+        // ============================================================
+        // FINAL SCORE CALCULATION
         // ============================================================
         // FINAL SCORE CALCULATION
         // ============================================================

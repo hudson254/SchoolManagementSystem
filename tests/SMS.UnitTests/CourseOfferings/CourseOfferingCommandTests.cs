@@ -38,8 +38,8 @@ namespace SMS.UnitTests.CourseOfferings
             var command = new CreateCourseOfferingCommand
             {
                 CourseId = Guid.NewGuid(),
-                AcademicYearId = Guid.NewGuid(),
-                SemesterId = Guid.NewGuid(),
+                AcademicYearName = "2026/2027",
+                SemesterName = "Semester 1",
                 StartDate = DateTime.UtcNow.AddDays(1),
                 EndDate = DateTime.UtcNow.AddMonths(6),
                 Status = CourseOfferingStatus.Draft
@@ -56,8 +56,8 @@ namespace SMS.UnitTests.CourseOfferings
             var command = new CreateCourseOfferingCommand
             {
                 CourseId = Guid.Empty,
-                AcademicYearId = Guid.Empty,
-                SemesterId = Guid.Empty,
+                AcademicYearName = string.Empty,
+                SemesterName = string.Empty,
                 StartDate = DateTime.MinValue,
                 EndDate = DateTime.MinValue
             };
@@ -65,8 +65,8 @@ namespace SMS.UnitTests.CourseOfferings
             var result = _validator.TestValidate(command);
 
             result.ShouldHaveValidationErrorFor(x => x.CourseId);
-            result.ShouldHaveValidationErrorFor(x => x.AcademicYearId);
-            result.ShouldHaveValidationErrorFor(x => x.SemesterId);
+            result.ShouldHaveValidationErrorFor(x => x.AcademicYearName);
+            result.ShouldHaveValidationErrorFor(x => x.SemesterName);
             result.ShouldHaveValidationErrorFor(x => x.StartDate);
             result.ShouldHaveValidationErrorFor(x => x.EndDate);
         }
@@ -77,8 +77,8 @@ namespace SMS.UnitTests.CourseOfferings
             var command = new CreateCourseOfferingCommand
             {
                 CourseId = Guid.NewGuid(),
-                AcademicYearId = Guid.NewGuid(),
-                SemesterId = Guid.NewGuid(),
+                AcademicYearName = "2026/2027",
+                SemesterName = "Semester 1",
                 StartDate = DateTime.UtcNow.AddDays(1),
                 EndDate = DateTime.UtcNow.AddMonths(6)
             };
@@ -105,8 +105,8 @@ namespace SMS.UnitTests.CourseOfferings
             var command = new CreateCourseOfferingCommand
             {
                 CourseId = courseId,
-                AcademicYearId = Guid.NewGuid(),
-                SemesterId = Guid.NewGuid(),
+                AcademicYearName = "2026/2027",
+                SemesterName = "Semester 1",
                 Intake = "2026 Intake A",
                 StartDate = DateTime.UtcNow.AddDays(1),
                 EndDate = DateTime.UtcNow.AddMonths(6),
@@ -126,8 +126,8 @@ namespace SMS.UnitTests.CourseOfferings
                 Id = Guid.NewGuid(),
                 OfferingCode = "WM101-2026-1-1",
                 CourseId = courseId,
-                AcademicYearId = command.AcademicYearId,
-                SemesterId = command.SemesterId,
+                AcademicYearName = command.AcademicYearName,
+                SemesterName = command.SemesterName,
                 Intake = command.Intake,
                 StartDate = command.StartDate,
                 EndDate = command.EndDate,

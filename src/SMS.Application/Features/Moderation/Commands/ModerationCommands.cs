@@ -3,7 +3,7 @@ using SMS.Application.Features.Moderation.DTOs;
 
 namespace SMS.Application.Features.Moderation.Commands
 {
-    public class ReviewMarksCommand : IRequest
+    public class ReviewMarksCommand : IRequest<MediatR.Unit>
     {
         public Guid AssessmentId { get; set; }
         public Guid StudentId { get; set; }
@@ -11,7 +11,7 @@ namespace SMS.Application.Features.Moderation.Commands
         public bool ReturnForCorrection { get; set; }
     }
 
-    public class ApproveMarksCommand : IRequest
+    public class ApproveMarksCommand : IRequest<MediatR.Unit>
     {
         public Guid AssessmentId { get; set; }
         public Guid StudentId { get; set; }

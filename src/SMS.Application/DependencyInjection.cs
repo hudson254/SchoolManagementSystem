@@ -23,9 +23,6 @@ namespace SMS.Application
             // Register the shared password policy service (server-side authority).
             services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
 
-            // Register Assessment Engine - Centralized assessment and grading service
-            services.AddScoped<AssessmentEngine>();
-
             return services;
         }
     }

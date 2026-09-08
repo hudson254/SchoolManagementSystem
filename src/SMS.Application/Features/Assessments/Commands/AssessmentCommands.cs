@@ -84,28 +84,28 @@ namespace SMS.Application.Features.Assessments.Commands
         public string? Reason { get; set; }
     }
 
-    public class SubmitForReviewCommand : IRequest
+    public class SubmitForReviewCommand : IRequest<MediatR.Unit>
     {
         public Guid UnitId { get; set; }
         public Guid? CourseOfferingId { get; set; }
         public string? Comments { get; set; }
     }
 
-    public class ApproveResultsCommand : IRequest
+    public class ApproveResultsCommand : IRequest<MediatR.Unit>
     {
         public Guid UnitId { get; set; }
         public Guid? CourseOfferingId { get; set; }
         public string? Comments { get; set; }
     }
 
-    public class PublishResultsCommand : IRequest
+    public class PublishResultsCommand : IRequest<MediatR.Unit>
     {
         public Guid UnitId { get; set; }
         public Guid? CourseOfferingId { get; set; }
         public string? Comments { get; set; }
     }
 
-    public class ChangeMarkCommand : IRequest
+    public class ChangeMarkCommand : IRequest<MediatR.Unit>
     {
         public Guid MarkId { get; set; }
         public decimal NewScore { get; set; }
@@ -113,13 +113,13 @@ namespace SMS.Application.Features.Assessments.Commands
         public string? Reason { get; set; }
     }
 
-    public class LockUnitCommand : IRequest
+    public class LockUnitCommand : IRequest<MediatR.Unit>
     {
         public Guid UnitId { get; set; }
         public string? Reason { get; set; }
     }
 
-    public class UnlockUnitCommand : IRequest
+    public class UnlockUnitCommand : IRequest<MediatR.Unit>
     {
         public Guid UnitId { get; set; }
         public string? Reason { get; set; }

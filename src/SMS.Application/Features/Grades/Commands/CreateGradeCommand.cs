@@ -31,6 +31,7 @@ namespace SMS.Application.Features.Grades.Commands
     {
         private readonly IGradeRepository _gradeRepository;
         private readonly IStudentRepository _studentRepository;
+        private readonly IAssessmentEngine _assessmentEngine;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
         private readonly ILogger<CreateGradeCommandHandler> _logger;
@@ -38,12 +39,14 @@ namespace SMS.Application.Features.Grades.Commands
         public CreateGradeCommandHandler(
             IGradeRepository gradeRepository,
             IStudentRepository studentRepository,
+            IAssessmentEngine assessmentEngine,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
             ILogger<CreateGradeCommandHandler> logger)
         {
             _gradeRepository = gradeRepository;
             _studentRepository = studentRepository;
+            _assessmentEngine = assessmentEngine;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
             _logger = logger;
@@ -61,7 +64,7 @@ namespace SMS.Application.Features.Grades.Commands
                 UnitId = request.UnitId,
                 SemesterId = request.SemesterId,
                 Score = request.Score,
-                GradeValue = CalculateLetterGrade(request.Score),
+                GradeValue = (await _assessmentEngine.AssignGradeAsync(request.Score, cancellationToken)).GradeLetter,
                 Remarks = request.Remarks,
                 GradedDate = DateTime.UtcNow,
                 IsPublished = false
@@ -91,24 +94,5 @@ namespace SMS.Application.Features.Grades.Commands
             };
         }
 
-        private static string CalculateLetterGrade(decimal score)
-        {
-            return score switch
-            {
-                >= 80 => "A",
-                >= 75 => "A-",
-                >= 70 => "B+",
-                >= 65 => "B",
-                >= 60 => "B-",
-                >= 55 => "C+",
-                >= 50 => "C",
-                >= 45 => "C-",
-                >= 40 => "D+",
-                >= 35 => "D",
-                >= 30 => "D-",
-                >= 25 => "E",
-                _ => "F"
-            };
-        }
     }
 }
