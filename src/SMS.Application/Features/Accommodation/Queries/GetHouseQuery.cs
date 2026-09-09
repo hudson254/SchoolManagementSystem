@@ -33,26 +33,7 @@ namespace SMS.Application.Features.Accommodation.Queries
             if (house == null)
                 throw new NotFoundException("House", request.Id);
 
-            var dto = new HouseDto
-            {
-                Id = house.Id,
-                LaneId = house.LaneId,
-                LaneName = house.Lane?.LaneName ?? string.Empty,
-                HouseNumber = house.HouseNumber,
-                HouseNumberNumeric = house.HouseNumberNumeric,
-                Status = house.Status,
-                IsOccupied = house.IsOccupied,
-                IsEnabled = house.IsEnabled,
-                IsAvailable = house.IsAvailable,
-                OccupantId = house.OccupantId,
-                OccupantName = house.Occupant != null ? $"{house.Occupant.FirstName} {house.Occupant.LastName}" : null,
-                StudentNumber = house.Occupant?.StudentNumber,
-                SemesterId = house.SemesterId,
-                Notes = house.Notes,
-                OccupiedDate = house.OccupiedDate,
-                CreatedDate = house.CreatedDate.GetValueOrDefault(),
-                UpdatedDate = house.ModifiedDate
-            };
+            var dto = AccommodationDtoMappings.ToHouseDto(house);
 
             _logger.LogInformation("Retrieved house: {HouseNumber} ({HouseId})", house.HouseNumber, house.Id);
             return dto;

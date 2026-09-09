@@ -13,7 +13,7 @@ namespace SMS.Application.Features.Accommodation.Commands
         public Guid? LecturerId { get; set; }
         public OccupantType OccupantType { get; set; } = OccupantType.Student;
         public Guid HouseId { get; set; }
-        public Guid SemesterId { get; set; }
+        public Guid? SemesterId { get; set; }
         public DateTime? MoveInDate { get; set; }
         public string? Remarks { get; set; }
     }
@@ -23,7 +23,6 @@ namespace SMS.Application.Features.Accommodation.Commands
         public AssignHouseCommandValidator()
         {
             RuleFor(x => x.HouseId).NotEmpty();
-            RuleFor(x => x.SemesterId).NotEmpty();
             RuleFor(x => x).Must(x =>
                 (x.OccupantType == OccupantType.Student && x.StudentId.HasValue) ||
                 (x.OccupantType == OccupantType.Lecturer && x.LecturerId.HasValue))
@@ -34,17 +33,20 @@ namespace SMS.Application.Features.Accommodation.Commands
     public class AssignHouseHandler : IRequestHandler<AssignHouseCommand, Guid>
     {
         private readonly IAccommodationRepository _repository;
+        private readonly ISemesterRepository _semesterRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
         private readonly ILogger<AssignHouseHandler> _logger;
 
         public AssignHouseHandler(
             IAccommodationRepository repository,
+            ISemesterRepository semesterRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
             ILogger<AssignHouseHandler> logger)
         {
             _repository = repository;
+            _semesterRepository = semesterRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
             _logger = logger;
@@ -57,11 +59,30 @@ namespace SMS.Application.Features.Accommodation.Commands
             if (house == null)
                 throw new SMS.Application.Exceptions.NotFoundException("House", request.HouseId);
 
-            if (house.IsOccupied)
-                throw new SMS.Application.Exceptions.ValidationException($"House {house.HouseNumber} is already occupied");
+            if (house.Status == HouseStatus.Maintenance ||
+                house.Status == HouseStatus.Disabled ||
+                house.Status == HouseStatus.Unavailable ||
+                house.Status == HouseStatus.Reserved)
+                throw new SMS.Application.Exceptions.ValidationException(
+                    $"House {house.HouseNumber} is currently {house.Status.ToLower()} and cannot receive new occupants");
 
             if (!house.IsAvailable || !house.IsEnabled)
                 throw new SMS.Application.Exceptions.ValidationException($"House {house.HouseNumber} is not available for assignment");
+
+            // Capacity enforcement (multi-occupancy: students + lecturers share the same pool)
+            if (house.OccupiedCount >= house.Capacity)
+                throw new SMS.Application.Exceptions.ValidationException(
+                    $"House {house.HouseNumber} has reached its capacity ({house.OccupiedCount}/{house.Capacity}) and cannot accept more occupants");
+
+            var semesterId = request.SemesterId;
+            if (!semesterId.HasValue)
+            {
+                var semester = await _semesterRepository.GetCurrentOrDefaultAsync(cancellationToken);
+                if (semester == null)
+                    throw new SMS.Application.Exceptions.ValidationException(
+                        "A semester is required to assign accommodation and no current semester could be resolved. Please create a semester or provide SemesterId.");
+                semesterId = semester.Id;
+            }
 
             // Check if occupant already has an active assignment
             var existingAssignment = await _repository.GetAssignmentByOccupantAsync(
@@ -79,7 +100,7 @@ namespace SMS.Application.Features.Accommodation.Commands
                 OccupantType = request.OccupantType,
                 HouseId = request.HouseId,
                 LaneId = house.LaneId,
-                SemesterId = request.SemesterId,
+                SemesterId = semesterId.Value,
                 AssignedDate = DateTime.UtcNow,
                 AssignmentDate = DateTime.UtcNow,
                 MoveInDate = request.MoveInDate ?? DateTime.UtcNow,
@@ -89,22 +110,27 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             await _repository.AddAssignmentAsync(assignment, cancellationToken);
 
-            // Update house status
-            house.IsOccupied = true;
-            house.OccupantId = request.OccupantType == OccupantType.Student ? request.StudentId : request.LecturerId;
-            house.OccupantType = request.OccupantType;
+            // Update house occupancy state (multi-occupancy aware)
+            house.OccupiedCount += 1;
+            house.IsOccupied = house.OccupiedCount > 0;
+            if (!house.OccupantId.HasValue)
+            {
+                house.OccupantId = request.OccupantType == OccupantType.Student ? request.StudentId : request.LecturerId;
+                house.OccupantType = request.OccupantType;
+            }
             house.Status = HouseStatus.Occupied;
             house.OccupiedDate = DateTime.UtcNow;
-            house.SemesterId = request.SemesterId;
+            house.SemesterId = semesterId.Value;
             await _repository.UpdateHouseAsync(house, cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var occupantId = request.OccupantType == OccupantType.Student ? request.StudentId!.Value : request.LecturerId!.Value;
             await _auditService.LogAsync("Assign", "House",
-                $"Assigned {request.OccupantType} {occupantId} to house {house.HouseNumber} (LaneId: {house.LaneId})");
+                $"Assigned {request.OccupantType} {occupantId} to house {house.HouseNumber} (HouseId: {house.Id}, LaneId: {house.LaneId}, Occupancy: {house.OccupiedCount}/{house.Capacity})");
 
-            _logger.LogInformation("House {HouseNumber} assigned to {OccupantType} {OccupantId}", house.HouseNumber, request.OccupantType, occupantId);
+            _logger.LogInformation("House {HouseNumber} assigned to {OccupantType} {OccupantId}, occupancy now {Occupied}/{Capacity}",
+                house.HouseNumber, request.OccupantType, occupantId, house.OccupiedCount, house.Capacity);
             return assignment.Id;
         }
     }

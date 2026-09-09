@@ -14,6 +14,7 @@ namespace SMS.UnitTests.Accommodation
     {
         private readonly IFixture _fixture;
         private readonly Mock<IAccommodationRepository> _repositoryMock;
+        private readonly Mock<ISemesterRepository> _semesterRepositoryMock;
         private readonly Mock<IUnitOfWork> _unitOfWorkMock;
         private readonly Mock<IAuditService> _auditServiceMock;
         private readonly Mock<ILogger<AssignHouseHandler>> _loggerMock;
@@ -23,11 +24,13 @@ namespace SMS.UnitTests.Accommodation
         {
             _fixture = new Fixture();
             _repositoryMock = new Mock<IAccommodationRepository>();
+            _semesterRepositoryMock = new Mock<ISemesterRepository>();
             _unitOfWorkMock = new Mock<IUnitOfWork>();
             _auditServiceMock = new Mock<IAuditService>();
             _loggerMock = new Mock<ILogger<AssignHouseHandler>>();
             _handler = new AssignHouseHandler(
                 _repositoryMock.Object,
+                _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
                 _loggerMock.Object);
@@ -146,7 +149,9 @@ namespace SMS.UnitTests.Accommodation
                 HouseNumber = "001",
                 IsOccupied = true,
                 IsAvailable = true,
-                IsEnabled = true
+                IsEnabled = true,
+                Capacity = 1,
+                OccupiedCount = 1
             };
 
             _repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))

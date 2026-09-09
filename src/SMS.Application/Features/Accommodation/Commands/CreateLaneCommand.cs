@@ -13,6 +13,7 @@ namespace SMS.Application.Features.Accommodation.Commands
         public int NumberOfHouses { get; set; } = 10;
         public string? NumberingFormat { get; set; }
         public int StartingHouseNumber { get; set; } = 1;
+        public int DefaultCapacity { get; set; } = 1;
     }
 
     public class CreateLaneCommandValidator : AbstractValidator<CreateLaneCommand>
@@ -29,6 +30,10 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             RuleFor(x => x.StartingHouseNumber)
                 .GreaterThanOrEqualTo(1).WithMessage("Starting house number must be at least 1");
+
+            RuleFor(x => x.DefaultCapacity)
+                .GreaterThan(0).WithMessage("Default capacity must be at least 1")
+                .LessThanOrEqualTo(1000).WithMessage("Default capacity must not exceed 1000");
 
             RuleFor(x => x.NumberingFormat)
                 .MaximumLength(20).WithMessage("Numbering format must not exceed 20 characters");
@@ -85,6 +90,8 @@ namespace SMS.Application.Features.Accommodation.Commands
                     LaneId = lane.Id,
                     HouseNumber = houseNumber.ToString(format),
                     HouseNumberNumeric = houseNumber,
+                    Capacity = request.DefaultCapacity,
+                    OccupiedCount = 0,
                     Status = HouseStatus.Vacant,
                     IsOccupied = false,
                     IsEnabled = true,

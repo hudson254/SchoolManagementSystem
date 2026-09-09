@@ -20,11 +20,15 @@ export interface House {
   laneId: string;
   laneName: string;
   houseNumber: string;
+  houseName?: string;
   houseNumberNumeric: number;
   status: HouseStatusType;
   isOccupied: boolean;
   isEnabled: boolean;
   isAvailable: boolean;
+  capacity: number;
+  occupiedCount: number;
+  remainingCapacity: number;
   occupantId?: string;
   occupantType?: OccupantType;
   occupantName?: string;
@@ -49,6 +53,11 @@ export interface LaneOccupancy {
   maintenance: number;
   disabled: number;
   occupancyPercentage: number;
+  totalCapacity: number;
+  occupants: number;
+  studentOccupants: number;
+  lecturerOccupants: number;
+  availableCapacity: number;
 }
 
 export interface AccommodationDashboard {
@@ -59,6 +68,11 @@ export interface AccommodationDashboard {
   maintenanceCount: number;
   disabledCount: number;
   occupancyPercentage: number;
+  totalCapacity: number;
+  totalOccupants: number;
+  studentOccupants: number;
+  lecturerOccupants: number;
+  availableCapacity: number;
   laneSummaries: LaneOccupancy[];
 }
 
@@ -68,6 +82,7 @@ export interface CreateLaneRequest {
   numberOfHouses: number;
   numberingFormat?: string;
   startingHouseNumber: number;
+  defaultCapacity: number;
 }
 
 export interface UpdateLaneRequest {
@@ -82,6 +97,7 @@ export interface CreateHouseRequest {
   numberOfHouses: number;
   numberingFormat?: string;
   startingHouseNumber?: number;
+  defaultCapacity: number;
 }
 
 export interface AssignHouseRequest {
@@ -89,9 +105,48 @@ export interface AssignHouseRequest {
   lecturerId?: string;
   occupantType: OccupantType;
   houseId: string;
-  semesterId: string;
+  semesterId?: string;
   moveInDate?: string;
   remarks?: string;
+}
+
+export interface CheckInRequest {
+  checkInDate?: string;
+  remarks?: string;
+}
+
+export interface CheckOutRequest {
+  checkOutDate?: string;
+  remarks?: string;
+}
+
+export interface AccommodationAssignment {
+  id: string;
+  studentId?: string;
+  lecturerId?: string;
+  occupantType: OccupantType;
+  semesterId: string;
+  assignmentDate: string;
+  moveInDate?: string;
+  moveOutDate?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  status: string;
+  remarks?: string;
+  studentName: string;
+  studentNumber: string;
+  lecturerName: string;
+  employeeNumber: string;
+  semesterName: string;
+  houseId?: string;
+  houseNumber: string;
+  houseName?: string;
+  laneId?: string;
+  laneName: string;
+  houseCapacity: number;
+  houseOccupiedCount: number;
+  isCheckedIn: boolean;
+  isCheckedOut: boolean;
 }
 
 export interface ReassignHouseRequest {
@@ -103,7 +158,7 @@ export interface ReassignHouseRequest {
 }
 
 export interface VacateHouseRequest {
-  houseId: string;
+  houseId?: string;
   vacatedDate?: string;
   remarks?: string;
 }
@@ -119,17 +174,24 @@ export interface LaneOccupancyReport {
   disabled: number;
   unavailable: number;
   occupancyPercentage: number;
+  totalCapacity: number;
+  occupants: number;
+  availableCapacity: number;
   houses: House[];
 }
 
 export interface HouseOccupancyReport {
   houseId: string;
   houseNumber: string;
+  houseName?: string;
   laneName: string;
   status: string;
   isOccupied: boolean;
+  capacity: number;
+  occupants: number;
   occupantName?: string;
   studentNumber?: string;
+  employeeNumber?: string;
   occupiedDate?: string;
   vacatedDate?: string;
   notes?: string;
@@ -183,6 +245,12 @@ export interface OccupancyStatistics {
   disabledHouses: number;
   unavailableHouses: number;
   occupancyPercentage: number;
+  totalCapacity: number;
+  totalOccupants: number;
+  studentOccupants: number;
+  lecturerOccupants: number;
+  availableCapacity: number;
+  capacityUtilization: number;
   laneSummaries: LaneOccupancy[];
 }
 

@@ -9,6 +9,9 @@ import type {
   AssignHouseRequest,
   ReassignHouseRequest,
   VacateHouseRequest,
+  AccommodationAssignment,
+  CheckInRequest,
+  CheckOutRequest,
   LaneOccupancyReport,
   HouseOccupancyReport,
   StudentAccommodation,
@@ -48,8 +51,15 @@ export const accommodationService = {
   createHouses: (data: CreateHouseRequest) =>
     api.post<string[]>('/accommodation/houses', data),
 
-  updateHouse: (id: string, data: any) =>
-    api.put<boolean>(`/accommodation/houses/${id}`, data),
+  updateHouse: (id: string, data: {
+    houseNumber?: string;
+    houseName?: string;
+    status?: string;
+    isEnabled?: boolean;
+    isAvailable?: boolean;
+    capacity?: number;
+    notes?: string;
+  }) => api.put<boolean>(`/accommodation/houses/${id}`, data),
 
   deleteHouse: (id: string) =>
     api.delete(`/accommodation/houses/${id}`),
@@ -64,14 +74,30 @@ export const accommodationService = {
   assignHouse: (houseId: string, data: AssignHouseRequest) =>
     api.post<Guid>(`/accommodation/houses/${houseId}/assign`, data),
 
-  reassignHouse: (data: ReassignHouseRequest) =>
-    api.post<boolean>('/accommodation/houses/reassign', data),
+  reassignHouse: (occupantId: string, data: ReassignHouseRequest) =>
+    api.post<boolean>(`/accommodation/houses/${data.newHouseId}/reassign`, {
+      studentId: data.occupantType === 'Student' ? occupantId : undefined,
+      lecturerId: data.occupantType === 'Lecturer' ? occupantId : undefined,
+      occupantType: data.occupantType,
+      newHouseId: data.newHouseId,
+      remarks: data.remarks,
+    }),
 
   vacateHouse: (houseId: string, data?: VacateHouseRequest) =>
     api.post(`/accommodation/houses/${houseId}/vacate`, data ?? {}),
 
   getAvailableHouses: (laneId?: string) =>
     api.get<House[]>('/accommodation/houses/available', { params: { laneId } }),
+
+  // ===== Assignments / Occupancy =====
+  getAssignments: (params?: { laneId?: string; houseId?: string; searchTerm?: string }) =>
+    api.get<AccommodationAssignment[]>('/accommodation/assignments', { params }),
+
+  checkInAssignment: (assignmentId: string, data?: CheckInRequest) =>
+    api.post<boolean>(`/accommodation/assignments/${assignmentId}/check-in`, data ?? {}),
+
+  checkOutAssignment: (assignmentId: string, data?: CheckOutRequest) =>
+    api.post<boolean>(`/accommodation/assignments/${assignmentId}/check-out`, data ?? {}),
 
   // ===== Dashboard =====
   getDashboard: () =>

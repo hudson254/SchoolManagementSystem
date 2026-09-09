@@ -59,8 +59,8 @@ namespace SMS.UnitTests.Accommodation
 
             _repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(house);
-            _repositoryMock.Setup(r => r.GetAssignmentByOccupantAsync(occupantId, OccupantType.Student, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(assignment);
+            _repositoryMock.Setup(r => r.GetActiveAssignmentsByHouseAsync(houseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new[] { assignment });
 
             // Act
             var result = await _handler.Handle(command, CancellationToken.None);

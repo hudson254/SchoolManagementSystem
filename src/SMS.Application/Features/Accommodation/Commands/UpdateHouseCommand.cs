@@ -14,9 +14,11 @@ namespace SMS.Application.Features.Accommodation.Commands
     {
         public Guid Id { get; set; }
         public string? HouseNumber { get; set; }
+        public string? HouseName { get; set; }
         public string? Status { get; set; }
         public bool? IsEnabled { get; set; }
         public bool? IsAvailable { get; set; }
+        public int? Capacity { get; set; }
         public string? Notes { get; set; }
     }
 
@@ -30,10 +32,19 @@ namespace SMS.Application.Features.Accommodation.Commands
                 .MaximumLength(20).WithMessage("House number must not exceed 20 characters")
                 .When(x => !string.IsNullOrEmpty(x.HouseNumber));
 
+            RuleFor(x => x.HouseName)
+                .MaximumLength(100).WithMessage("House name must not exceed 100 characters")
+                .When(x => !string.IsNullOrEmpty(x.HouseName));
+
             RuleFor(x => x.Status)
                 .Must((context, status) => string.IsNullOrEmpty(status) || HouseStatus.All.Contains(status))
                 .WithMessage("Invalid house status. Valid values: " + string.Join(", ", HouseStatus.All))
                 .When(x => !string.IsNullOrEmpty(x.Status));
+
+            RuleFor(x => x.Capacity)
+                .GreaterThan(0).WithMessage("Capacity must be at least 1")
+                .LessThanOrEqualTo(1000).WithMessage("Capacity must not exceed 1000")
+                .When(x => x.Capacity.HasValue);
 
             RuleFor(x => x.Notes)
                 .MaximumLength(500).WithMessage("Notes must not exceed 500 characters");
@@ -68,9 +79,12 @@ namespace SMS.Application.Features.Accommodation.Commands
             var oldValues = new Dictionary<string, object?>
             {
                 ["HouseNumber"] = house.HouseNumber,
+                ["HouseName"] = house.HouseName,
                 ["Status"] = house.Status,
                 ["IsEnabled"] = house.IsEnabled,
                 ["IsAvailable"] = house.IsAvailable,
+                ["Capacity"] = house.Capacity,
+                ["OccupiedCount"] = house.OccupiedCount,
                 ["Notes"] = house.Notes
             };
 
@@ -81,6 +95,18 @@ namespace SMS.Application.Features.Accommodation.Commands
                     throw new ConflictException("House", "HouseNumber", request.HouseNumber);
 
                 house.HouseNumber = request.HouseNumber;
+            }
+
+            if (request.HouseName != null)
+                house.HouseName = string.IsNullOrWhiteSpace(request.HouseName) ? null : request.HouseName.Trim();
+
+            if (request.Capacity.HasValue)
+            {
+                if (request.Capacity.Value < house.OccupiedCount)
+                    throw new BusinessRuleException("Cannot update capacity",
+                        $"House {house.HouseNumber} currently has {house.OccupiedCount} occupant(s); capacity cannot be reduced below the current occupancy.");
+
+                house.Capacity = request.Capacity.Value;
             }
 
             if (!string.IsNullOrEmpty(request.Status))
@@ -95,11 +121,17 @@ namespace SMS.Application.Features.Accommodation.Commands
             if (request.Notes != null)
                 house.Notes = request.Notes;
 
-            // Sync IsOccupied with Status
-            if (house.Status == HouseStatus.Occupied)
-                house.IsOccupied = true;
-            else if (house.Status == HouseStatus.Vacant)
-                house.IsOccupied = false;
+            // Sync IsOccupied/Status with the capacity-based occupancy model
+            house.IsOccupied = house.OccupiedCount > 0;
+            if (house.OccupiedCount > 0)
+            {
+                if (house.Status == HouseStatus.Vacant)
+                    house.Status = HouseStatus.Occupied;
+            }
+            else if (house.Status == HouseStatus.Occupied)
+            {
+                house.Status = HouseStatus.Vacant;
+            }
 
             await _repository.UpdateHouseAsync(house, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -107,9 +139,12 @@ namespace SMS.Application.Features.Accommodation.Commands
             var newValues = new Dictionary<string, object?>
             {
                 ["HouseNumber"] = house.HouseNumber,
+                ["HouseName"] = house.HouseName,
                 ["Status"] = house.Status,
                 ["IsEnabled"] = house.IsEnabled,
                 ["IsAvailable"] = house.IsAvailable,
+                ["Capacity"] = house.Capacity,
+                ["OccupiedCount"] = house.OccupiedCount,
                 ["Notes"] = house.Notes
             };
 

@@ -46,7 +46,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPost("lanes")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(typeof(Guid), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> CreateLane(
@@ -58,7 +58,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPut("lanes/{id}")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -127,7 +127,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPost("houses")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(typeof(IEnumerable<Guid>), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> CreateHouses(
@@ -139,7 +139,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPut("houses/{id}")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -168,7 +168,7 @@ namespace SMS.API.Controllers.v1
         // ===== House Status Management =====
 
         [HttpPost("houses/{houseId}/maintenance")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -183,7 +183,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPost("houses/{houseId}/unavailable")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ReceptionistAccess")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -251,6 +251,52 @@ namespace SMS.API.Controllers.v1
             var command = new VacateHouseCommand { HouseId = houseId };
             await Mediator.Send(command, cancellationToken);
             return NoContent();
+        }
+
+        // ===== Assignments / Occupancy =====
+
+        [HttpGet("assignments")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(IEnumerable<AccommodationAssignmentDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetAssignments(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] Guid? houseId = null,
+            [FromQuery] string? searchTerm = null,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetAssignmentsQuery { LaneId = laneId, HouseId = houseId, SearchTerm = searchTerm };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpPost("assignments/{assignmentId}/check-in")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> CheckInAssignment(
+            Guid assignmentId,
+            [FromBody] CheckInHouseCommand command,
+            CancellationToken cancellationToken)
+        {
+            command.AssignmentId = assignmentId;
+            var result = await Mediator.Send(command, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpPost("assignments/{assignmentId}/check-out")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> CheckOutAssignment(
+            Guid assignmentId,
+            [FromBody] CheckOutHouseCommand command,
+            CancellationToken cancellationToken)
+        {
+            command.AssignmentId = assignmentId;
+            var result = await Mediator.Send(command, cancellationToken);
+            return Ok(result);
         }
 
         // ===== Dashboard =====

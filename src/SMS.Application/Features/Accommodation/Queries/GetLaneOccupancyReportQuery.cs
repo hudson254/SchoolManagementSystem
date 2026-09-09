@@ -36,6 +36,9 @@ namespace SMS.Application.Features.Accommodation.Queries
             var houses = await _repository.GetHousesByLaneAsync(request.LaneId, cancellationToken);
             var stats = await _repository.GetLaneOccupancySummaryAsync(request.LaneId, cancellationToken);
 
+            var totalCapacity = houses.Sum(h => h.Capacity);
+            var occupants = houses.Sum(h => h.OccupiedCount);
+
             var report = new LaneOccupancyReportDto
             {
                 LaneId = lane.Id,
@@ -47,28 +50,12 @@ namespace SMS.Application.Features.Accommodation.Queries
                 Maintenance = stats.Maintenance,
                 Disabled = stats.Disabled,
                 Unavailable = houses.Count(h => h.Status == Domain.Entities.HouseStatus.Unavailable),
-                OccupancyPercentage = stats.Total > 0
-                    ? Math.Round((double)stats.Occupied / stats.Total * 100, 2)
+                OccupancyPercentage = totalCapacity > 0
+                    ? Math.Round((double)occupants / totalCapacity * 100, 2)
                     : 0,
-                Houses = houses.Select(h => new HouseDto
-                {
-                    Id = h.Id,
-                    LaneId = h.LaneId,
-                    LaneName = lane.LaneName,
-                    HouseNumber = h.HouseNumber,
-                    HouseNumberNumeric = h.HouseNumberNumeric,
-                    Status = h.Status,
-                    IsOccupied = h.IsOccupied,
-                    IsEnabled = h.IsEnabled,
-                    IsAvailable = h.IsAvailable,
-                    OccupantId = h.OccupantId,
-                    OccupantName = h.Occupant != null ? $"{h.Occupant.FirstName} {h.Occupant.LastName}" : null,
-                    StudentNumber = h.Occupant?.StudentNumber,
-                    Notes = h.Notes,
-                    OccupiedDate = h.OccupiedDate,
-                    CreatedDate = h.CreatedDate.GetValueOrDefault(),
-                    UpdatedDate = h.ModifiedDate
-                }).ToList()
+                TotalCapacity = totalCapacity,
+                Occupants = occupants,
+                Houses = houses.Select(h => AccommodationDtoMappings.ToHouseDto(h)).ToList()
             };
 
             _logger.LogInformation("Lane occupancy report generated for lane '{LaneName}' ({LaneId})",

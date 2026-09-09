@@ -30,10 +30,20 @@ namespace SMS.Application.Features.Accommodation.Queries
             var lanes = await _repository.GetLanesAsync(cancellationToken);
             var overallStats = await _repository.GetOverallOccupancySummaryAsync(cancellationToken);
 
+            var allActiveAssignments = (await _repository.GetActiveAssignmentsAsync(null, null, null, cancellationToken)).ToList();
+            var totalOccupants = allActiveAssignments.Count;
+            var studentOccupants = allActiveAssignments.Count(a => a.OccupantType == SMS.Domain.Enums.OccupantType.Student);
+            var lecturerOccupants = allActiveAssignments.Count(a => a.OccupantType == SMS.Domain.Enums.OccupantType.Lecturer);
+
             var laneSummaries = new List<LaneOccupancyDto>();
             foreach (var lane in lanes)
             {
                 var stats = await _repository.GetLaneOccupancySummaryAsync(lane.Id, cancellationToken);
+                var laneHouses = await _repository.GetHousesByLaneAsync(lane.Id, cancellationToken);
+                var laneAssignments = allActiveAssignments
+                    .Where(a => a.House != null && a.House.LaneId == lane.Id)
+                    .ToList();
+
                 laneSummaries.Add(new LaneOccupancyDto
                 {
                     LaneId = lane.Id,
@@ -44,11 +54,17 @@ namespace SMS.Application.Features.Accommodation.Queries
                     Reserved = stats.Reserved,
                     Maintenance = stats.Maintenance,
                     Disabled = stats.Disabled,
-                    OccupancyPercentage = stats.Total > 0
-                        ? Math.Round((double)stats.Occupied / stats.Total * 100, 2)
+                    TotalCapacity = laneHouses.Sum(h => h.Capacity),
+                    Occupants = laneAssignments.Count,
+                    StudentOccupants = laneAssignments.Count(a => a.OccupantType == SMS.Domain.Enums.OccupantType.Student),
+                    LecturerOccupants = laneAssignments.Count(a => a.OccupantType == SMS.Domain.Enums.OccupantType.Lecturer),
+                    OccupancyPercentage = laneHouses.Sum(h => h.Capacity) > 0
+                        ? Math.Round((double)laneAssignments.Count / laneHouses.Sum(h => h.Capacity) * 100, 2)
                         : 0
                 });
             }
+
+            var totalCapacity = (await _repository.GetHousesPagedAsync(1, int.MaxValue, null, null, null, cancellationToken)).Items.Sum(h => h.Capacity);
 
             var statistics = new OccupancyStatisticsDto
             {
@@ -60,14 +76,18 @@ namespace SMS.Application.Features.Accommodation.Queries
                 MaintenanceHouses = overallStats.Maintenance,
                 DisabledHouses = overallStats.Disabled,
                 UnavailableHouses = overallStats.Total - overallStats.Occupied - overallStats.Vacant - overallStats.Maintenance,
-                OccupancyPercentage = overallStats.Total > 0
-                    ? Math.Round((double)overallStats.Occupied / overallStats.Total * 100, 2)
+                TotalCapacity = totalCapacity,
+                TotalOccupants = totalOccupants,
+                StudentOccupants = studentOccupants,
+                LecturerOccupants = lecturerOccupants,
+                OccupancyPercentage = totalCapacity > 0
+                    ? Math.Round((double)totalOccupants / totalCapacity * 100, 2)
                     : 0,
                 LaneSummaries = laneSummaries
             };
 
-            _logger.LogInformation("Occupancy statistics generated: {TotalLanes} lanes, {TotalHouses} houses, {OccupancyPercentage}% occupied",
-                statistics.TotalLanes, statistics.TotalHouses, statistics.OccupancyPercentage);
+            _logger.LogInformation("Occupancy statistics generated: {TotalLanes} lanes, {TotalHouses} houses, {TotalOccupants} occupants / {TotalCapacity} capacity ({OccupancyPercentage}%)",
+                statistics.TotalLanes, statistics.TotalHouses, statistics.TotalOccupants, statistics.TotalCapacity, statistics.OccupancyPercentage);
             return statistics;
         }
     }

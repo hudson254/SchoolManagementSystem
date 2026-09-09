@@ -47,39 +47,41 @@ namespace SMS.Application.Features.Accommodation.Commands
             if (house == null)
                 throw new SMS.Application.Exceptions.NotFoundException("House", request.HouseId);
 
-            if (!house.IsOccupied)
+            if (house.OccupiedCount <= 0 && !house.IsOccupied && house.OccupantId == null)
                 throw new SMS.Application.Exceptions.ValidationException($"House {house.HouseNumber} is not currently occupied");
 
-            // Get active assignment and vacate it
-            if (house.OccupantId.HasValue)
+            var vacatedDate = request.VacatedDate ?? DateTime.UtcNow;
+
+            // Close every active assignment for this house (multi-occupancy aware)
+            var activeAssignments = await _repository.GetActiveAssignmentsByHouseAsync(request.HouseId, cancellationToken);
+            foreach (var assignment in activeAssignments)
             {
-                var occupantType = house.OccupantType ?? OccupantType.Student;
-                var assignment = await _repository.GetAssignmentByOccupantAsync(house.OccupantId.Value, occupantType, cancellationToken);
-                if (assignment != null)
-                {
-                    assignment.Status = "Vacated";
-                    assignment.VacatedDate = request.VacatedDate ?? DateTime.UtcNow;
-                    assignment.MoveOutDate = request.VacatedDate ?? DateTime.UtcNow;
+                assignment.Status = "Vacated";
+                assignment.VacatedDate = vacatedDate;
+                assignment.MoveOutDate = vacatedDate;
+                if (!assignment.CheckOutDate.HasValue)
+                    assignment.CheckOutDate = vacatedDate;
+                if (request.Remarks != null)
                     assignment.Remarks = request.Remarks;
-                    await _repository.UpdateAssignmentAsync(assignment, cancellationToken);
-                }
+                await _repository.UpdateAssignmentAsync(assignment, cancellationToken);
             }
 
-            // Update house status
+            // Reset house occupancy state
+            house.OccupiedCount = 0;
             house.IsOccupied = false;
             house.OccupantId = null;
             house.OccupantType = null;
             house.Status = HouseStatus.Vacant;
-            house.VacatedDate = request.VacatedDate ?? DateTime.UtcNow;
+            house.VacatedDate = vacatedDate;
             house.SemesterId = null;
             await _repository.UpdateHouseAsync(house, cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync("Vacate", "House",
-                $"Vacated house {house.HouseNumber} (LaneId: {house.LaneId})");
+                $"Vacated house {house.HouseNumber} (HouseId: {house.Id}, LaneId: {house.LaneId}, {activeAssignments.Count()} active assignment(s) closed)");
 
-            _logger.LogInformation("House {HouseNumber} vacated", house.HouseNumber);
+            _logger.LogInformation("House {HouseNumber} vacated ({Count} assignments closed)", house.HouseNumber, activeAssignments.Count());
             return true;
         }
     }

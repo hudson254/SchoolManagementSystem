@@ -56,6 +56,12 @@ namespace SMS.Domain.Interfaces
         Task<IEnumerable<AccommodationAssignment>> GetAssignmentsByStudentAsync(Guid studentId, CancellationToken cancellationToken = default);
         Task<IEnumerable<AccommodationAssignment>> GetAssignmentsByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default);
 
+        // ===== Occupancy / capacity helpers (multi-occupancy model) =====
+        Task<int> CountActiveAssignmentsByHouseAsync(Guid houseId, CancellationToken cancellationToken = default);
+        Task<IEnumerable<AccommodationAssignment>> GetActiveAssignmentsAsync(Guid? houseId, Guid? laneId, string? searchTerm, CancellationToken cancellationToken = default);
+        Task<IEnumerable<AccommodationAssignment>> GetActiveAssignmentsByHouseAsync(Guid houseId, CancellationToken cancellationToken = default);
+        Task<int> CountActiveOccupantsByTypeAsync(OccupantType occupantType, CancellationToken cancellationToken = default);
+
         // ===== Legacy methods (kept for backward compatibility) =====
         Task<IEnumerable<Room>> GetRoomsAsync(int page, int pageSize, string? searchTerm, string? roomType, CancellationToken cancellationToken = default);
         Task<int> CountRoomsAsync(string? searchTerm, string? roomType, CancellationToken cancellationToken = default);

@@ -35,11 +35,15 @@ namespace SMS.Application.Features.Accommodation.Queries
             {
                 HouseId = h.Id,
                 HouseNumber = h.HouseNumber,
+                HouseName = h.HouseName,
                 LaneName = h.Lane?.LaneName ?? string.Empty,
                 Status = h.Status,
-                IsOccupied = h.IsOccupied,
-                OccupantName = h.Occupant != null ? $"{h.Occupant.FirstName} {h.Occupant.LastName}" : null,
+                IsOccupied = h.IsOccupied || h.OccupiedCount > 0,
+                Capacity = h.Capacity,
+                Occupants = h.OccupiedCount,
+                OccupantName = AccommodationDtoMappings.ToHouseDto(h).OccupantName,
                 StudentNumber = h.Occupant?.StudentNumber,
+                EmployeeNumber = h.LecturerOccupant?.EmployeeNumber,
                 OccupiedDate = h.OccupiedDate,
                 VacatedDate = h.VacatedDate,
                 Notes = h.Notes

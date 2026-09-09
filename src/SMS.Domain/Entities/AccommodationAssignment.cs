@@ -45,6 +45,18 @@ namespace SMS.Domain.Entities
         public DateTime AssignmentDate { get; set; } = DateTime.UtcNow;
         public DateTime? MoveInDate { get; set; }
         public DateTime? MoveOutDate { get; set; }
+
+        /// <summary>
+        /// Date the occupant was physically checked in to the house (receptionist workflow).
+        /// </summary>
+        public DateTime? CheckInDate { get; set; }
+
+        /// <summary>
+        /// Date the occupant was physically checked out of the house (receptionist workflow).
+        /// A checked-out occupant no longer consumes house capacity.
+        /// </summary>
+        public DateTime? CheckOutDate { get; set; }
+
         public string? Remarks { get; set; }
 
         // Navigation properties

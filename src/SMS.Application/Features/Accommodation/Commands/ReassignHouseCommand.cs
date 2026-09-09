@@ -71,22 +71,31 @@ namespace SMS.Application.Features.Accommodation.Commands
                 throw new NotFoundException("House", request.NewHouseId);
 
             // Check if new house is available
-            if (newHouse.IsOccupied || !newHouse.IsAvailable || !newHouse.IsEnabled)
+            if (!newHouse.IsAvailable || !newHouse.IsEnabled)
                 throw new BusinessRuleException("Cannot reassign",
                     $"House {newHouse.HouseNumber} is not available for assignment");
 
             // Check if new house is in maintenance or disabled
-            if (newHouse.Status == HouseStatus.Maintenance || newHouse.Status == HouseStatus.Disabled || newHouse.Status == HouseStatus.Unavailable)
+            if (newHouse.Status == HouseStatus.Maintenance || newHouse.Status == HouseStatus.Disabled || newHouse.Status == HouseStatus.Unavailable || newHouse.Status == HouseStatus.Reserved)
                 throw new BusinessRuleException("Cannot reassign",
                     $"House {newHouse.HouseNumber} is {newHouse.Status.ToLower()} and cannot be assigned");
 
-            // Vacate the current house
-            currentHouse.IsOccupied = false;
-            currentHouse.OccupantId = null;
-            currentHouse.OccupantType = null;
-            currentHouse.Status = HouseStatus.Vacant;
-            currentHouse.VacatedDate = DateTime.UtcNow;
-            currentHouse.SemesterId = null;
+            // Capacity enforcement - the destination house must have room
+            if (newHouse.OccupiedCount >= newHouse.Capacity)
+                throw new BusinessRuleException("Cannot reassign",
+                    $"House {newHouse.HouseNumber} is full ({newHouse.OccupiedCount}/{newHouse.Capacity})");
+
+            // Vacate the current house (multi-occupancy aware)
+            currentHouse.OccupiedCount = Math.Max(0, currentHouse.OccupiedCount - 1);
+            if (currentHouse.OccupiedCount == 0)
+            {
+                currentHouse.OccupantId = null;
+                currentHouse.OccupantType = null;
+                currentHouse.Status = HouseStatus.Vacant;
+                currentHouse.VacatedDate = DateTime.UtcNow;
+                currentHouse.SemesterId = null;
+            }
+            currentHouse.IsOccupied = currentHouse.OccupiedCount > 0;
             await _repository.UpdateHouseAsync(currentHouse, cancellationToken);
 
             // Update the current assignment to completed
@@ -114,12 +123,17 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             await _repository.AddAssignmentAsync(newAssignment, cancellationToken);
 
-            // Update the new house status
+            // Update the new house status (multi-occupancy aware)
+            newHouse.OccupiedCount += 1;
             newHouse.IsOccupied = true;
-            newHouse.OccupantId = occupantId;
-            newHouse.OccupantType = request.OccupantType;
+            if (!newHouse.OccupantId.HasValue)
+            {
+                newHouse.OccupantId = occupantId;
+                newHouse.OccupantType = request.OccupantType;
+            }
             newHouse.Status = HouseStatus.Occupied;
             newHouse.OccupiedDate = DateTime.UtcNow;
+            newHouse.SemesterId = currentAssignment.SemesterId;
             await _repository.UpdateHouseAsync(newHouse, cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

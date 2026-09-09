@@ -7,7 +7,7 @@ namespace SMS.Domain.Entities
 {
     /// <summary>
     /// Represents a single residential house within a lane.
-    /// Each house can be occupied by one student.
+    /// A house may hold one or more occupants (students and/or lecturers) up to its configured capacity.
     /// </summary>
     public class House : BaseEntity, ITenantAwareEntity
     {
@@ -23,9 +23,27 @@ namespace SMS.Domain.Entities
         public string HouseNumber { get; set; } = string.Empty;
 
         /// <summary>
+        /// Human-readable house name (optional, e.g. "Sunflower Hall", "Block A - Room 3").
+        /// </summary>
+        [MaxLength(100)]
+        public string? HouseName { get; set; }
+
+        /// <summary>
         /// Numeric house number for sorting purposes.
         /// </summary>
         public int HouseNumberNumeric { get; set; }
+
+        /// <summary>
+        /// Maximum number of occupants this house can hold.
+        /// Houses are multi-occupancy: students and lecturers share the same capacity pool.
+        /// </summary>
+        public int Capacity { get; set; } = 1;
+
+        /// <summary>
+        /// Current number of occupants (students + lecturers) assigned to this house.
+        /// Derived from active AccommodationAssignments; kept in sync by the command layer.
+        /// </summary>
+        public int OccupiedCount { get; set; }
 
         /// <summary>
         /// Current occupancy status of the house.

@@ -37,21 +37,7 @@ namespace SMS.Application.Features.Accommodation.Queries
                 vacantHouses = vacantHouses.Where(h => h.LaneId == request.LaneId.Value);
             }
 
-            var houseDtos = vacantHouses.Select(h => new HouseDto
-            {
-                Id = h.Id,
-                LaneId = h.LaneId,
-                LaneName = h.Lane?.LaneName ?? string.Empty,
-                HouseNumber = h.HouseNumber,
-                HouseNumberNumeric = h.HouseNumberNumeric,
-                Status = h.Status,
-                IsOccupied = h.IsOccupied,
-                IsEnabled = h.IsEnabled,
-                IsAvailable = h.IsAvailable,
-                Notes = h.Notes,
-                CreatedDate = h.CreatedDate.GetValueOrDefault(),
-                UpdatedDate = h.ModifiedDate
-            }).ToList();
+            var houseDtos = vacantHouses.Select(h => AccommodationDtoMappings.ToHouseDto(h)).ToList();
 
             var report = new VacantHouseReportDto
             {

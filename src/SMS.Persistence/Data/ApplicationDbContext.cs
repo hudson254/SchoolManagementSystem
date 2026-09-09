@@ -110,6 +110,7 @@ namespace SMS.Persistence.Data
             {
                 entity.HasKey(h => h.Id);
                 entity.Property(h => h.HouseNumber).IsRequired().HasMaxLength(20);
+                entity.Property(h => h.HouseName).HasMaxLength(100);
                 entity.Property(h => h.Status).IsRequired().HasMaxLength(30);
                 entity.Property(h => h.Notes).HasMaxLength(500);
                 entity.HasIndex(h => new { h.LaneId, h.HouseNumber }).IsUnique();
@@ -276,6 +277,19 @@ namespace SMS.Persistence.Data
                 entity.HasKey(aa => aa.Id);
                 entity.Property(aa => aa.Status).IsRequired().HasMaxLength(50);
 
+                // Duplicate-assignment prevention at the database level:
+                // an occupant (student or lecturer) may only ever have ONE active
+                // assignment at a time. These filtered (partial) unique indexes
+                // guarantee the invariant that the command layer already enforces,
+                // even in the event of concurrent/repeated requests.
+                entity.HasIndex(aa => aa.StudentId)
+                    .IsUnique()
+                    .HasFilter("\"StudentId\" IS NOT NULL AND \"Status\" = 'Active'");
+
+                entity.HasIndex(aa => aa.LecturerId)
+                    .IsUnique()
+                    .HasFilter("\"LecturerId\" IS NOT NULL AND \"Status\" = 'Active'");
+
                 // FIX: Both Student and Lecturer relationships are already configured
                 // from the Student and Lecturer side to avoid ambiguous FK mapping.
                 // Only configure the House, Lane, Room, and Semester relationships here.
@@ -307,6 +321,16 @@ namespace SMS.Persistence.Data
             {
                 entity.HasKey(a => a.Id);
                 entity.Property(a => a.Status).IsRequired().HasMaxLength(50);
+
+                // Legacy table duplicate-assignment prevention: only one active
+                // accommodation record per occupant.
+                entity.HasIndex(a => a.StudentId)
+                    .IsUnique()
+                    .HasFilter("\"StudentId\" IS NOT NULL AND \"IsActive\" = true");
+
+                entity.HasIndex(a => a.LecturerId)
+                    .IsUnique()
+                    .HasFilter("\"LecturerId\" IS NOT NULL AND \"IsActive\" = true");
 
                 entity.HasOne(a => a.Student)
                     .WithMany(s => s.Accommodations)

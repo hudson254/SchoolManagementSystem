@@ -31,11 +31,14 @@ namespace SMS.Application.DTOs
         public Guid LaneId { get; set; }
         public string LaneName { get; set; } = string.Empty;
         public string HouseNumber { get; set; } = string.Empty;
+        public string? HouseName { get; set; }
         public int HouseNumberNumeric { get; set; }
         public string Status { get; set; } = string.Empty;
         public bool IsOccupied { get; set; }
         public bool IsEnabled { get; set; }
         public bool IsAvailable { get; set; }
+        public int Capacity { get; set; } = 1;
+        public int OccupiedCount { get; set; }
         public Guid? OccupantId { get; set; }
         public OccupantType? OccupantType { get; set; }
         public string? OccupantName { get; set; }
@@ -46,6 +49,9 @@ namespace SMS.Application.DTOs
         public DateTime? OccupiedDate { get; set; }
         public DateTime CreatedDate { get; set; }
         public DateTime? UpdatedDate { get; set; }
+
+        /// <summary>Number of free places left before capacity is reached.</summary>
+        public int RemainingCapacity => Math.Max(0, Capacity - OccupiedCount);
     }
 
     /// <summary>
@@ -62,6 +68,21 @@ namespace SMS.Application.DTOs
         public int Maintenance { get; set; }
         public int Disabled { get; set; }
         public double OccupancyPercentage { get; set; }
+
+        /// <summary>Total bed/place capacity across all houses in the lane.</summary>
+        public int TotalCapacity { get; set; }
+
+        /// <summary>Total current occupants (students + lecturers) across the lane.</summary>
+        public int Occupants { get; set; }
+
+        /// <summary>Current student occupants.</summary>
+        public int StudentOccupants { get; set; }
+
+        /// <summary>Current lecturer occupants.</summary>
+        public int LecturerOccupants { get; set; }
+
+        /// <summary>Free places remaining across the lane.</summary>
+        public int AvailableCapacity => Math.Max(0, TotalCapacity - Occupants);
     }
 
     /// <summary>
@@ -75,6 +96,22 @@ namespace SMS.Application.DTOs
         public int VacantHouses { get; set; }
         public int MaintenanceCount { get; set; }
         public int DisabledCount { get; set; }
+
+        /// <summary>Total place capacity across all houses.</summary>
+        public int TotalCapacity { get; set; }
+
+        /// <summary>Total current occupants (students + lecturers).</summary>
+        public int TotalOccupants { get; set; }
+
+        /// <summary>Current student occupants.</summary>
+        public int StudentOccupants { get; set; }
+
+        /// <summary>Current lecturer occupants.</summary>
+        public int LecturerOccupants { get; set; }
+
+        /// <summary>Free places remaining.</summary>
+        public int AvailableCapacity => Math.Max(0, TotalCapacity - TotalOccupants);
+
         public double OccupancyPercentage { get; set; }
         public List<LaneOccupancyDto> LaneSummaries { get; set; } = new();
     }
@@ -160,6 +197,16 @@ namespace SMS.Application.DTOs
         public int Disabled { get; set; }
         public int Unavailable { get; set; }
         public double OccupancyPercentage { get; set; }
+
+        /// <summary>Total place capacity across the lane.</summary>
+        public int TotalCapacity { get; set; }
+
+        /// <summary>Total current occupants (students + lecturers).</summary>
+        public int Occupants { get; set; }
+
+        /// <summary>Free places remaining.</summary>
+        public int AvailableCapacity => Math.Max(0, TotalCapacity - Occupants);
+
         public List<HouseDto> Houses { get; set; } = new();
     }
 
@@ -170,11 +217,15 @@ namespace SMS.Application.DTOs
     {
         public Guid HouseId { get; set; }
         public string HouseNumber { get; set; } = string.Empty;
+        public string? HouseName { get; set; }
         public string LaneName { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public bool IsOccupied { get; set; }
+        public int Capacity { get; set; } = 1;
+        public int Occupants { get; set; }
         public string? OccupantName { get; set; }
         public string? StudentNumber { get; set; }
+        public string? EmployeeNumber { get; set; }
         public DateTime? OccupiedDate { get; set; }
         public DateTime? VacatedDate { get; set; }
         public string? Notes { get; set; }
@@ -266,7 +317,28 @@ namespace SMS.Application.DTOs
         public int MaintenanceHouses { get; set; }
         public int DisabledHouses { get; set; }
         public int UnavailableHouses { get; set; }
+
+        /// <summary>Total place capacity across all houses.</summary>
+        public int TotalCapacity { get; set; }
+
+        /// <summary>Total current occupants (students + lecturers).</summary>
+        public int TotalOccupants { get; set; }
+
+        /// <summary>Current student occupants.</summary>
+        public int StudentOccupants { get; set; }
+
+        /// <summary>Current lecturer occupants.</summary>
+        public int LecturerOccupants { get; set; }
+
+        /// <summary>Free places remaining.</summary>
+        public int AvailableCapacity => Math.Max(0, TotalCapacity - TotalOccupants);
+
+        /// <summary>House-status percentage (kept for backward compatibility).</summary>
         public double OccupancyPercentage { get; set; }
+
+        /// <summary>Occupancy as a percentage of total place capacity.</summary>
+        public double CapacityUtilization => TotalCapacity > 0 ? Math.Round((double)TotalOccupants / TotalCapacity * 100, 2) : 0;
+
         public List<LaneOccupancyDto> LaneSummaries { get; set; } = new();
     }
 }

@@ -262,5 +262,89 @@ namespace SMS.UnitTests.Accommodation
         }
 
         #endregion
+
+        #region UpdateHouseCommand Tests
+
+        [Fact]
+        public async Task UpdateHouseHandler_CapacityBelowOccupancy_ShouldThrow()
+        {
+            // Arrange
+            var houseId = Guid.NewGuid();
+            var repositoryMock = new Mock<IAccommodationRepository>();
+            var unitOfWorkMock = new Mock<IUnitOfWork>();
+            var auditServiceMock = new Mock<IAuditService>();
+            var loggerMock = new Mock<ILogger<UpdateHouseHandler>>();
+
+            var handler = new UpdateHouseHandler(
+                repositoryMock.Object,
+                unitOfWorkMock.Object,
+                auditServiceMock.Object,
+                loggerMock.Object);
+
+            var house = new House
+            {
+                Id = houseId,
+                LaneId = Guid.NewGuid(),
+                HouseNumber = "001",
+                Capacity = 4,
+                OccupiedCount = 3,
+                IsOccupied = true,
+                Status = HouseStatus.Occupied
+            };
+            repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(house);
+
+            var command = new UpdateHouseCommand { Id = houseId, Capacity = 2 };
+
+            // Act
+            Func<Task> act = () => handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            await act.Should().ThrowAsync<Exception>();
+            house.Capacity.Should().Be(4);
+        }
+
+        [Fact]
+        public async Task UpdateHouseHandler_CapacityAtOrAboveOccupancy_ShouldSucceed()
+        {
+            // Arrange
+            var houseId = Guid.NewGuid();
+            var repositoryMock = new Mock<IAccommodationRepository>();
+            var unitOfWorkMock = new Mock<IUnitOfWork>();
+            var auditServiceMock = new Mock<IAuditService>();
+            var loggerMock = new Mock<ILogger<UpdateHouseHandler>>();
+
+            var handler = new UpdateHouseHandler(
+                repositoryMock.Object,
+                unitOfWorkMock.Object,
+                auditServiceMock.Object,
+                loggerMock.Object);
+
+            var house = new House
+            {
+                Id = houseId,
+                LaneId = Guid.NewGuid(),
+                HouseNumber = "001",
+                Capacity = 2,
+                OccupiedCount = 2,
+                IsOccupied = true,
+                Status = HouseStatus.Occupied
+            };
+            repositoryMock.Setup(r => r.GetHouseByIdAsync(houseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(house);
+
+            var command = new UpdateHouseCommand { Id = houseId, Capacity = 4, HouseName = "North Wing" };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            result.Should().BeTrue();
+            house.Capacity.Should().Be(4);
+            house.HouseName.Should().Be("North Wing");
+            unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        #endregion
     }
 }

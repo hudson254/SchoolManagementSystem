@@ -40,12 +40,20 @@ namespace SMS.Persistence.Repositories
         public async Task<AccommodationAssignment> GetAssignmentByStudentAsync(Guid studentId, CancellationToken cancellationToken = default)
         {
             return await _context.Set<AccommodationAssignment>()
+                .Include(a => a.Student)
+                .Include(a => a.Lecturer)
+                .Include(a => a.House).ThenInclude(h => h.Lane)
+                .Include(a => a.Semester)
                 .FirstOrDefaultAsync(a => a.StudentId == studentId && !a.IsDeleted, cancellationToken);
         }
 
         public async Task<AccommodationAssignment> GetAssignmentByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default)
         {
             return await _context.Set<AccommodationAssignment>()
+                .Include(a => a.Student)
+                .Include(a => a.Lecturer)
+                .Include(a => a.House).ThenInclude(h => h.Lane)
+                .Include(a => a.Semester)
                 .FirstOrDefaultAsync(a => a.LecturerId == lecturerId && !a.IsDeleted, cancellationToken);
         }
 
@@ -208,6 +216,7 @@ namespace SMS.Persistence.Repositories
             return await _context.Set<House>()
                 .Include(h => h.Lane)
                 .Include(h => h.Occupant)
+                .Include(h => h.LecturerOccupant)
                 .FirstOrDefaultAsync(h => h.Id == houseId && !h.IsDeleted, cancellationToken);
         }
 
@@ -241,6 +250,7 @@ namespace SMS.Persistence.Repositories
             var items = await query
                 .Include(h => h.Lane)
                 .Include(h => h.Occupant)
+                .Include(h => h.LecturerOccupant)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(cancellationToken);
@@ -252,6 +262,9 @@ namespace SMS.Persistence.Repositories
         {
             return await _context.Set<House>()
                 .Where(h => h.LaneId == laneId && !h.IsDeleted)
+                .Include(h => h.Lane)
+                .Include(h => h.Occupant)
+                .Include(h => h.LecturerOccupant)
                 .OrderBy(h => h.HouseNumberNumeric)
                 .ToListAsync(cancellationToken);
         }
@@ -259,7 +272,7 @@ namespace SMS.Persistence.Repositories
         public async Task<IEnumerable<House>> GetAvailableHousesAsync(Guid? laneId, CancellationToken cancellationToken = default)
         {
             var query = _context.Set<House>()
-                .Where(h => !h.IsOccupied && h.IsAvailable && h.IsEnabled && !h.IsDeleted);
+                .Where(h => h.OccupiedCount < h.Capacity && h.IsAvailable && h.IsEnabled && !h.IsDeleted);
 
             if (laneId.HasValue)
             {
@@ -268,6 +281,8 @@ namespace SMS.Persistence.Repositories
 
             return await query
                 .Include(h => h.Lane)
+                .Include(h => h.Occupant)
+                .Include(h => h.LecturerOccupant)
                 .OrderBy(h => h.LaneId)
                 .ThenBy(h => h.HouseNumberNumeric)
                 .ToListAsync(cancellationToken);
@@ -326,6 +341,7 @@ namespace SMS.Persistence.Repositories
                 .Where(h => h.Status == status && !h.IsDeleted)
                 .Include(h => h.Lane)
                 .Include(h => h.Occupant)
+                .Include(h => h.LecturerOccupant)
                 .ToListAsync(cancellationToken);
         }
 
@@ -341,8 +357,10 @@ namespace SMS.Persistence.Repositories
         {
             return await _context.Set<AccommodationAssignment>()
                 .Include(a => a.Student)
+                .Include(a => a.Lecturer)
                 .Include(a => a.House)
                     .ThenInclude(h => h.Lane)
+                .Include(a => a.Semester)
                 .Where(a => !a.IsDeleted)
                 .ToListAsync(cancellationToken);
         }
@@ -353,6 +371,7 @@ namespace SMS.Persistence.Repositories
                 .Where(a => a.StudentId == studentId && !a.IsDeleted)
                 .Include(a => a.House)
                     .ThenInclude(h => h.Lane)
+                .Include(a => a.Semester)
                 .ToListAsync(cancellationToken);
         }
 
@@ -362,7 +381,83 @@ namespace SMS.Persistence.Repositories
                 .Where(a => a.LecturerId == lecturerId && !a.IsDeleted)
                 .Include(a => a.House)
                     .ThenInclude(h => h.Lane)
+                .Include(a => a.Semester)
                 .ToListAsync(cancellationToken);
+        }
+
+        // ===== Multi-occupancy capacity helpers =====
+
+        public async Task<int> CountActiveAssignmentsByHouseAsync(Guid houseId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<AccommodationAssignment>()
+                .CountAsync(a => a.HouseId == houseId && a.Status == "Active" && !a.IsDeleted, cancellationToken);
+        }
+
+        public async Task<IEnumerable<AccommodationAssignment>> GetActiveAssignmentsByHouseAsync(Guid houseId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<AccommodationAssignment>()
+                .Include(a => a.Student)
+                .Include(a => a.Lecturer)
+                .Include(a => a.Semester)
+                .Where(a => a.HouseId == houseId && a.Status == "Active" && !a.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<IEnumerable<AccommodationAssignment>> GetActiveAssignmentsAsync(
+            Guid? houseId,
+            Guid? laneId,
+            string? searchTerm,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _context.Set<AccommodationAssignment>()
+                .Include(a => a.Student)
+                .Include(a => a.Lecturer)
+                .Include(a => a.House)
+                    .ThenInclude(h => h.Lane)
+                .Include(a => a.Semester)
+                .Where(a => a.Status == "Active" && !a.IsDeleted);
+
+            if (houseId.HasValue)
+            {
+                query = query.Where(a => a.HouseId == houseId.Value);
+            }
+
+            if (laneId.HasValue)
+            {
+                query = query.Where(a => a.House.LaneId == laneId.Value);
+            }
+
+            var assignments = await query.OrderBy(a => a.AssignmentDate).ToListAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                assignments = assignments.Where(a =>
+                {
+                    var student = a.Student;
+                    var lecturer = a.Lecturer;
+                    var studentMatch = a.OccupantType == OccupantType.Student && student != null &&
+                        ((student.FirstName ?? "").ToLower().Contains(search) ||
+                         (student.LastName ?? "").ToLower().Contains(search) ||
+                         (student.StudentNumber ?? "").ToLower().Contains(search));
+                    var lecturerMatch = a.OccupantType == OccupantType.Lecturer && lecturer != null &&
+                        ((lecturer.FirstName ?? "").ToLower().Contains(search) ||
+                         (lecturer.LastName ?? "").ToLower().Contains(search) ||
+                         (lecturer.EmployeeNumber ?? "").ToLower().Contains(search));
+                    var houseMatch = (a.House?.HouseNumber ?? "").ToLower().Contains(search) ||
+                        (a.House?.HouseName ?? "").ToLower().Contains(search);
+                    var laneMatch = (a.House?.Lane?.LaneName ?? "").ToLower().Contains(search);
+                    return studentMatch || lecturerMatch || houseMatch || laneMatch;
+                }).ToList();
+            }
+
+            return assignments;
+        }
+
+        public async Task<int> CountActiveOccupantsByTypeAsync(OccupantType occupantType, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<AccommodationAssignment>()
+                .CountAsync(a => a.OccupantType == occupantType && a.Status == "Active" && !a.IsDeleted, cancellationToken);
         }
 
         // ===== Legacy methods (kept for backward compatibility) =====

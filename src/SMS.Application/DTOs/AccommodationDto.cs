@@ -75,6 +75,25 @@ namespace SMS.Application.DTOs
         public string BlockName { get; set; } = string.Empty;
         public string BuildingName { get; set; } = string.Empty;
         public string SemesterName { get; set; } = string.Empty;
+
+        // ===== Lane -> House accommodation model =====
+        public Guid? HouseId { get; set; }
+        public string HouseNumber { get; set; } = string.Empty;
+        public string? HouseName { get; set; }
+        public Guid? LaneId { get; set; }
+        public string LaneName { get; set; } = string.Empty;
+        public int HouseCapacity { get; set; }
+        public int HouseOccupiedCount { get; set; }
+
+        // ===== Check-in / check-out =====
+        public DateTime? CheckInDate { get; set; }
+        public DateTime? CheckOutDate { get; set; }
+
+        /// <summary>True when the occupant has physically checked in.</summary>
+        public bool IsCheckedIn => CheckInDate != null && CheckOutDate == null;
+
+        /// <summary>True when the occupant has physically checked out.</summary>
+        public bool IsCheckedOut => CheckOutDate != null;
     }
 
     public class OccupancyReportDto

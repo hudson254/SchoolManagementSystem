@@ -28,25 +28,7 @@ namespace SMS.Application.Features.Accommodation.Queries
         public async Task<IEnumerable<HouseDto>> Handle(GetHousesQuery request, CancellationToken cancellationToken)
         {
             var (items, _) = await _repository.GetHousesPagedAsync(1, int.MaxValue, request.LaneId, request.SearchTerm, request.Status, cancellationToken);
-            var houseDtos = items.Select(h => new HouseDto
-            {
-                Id = h.Id,
-                LaneId = h.LaneId,
-                LaneName = h.Lane?.LaneName ?? string.Empty,
-                HouseNumber = h.HouseNumber,
-                HouseNumberNumeric = h.HouseNumberNumeric,
-                Status = h.Status,
-                IsOccupied = h.IsOccupied,
-                IsEnabled = h.IsEnabled,
-                IsAvailable = h.IsAvailable,
-                OccupantId = h.OccupantId,
-                OccupantName = h.Occupant != null ? $"{h.Occupant.FirstName} {h.Occupant.LastName}" : null,
-                SemesterId = h.SemesterId,
-                Notes = h.Notes,
-                OccupiedDate = h.OccupiedDate,
-                CreatedDate = h.CreatedDate.GetValueOrDefault(),
-                UpdatedDate = h.ModifiedDate
-            });
+            var houseDtos = items.Select(h => AccommodationDtoMappings.ToHouseDto(h));
 
             _logger.LogInformation("Retrieved {Count} houses", houseDtos.Count());
             return houseDtos;
