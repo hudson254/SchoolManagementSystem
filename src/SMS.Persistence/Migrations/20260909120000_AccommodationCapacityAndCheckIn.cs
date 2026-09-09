@@ -13,6 +13,7 @@ namespace SMS.Persistence.Migrations
     ///  - Enforces duplicate-active-assignment prevention with filtered unique indexes.
     ///  - Backfills OccupiedCount/IsOccupied from existing active assignments (data-preserving).
     /// </summary>
+    [Migration("20260909120000_AccommodationCapacityAndCheckIn")]
     public partial class AccommodationCapacityAndCheckIn : Migration
     {
         /// <inheritdoc />
