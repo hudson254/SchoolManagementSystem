@@ -44,7 +44,12 @@ namespace SMS.Persistence.Repositories
                 .Include(a => a.Lecturer)
                 .Include(a => a.House).ThenInclude(h => h.Lane)
                 .Include(a => a.Semester)
-                .FirstOrDefaultAsync(a => a.StudentId == studentId && !a.IsDeleted, cancellationToken);
+                .Where(a => a.StudentId == studentId && !a.IsDeleted)
+                // Prefer the active assignment so duplicate-assignment detection
+                // never mistakes a historical (vacated/completed) row for nothing.
+                .OrderByDescending(a => a.Status == "Active")
+                .ThenByDescending(a => a.AssignmentDate)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         public async Task<AccommodationAssignment> GetAssignmentByLecturerAsync(Guid lecturerId, CancellationToken cancellationToken = default)
@@ -54,7 +59,10 @@ namespace SMS.Persistence.Repositories
                 .Include(a => a.Lecturer)
                 .Include(a => a.House).ThenInclude(h => h.Lane)
                 .Include(a => a.Semester)
-                .FirstOrDefaultAsync(a => a.LecturerId == lecturerId && !a.IsDeleted, cancellationToken);
+                .Where(a => a.LecturerId == lecturerId && !a.IsDeleted)
+                .OrderByDescending(a => a.Status == "Active")
+                .ThenByDescending(a => a.AssignmentDate)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         public async Task<AccommodationAssignment> GetAssignmentByOccupantAsync(Guid occupantId, OccupantType occupantType, CancellationToken cancellationToken = default)
