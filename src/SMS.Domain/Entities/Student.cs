@@ -59,6 +59,5 @@ namespace SMS.Domain.Entities
         public virtual ICollection<Attendance> Attendances { get; set; } = new List<Attendance>();
         public virtual ICollection<Accommodation> Accommodations { get; set; } = new List<Accommodation>();
         public virtual ICollection<AccommodationAssignment> AccommodationAssignments { get; set; } = new List<AccommodationAssignment>();
-        public virtual ICollection<House> Houses { get; set; } = new List<House>();
     }
 }

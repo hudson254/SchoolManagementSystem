@@ -95,6 +95,17 @@ namespace SMS.Application.Features.Accommodation.Commands
                 currentHouse.VacatedDate = DateTime.UtcNow;
                 currentHouse.SemesterId = null;
             }
+            else if (currentHouse.OccupantId == occupantId)
+            {
+                // The primary occupant left but others remain - promote the next occupant.
+                var remaining = await _repository.GetActiveAssignmentsByHouseAsync(currentHouse.Id, cancellationToken);
+                var next = remaining.FirstOrDefault(a => a.StudentId != occupantId && a.LecturerId != occupantId);
+                if (next != null)
+                {
+                    currentHouse.OccupantId = next.StudentId ?? next.LecturerId;
+                    currentHouse.OccupantType = next.OccupantType;
+                }
+            }
             currentHouse.IsOccupied = currentHouse.OccupiedCount > 0;
             await _repository.UpdateHouseAsync(currentHouse, cancellationToken);
 

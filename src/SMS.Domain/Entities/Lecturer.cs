@@ -39,6 +39,5 @@ namespace SMS.Domain.Entities
         // Accommodation navigation properties
         public virtual ICollection<Accommodation> Accommodations { get; set; } = new List<Accommodation>();
         public virtual ICollection<AccommodationAssignment> AccommodationAssignments { get; set; } = new List<AccommodationAssignment>();
-        public virtual ICollection<House> Houses { get; set; } = new List<House>();
     }
 }

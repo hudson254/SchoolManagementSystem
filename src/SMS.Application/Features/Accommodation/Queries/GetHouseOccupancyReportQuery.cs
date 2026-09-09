@@ -31,22 +31,26 @@ namespace SMS.Application.Features.Accommodation.Queries
         {
             var (items, _) = await _repository.GetHousesPagedAsync(1, int.MaxValue, request.LaneId, null, request.Status, cancellationToken);
 
-            var report = items.Select(h => new HouseOccupancyReportDto
+            var report = items.Select(h =>
             {
-                HouseId = h.Id,
-                HouseNumber = h.HouseNumber,
-                HouseName = h.HouseName,
-                LaneName = h.Lane?.LaneName ?? string.Empty,
-                Status = h.Status,
-                IsOccupied = h.IsOccupied || h.OccupiedCount > 0,
-                Capacity = h.Capacity,
-                Occupants = h.OccupiedCount,
-                OccupantName = AccommodationDtoMappings.ToHouseDto(h).OccupantName,
-                StudentNumber = h.Occupant?.StudentNumber,
-                EmployeeNumber = h.LecturerOccupant?.EmployeeNumber,
-                OccupiedDate = h.OccupiedDate,
-                VacatedDate = h.VacatedDate,
-                Notes = h.Notes
+                var houseDto = AccommodationDtoMappings.ToHouseDto(h);
+                return new HouseOccupancyReportDto
+                {
+                    HouseId = h.Id,
+                    HouseNumber = h.HouseNumber,
+                    HouseName = h.HouseName,
+                    LaneName = h.Lane?.LaneName ?? string.Empty,
+                    Status = h.Status,
+                    IsOccupied = h.IsOccupied || h.OccupiedCount > 0,
+                    Capacity = h.Capacity,
+                    Occupants = h.OccupiedCount,
+                    OccupantName = houseDto.OccupantName,
+                    StudentNumber = houseDto.StudentNumber,
+                    EmployeeNumber = houseDto.EmployeeNumber,
+                    OccupiedDate = h.OccupiedDate,
+                    VacatedDate = h.VacatedDate,
+                    Notes = h.Notes
+                };
             });
 
             _logger.LogInformation("House occupancy report generated with {Count} houses", report.Count());

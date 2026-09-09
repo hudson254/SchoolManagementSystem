@@ -215,8 +215,6 @@ namespace SMS.Persistence.Repositories
         {
             return await _context.Set<House>()
                 .Include(h => h.Lane)
-                .Include(h => h.Occupant)
-                .Include(h => h.LecturerOccupant)
                 .FirstOrDefaultAsync(h => h.Id == houseId && !h.IsDeleted, cancellationToken);
         }
 
@@ -249,8 +247,6 @@ namespace SMS.Persistence.Repositories
             var totalCount = await query.CountAsync(cancellationToken);
             var items = await query
                 .Include(h => h.Lane)
-                .Include(h => h.Occupant)
-                .Include(h => h.LecturerOccupant)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(cancellationToken);
@@ -263,8 +259,6 @@ namespace SMS.Persistence.Repositories
             return await _context.Set<House>()
                 .Where(h => h.LaneId == laneId && !h.IsDeleted)
                 .Include(h => h.Lane)
-                .Include(h => h.Occupant)
-                .Include(h => h.LecturerOccupant)
                 .OrderBy(h => h.HouseNumberNumeric)
                 .ToListAsync(cancellationToken);
         }
@@ -281,8 +275,6 @@ namespace SMS.Persistence.Repositories
 
             return await query
                 .Include(h => h.Lane)
-                .Include(h => h.Occupant)
-                .Include(h => h.LecturerOccupant)
                 .OrderBy(h => h.LaneId)
                 .ThenBy(h => h.HouseNumberNumeric)
                 .ToListAsync(cancellationToken);
@@ -340,8 +332,6 @@ namespace SMS.Persistence.Repositories
             return await _context.Set<House>()
                 .Where(h => h.Status == status && !h.IsDeleted)
                 .Include(h => h.Lane)
-                .Include(h => h.Occupant)
-                .Include(h => h.LecturerOccupant)
                 .ToListAsync(cancellationToken);
         }
 

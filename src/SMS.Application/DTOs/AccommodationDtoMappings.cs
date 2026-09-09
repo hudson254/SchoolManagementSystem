@@ -14,28 +14,32 @@ namespace SMS.Application.DTOs
     {
         public static HouseDto ToHouseDto(House h)
         {
-            var occupantType = h.OccupantType;
+            // Occupant display info: OccupantId/OccupantType are denormalized
+            // primary-occupant markers. When the active assignments collection is
+            // already loaded (batch queries), enrich the display names from it.
+            // When not loaded, fall back to the denormalized markers (ids only).
             string? occupantName = null;
             string? studentNumber = null;
             string? employeeNumber = null;
 
-            if (occupantType == OccupantType.Lecturer)
+            var activeAssignments = h.AccommodationAssignments
+                .Where(a => a.Status == "Active")
+                .ToList();
+            var student = activeAssignments.Select(a => a.Student).FirstOrDefault(s => s != null);
+            var lecturer = activeAssignments.Select(a => a.Lecturer).FirstOrDefault(l => l != null);
+
+            if (h.OccupantType == OccupantType.Lecturer)
             {
-                var lecturer = h.LecturerOccupant;
                 occupantName = lecturer != null ? $"{lecturer.FirstName} {lecturer.LastName}" : null;
                 employeeNumber = lecturer?.EmployeeNumber;
             }
-            else if (occupantType == OccupantType.Student)
+            else if (h.OccupantType == OccupantType.Student)
             {
-                var student = h.Occupant;
                 occupantName = student != null ? $"{student.FirstName} {student.LastName}" : null;
                 studentNumber = student?.StudentNumber;
             }
             else
             {
-                // No explicit occupant type - fall back to whichever navigation loaded.
-                var student = h.Occupant;
-                var lecturer = h.LecturerOccupant;
                 occupantName = student != null ? $"{student.FirstName} {student.LastName}"
                     : lecturer != null ? $"{lecturer.FirstName} {lecturer.LastName}"
                     : null;

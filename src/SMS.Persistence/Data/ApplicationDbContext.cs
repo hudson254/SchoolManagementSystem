@@ -120,22 +120,13 @@ namespace SMS.Persistence.Data
                     .HasForeignKey(h => h.LaneId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                // FIX: Explicitly configure Occupant as Student and LecturerOccupant as Lecturer
-                // using separate FK columns to avoid the shadow FK conflict.
-                // House.OccupantId is the FK for Student (nullable, one-to-many)
-                entity.HasOne(h => h.Occupant)
-                    .WithMany(s => s.Houses)
-                    .HasForeignKey(h => h.OccupantId)
-                    .OnDelete(DeleteBehavior.SetNull);
-
-                // House.LecturerOccupant maps to Lecturer with the SAME OccupantId column
-                // This is intentionally using the same column since a house can only have
-                // one occupant type at a time. The OccupantType discriminator determines
-                // which navigation property is valid.
-                entity.HasOne(h => h.LecturerOccupant)
-                    .WithMany(l => l.Houses)
-                    .HasForeignKey(h => h.OccupantId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                // OccupantId is intentionally NOT a foreign key. It is a
+                // denormalized UUID marker that may reference either a Student
+                // or a Lecturer (polymorphic occupant). A single FK cannot
+                // enforce both; referential integrity for occupants is enforced
+                // solely by AccommodationAssignments (which carry dedicated
+                // StudentId/LecturerId FKs + filtered unique indexes).
+                entity.Property(h => h.OccupantId).IsRequired(false);
 
                 entity.HasOne(h => h.Semester)
                     .WithMany()
@@ -222,11 +213,6 @@ namespace SMS.Persistence.Data
                     .WithOne(g => g.Student)
                     .HasForeignKey(g => g.StudentId)
                     .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasMany(s => s.Houses)
-                    .WithOne(h => h.Occupant)
-                    .HasForeignKey(h => h.OccupantId)
-                    .OnDelete(DeleteBehavior.SetNull);
 
                 // FIX: AccommodationAssignments - one-to-many with Student
                 // AccommodationAssignment.StudentId is the FK for this relationship.

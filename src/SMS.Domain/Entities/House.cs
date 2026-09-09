@@ -101,8 +101,6 @@ namespace SMS.Domain.Entities
 
         // Navigation properties
         public virtual Lane Lane { get; set; }
-        public virtual Student Occupant { get; set; }
-        public virtual Lecturer LecturerOccupant { get; set; }
         public virtual Semester Semester { get; set; }
         public virtual ICollection<Accommodation> Accommodations { get; set; } = new List<Accommodation>();
         public virtual ICollection<AccommodationAssignment> AccommodationAssignments { get; set; } = new List<AccommodationAssignment>();
