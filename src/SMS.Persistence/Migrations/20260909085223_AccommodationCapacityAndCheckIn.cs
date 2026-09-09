@@ -6,26 +6,26 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace SMS.Persistence.Migrations
 {
     /// <inheritdoc />
-    /// <summary>
-    /// Accommodation repair migration (2026-09-09):
-    ///  - Adds multi-occupancy capacity model to Houses (Capacity, OccupiedCount, optional HouseName).
-    ///  - Adds explicit CheckInDate/CheckOutDate to AccommodationAssignments.
-    ///  - Enforces duplicate-active-assignment prevention with filtered unique indexes.
-    ///  - Backfills OccupiedCount/IsOccupied from existing active assignments (data-preserving).
-    /// </summary>
-    [Migration("20260909120000_AccommodationCapacityAndCheckIn")]
     public partial class AccommodationCapacityAndCheckIn : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // ===== Houses: multi-occupancy capacity model =====
-            migrationBuilder.AddColumn<string>(
-                name: "HouseName",
-                table: "Houses",
-                type: "character varying(100)",
-                maxLength: 100,
-                nullable: true);
+            migrationBuilder.DropIndex(
+                name: "IX_Accommodations_LecturerId",
+                table: "Accommodations");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Accommodations_StudentId",
+                table: "Accommodations");
+
+            migrationBuilder.DropIndex(
+                name: "IX_AccommodationAssignments_LecturerId",
+                table: "AccommodationAssignments");
+
+            migrationBuilder.DropIndex(
+                name: "IX_AccommodationAssignments_StudentId",
+                table: "AccommodationAssignments");
 
             migrationBuilder.AddColumn<int>(
                 name: "Capacity",
@@ -34,6 +34,13 @@ namespace SMS.Persistence.Migrations
                 nullable: false,
                 defaultValue: 1);
 
+            migrationBuilder.AddColumn<string>(
+                name: "HouseName",
+                table: "Houses",
+                type: "character varying(100)",
+                maxLength: 100,
+                nullable: true);
+
             migrationBuilder.AddColumn<int>(
                 name: "OccupiedCount",
                 table: "Houses",
@@ -41,7 +48,6 @@ namespace SMS.Persistence.Migrations
                 nullable: false,
                 defaultValue: 0);
 
-            // ===== AccommodationAssignments: explicit check-in / check-out records =====
             migrationBuilder.AddColumn<DateTime>(
                 name: "CheckInDate",
                 table: "AccommodationAssignments",
@@ -54,38 +60,33 @@ namespace SMS.Persistence.Migrations
                 type: "timestamp with time zone",
                 nullable: true);
 
-            // ===== Duplicate-active-assignment prevention (database invariant) =====
-            // An occupant may only ever have ONE active ('Active') assignment.
-            // These partial unique indexes enforce that invariant regardless of
-            // application-layer races or direct database writes.
             migrationBuilder.CreateIndex(
-                name: "IX_AccommodationAssignments_ActiveStudentId",
-                table: "AccommodationAssignments",
-                column: "StudentId",
-                unique: true,
-                filter: "\"StudentId\" IS NOT NULL AND \"Status\" = 'Active'");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AccommodationAssignments_ActiveLecturerId",
-                table: "AccommodationAssignments",
+                name: "IX_Accommodations_LecturerId",
+                table: "Accommodations",
                 column: "LecturerId",
                 unique: true,
-                filter: "\"LecturerId\" IS NOT NULL AND \"Status\" = 'Active'");
+                filter: "\"LecturerId\" IS NOT NULL AND \"IsActive\" = true");
 
-            // Legacy Accommodations table: one active record per occupant.
             migrationBuilder.CreateIndex(
-                name: "IX_Accommodations_ActiveStudentId",
+                name: "IX_Accommodations_StudentId",
                 table: "Accommodations",
                 column: "StudentId",
                 unique: true,
                 filter: "\"StudentId\" IS NOT NULL AND \"IsActive\" = true");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Accommodations_ActiveLecturerId",
-                table: "Accommodations",
+                name: "IX_AccommodationAssignments_LecturerId",
+                table: "AccommodationAssignments",
                 column: "LecturerId",
                 unique: true,
-                filter: "\"LecturerId\" IS NOT NULL AND \"IsActive\" = true");
+                filter: "\"LecturerId\" IS NOT NULL AND \"Status\" = 'Active'");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AccommodationAssignments_StudentId",
+                table: "AccommodationAssignments",
+                column: "StudentId",
+                unique: true,
+                filter: "\"StudentId\" IS NOT NULL AND \"Status\" = 'Active'");
 
             // ===== Data backfill (preserves existing production accommodation data) =====
             // Derive OccupiedCount/IsOccupied/Status from the authoritative active
@@ -109,32 +110,20 @@ namespace SMS.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
-                name: "IX_Accommodations_ActiveLecturerId",
+                name: "IX_Accommodations_LecturerId",
                 table: "Accommodations");
 
             migrationBuilder.DropIndex(
-                name: "IX_Accommodations_ActiveStudentId",
+                name: "IX_Accommodations_StudentId",
                 table: "Accommodations");
 
             migrationBuilder.DropIndex(
-                name: "IX_AccommodationAssignments_ActiveLecturerId",
+                name: "IX_AccommodationAssignments_LecturerId",
                 table: "AccommodationAssignments");
 
             migrationBuilder.DropIndex(
-                name: "IX_AccommodationAssignments_ActiveStudentId",
+                name: "IX_AccommodationAssignments_StudentId",
                 table: "AccommodationAssignments");
-
-            migrationBuilder.DropColumn(
-                name: "CheckOutDate",
-                table: "AccommodationAssignments");
-
-            migrationBuilder.DropColumn(
-                name: "CheckInDate",
-                table: "AccommodationAssignments");
-
-            migrationBuilder.DropColumn(
-                name: "OccupiedCount",
-                table: "Houses");
 
             migrationBuilder.DropColumn(
                 name: "Capacity",
@@ -143,6 +132,38 @@ namespace SMS.Persistence.Migrations
             migrationBuilder.DropColumn(
                 name: "HouseName",
                 table: "Houses");
+
+            migrationBuilder.DropColumn(
+                name: "OccupiedCount",
+                table: "Houses");
+
+            migrationBuilder.DropColumn(
+                name: "CheckInDate",
+                table: "AccommodationAssignments");
+
+            migrationBuilder.DropColumn(
+                name: "CheckOutDate",
+                table: "AccommodationAssignments");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Accommodations_LecturerId",
+                table: "Accommodations",
+                column: "LecturerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Accommodations_StudentId",
+                table: "Accommodations",
+                column: "StudentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AccommodationAssignments_LecturerId",
+                table: "AccommodationAssignments",
+                column: "LecturerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AccommodationAssignments_StudentId",
+                table: "AccommodationAssignments",
+                column: "StudentId");
         }
     }
 }
