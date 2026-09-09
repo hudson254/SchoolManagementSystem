@@ -21,7 +21,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpGet]
-        [Authorize(Policy = "ModeratorAccess")]
+        [Authorize(Policy = "AccommodationOccupantReadAccess")]
         [ProducesResponseType(typeof(PagedResult<LecturerDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetLecturers(
             [FromQuery] int page = 1,
@@ -42,7 +42,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpGet("{id}")]
-        [Authorize(Policy = "LecturerAccess")]
+        [Authorize(Policy = "LecturerProfileReadAccess")]
         [ProducesResponseType(typeof(LecturerDetailsDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetLecturer(Guid id, CancellationToken cancellationToken)

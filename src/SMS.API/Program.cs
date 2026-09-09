@@ -676,6 +676,19 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Receptionist"));
     options.AddPolicy("SystemAdministratorAccess", policy =>
         policy.RequireRole("SystemAdministrator"));
+    // Read-only access to occupant (student/lecturer) records required by the
+    // accommodation workflows. Receptionists manage accommodation and must be
+    // able to search for and view students and lecturers, but must NOT be able
+    // to create/update/delete them (ModeratorAccess includes write endpoints).
+    options.AddPolicy("AccommodationOccupantReadAccess", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Receptionist"));
+    // Student profile read access = previous StudentAccess + Receptionist
+    // (used only on the student detail GET; students still see their own record).
+    options.AddPolicy("StudentProfileReadAccess", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student", "Receptionist"));
+    // Lecturer profile read access = previous LecturerAccess + Receptionist.
+    options.AddPolicy("LecturerProfileReadAccess", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Receptionist"));
 });
 
 var app = builder.Build();
