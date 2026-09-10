@@ -137,11 +137,26 @@ namespace SMS.ApiTests.Controllers
                 var response = await client.PostAsJsonAsync("/api/v1/calendar-events", create);
                 response.StatusCode.Should().Be(HttpStatusCode.Created,
                     $"coordinator create calendar event should succeed (HTTP {response.StatusCode})");
+
+                // Regression: the event must be persisted and appear in the list
+                // (the controller previously never called SaveChanges).
+                var listResponse = await client.GetAsync("/api/v1/calendar-events");
+                listResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+                var events = await listResponse.Content.ReadFromJsonAsync<CalendarEventPayload[]>();
+                events.Should().NotBeNullOrEmpty();
+                events.Should().Contain(e => e.title == create.title,
+                    "the created calendar event must be persisted and returned by the list endpoint");
             }
             finally
             {
                 client.Dispose();
             }
+        }
+
+        private sealed class CalendarEventPayload
+        {
+            public string id { get; set; } = string.Empty;
+            public string title { get; set; } = string.Empty;
         }
 [Fact]
         public async Task Coordinator_CannotDeleteCourse()

@@ -14,13 +14,16 @@ namespace SMS.API.Controllers.v1
     {
         private readonly ILogger<CalendarEventController> _logger;
         private readonly ICalendarEventRepository _calendarEventRepository;
+        private readonly IUnitOfWork _unitOfWork;
 
         public CalendarEventController(
             ILogger<CalendarEventController> logger,
-            ICalendarEventRepository calendarEventRepository)
+            ICalendarEventRepository calendarEventRepository,
+            IUnitOfWork unitOfWork)
         {
             _logger = logger;
             _calendarEventRepository = calendarEventRepository;
+            _unitOfWork = unitOfWork;
         }
 [HttpGet]
         [Authorize(Policy = "LecturerAccess")]
@@ -71,6 +74,7 @@ namespace SMS.API.Controllers.v1
                 IsActive = true
             };
             var result = await _calendarEventRepository.AddAsync(evt, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
             return CreatedAtAction(nameof(GetEvent), new { id = result.Id }, ToDto(result));
         }
 
@@ -90,6 +94,7 @@ namespace SMS.API.Controllers.v1
             if (request.EventType != null) evt.EventType = request.EventType;
             if (request.Location != null) evt.Location = request.Location;
             await _calendarEventRepository.UpdateAsync(evt, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
             return Ok(ToDto(evt));
         }
 [HttpDelete("{id}")]
@@ -101,6 +106,7 @@ namespace SMS.API.Controllers.v1
             var evt = await _calendarEventRepository.GetByIdAsync(id, cancellationToken);
             if (evt == null) return NotFound();
             await _calendarEventRepository.DeleteAsync(evt, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
             return NoContent();
         }
 
