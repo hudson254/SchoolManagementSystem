@@ -18,6 +18,15 @@ namespace SMS.Persistence.Repositories
         {
         }
 
+        public async Task<IEnumerable<Timetable>> GetAllWithDetailsAsync(CancellationToken cancellationToken = default)
+        {
+            return await _dbSet
+                .Include(t => t.Unit)
+                .Include(t => t.Lecturer)
+                .Where(t => !t.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
         public async Task<IEnumerable<Timetable>> GetTimetableByClassAsync(Guid classId)
         {
             return await _dbSet.Where(t => t.ClassId == classId && !t.IsDeleted).ToListAsync();

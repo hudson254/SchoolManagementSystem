@@ -21,14 +21,18 @@ const Register = loadPage(() => import('./pages/Register'), 'Register');
 const Dashboard = loadPage(() => import('./pages/Dashboard'), 'Dashboard');
 const Students = loadPage(() => import('./pages/Students'), 'Students');
 const StudentDetail = loadPage(() => import('./pages/StudentDetail'), 'StudentDetail');
+const AddStudentPage = loadPage(() => import('./pages/AddStudentPage'), 'AddStudentPage');
 const Lecturers = loadPage(() => import('./pages/Lecturers'), 'Lecturers');
 const LecturerDetail = loadPage(() => import('./pages/LecturerDetail'), 'LecturerDetail');
 const Courses = loadPage(() => import('./pages/Courses'), 'Courses');
 const CourseDetail = loadPage(() => import('./pages/CourseDetail'), 'CourseDetail');
+const AddCoursePage = loadPage(() => import('./pages/AddCoursePage'), 'AddCoursePage');
 const CourseOfferings = loadPage(() => import('./pages/CourseOfferings'), 'CourseOfferings');
 const CourseOfferingDetail = loadPage(() => import('./pages/CourseOfferingDetail'), 'CourseOfferingDetail');
 const CourseOfferingFormPage = loadPage(() => import('./pages/CourseOfferingFormPage'), 'CourseOfferingFormPage');
 const Units = loadPage(() => import('./pages/Units'), 'Units');
+const AddUnitPage = loadPage(() => import('./pages/AddUnitPage'), 'AddUnitPage');
+const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
 const Assignments = loadPage(() => import('./pages/Assignments'), 'Assignments');
@@ -88,16 +92,24 @@ function App() {
                         <Route index element={<Navigate to="/dashboard" />} />
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="students" element={<Students />} />
+                        <Route path="students/new" element={<AddStudentPage />} />
                         <Route path="students/:id" element={<StudentDetail />} />
+                        <Route path="students/:id/edit" element={<AddStudentPage />} />
                         <Route path="lecturers" element={<Lecturers />} />
                         <Route path="lecturers/:id" element={<LecturerDetail />} />
                         <Route path="courses" element={<Courses />} />
+                        <Route path="courses/new" element={<AddCoursePage />} />
                         <Route path="courses/:id" element={<CourseDetail />} />
+                        <Route path="courses/:id/edit" element={<AddCoursePage />} />
                         <Route path="course-offerings" element={<CourseOfferings />} />
                         <Route path="course-offerings/new" element={<CourseOfferingFormPage />} />
                         <Route path="course-offerings/:id" element={<CourseOfferingDetail />} />
                         <Route path="course-offerings/:id/edit" element={<CourseOfferingFormPage />} />
                         <Route path="units" element={<Units />} />
+                        <Route path="units/new" element={<AddUnitPage />} />
+                        <Route path="units/:id" element={<AddUnitPage />} />
+                        <Route path="units/:id/edit" element={<AddUnitPage />} />
+                        <Route path="classes" element={<Classes />} />
                         <Route path="timetable" element={<Timetable />} />
                         <Route path="accommodation" element={<Accommodation />} />
                         <Route path="assignments" element={<Assignments />} />

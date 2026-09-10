@@ -45,6 +45,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { unitService } from '../services/unit.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 export const Units: React.FC = () => {
@@ -163,7 +164,7 @@ export const Units: React.FC = () => {
           Units
         </Typography>
         <Box>
-          {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+          {canManageAcademic(user?.roles) && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -326,7 +327,7 @@ export const Units: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+                      {(canManageAcademic(user?.roles)) && (
                         <>
                           <Tooltip title="Edit">
                             <IconButton
@@ -375,9 +376,11 @@ export const Units: React.FC = () => {
         <MenuItem onClick={() => { handleMenuClose(); navigate(`/units/${selectedUnitId}/edit`); }}>
           <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
         </MenuItem>
-        <MenuItem onClick={() => { if (selectedUnitId) handleDeleteClick(selectedUnitId); }} sx={{ color: 'error.main' }}>
-          <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
-        </MenuItem>
+        {canAdministrate(user?.roles) && (
+          <MenuItem onClick={() => { if (selectedUnitId) handleDeleteClick(selectedUnitId); }} sx={{ color: 'error.main' }}>
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
+          </MenuItem>
+        )}
       </Menu>
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>

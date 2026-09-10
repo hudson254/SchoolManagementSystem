@@ -41,6 +41,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { courseOfferingService, CourseOffering, CourseOfferingStatus } from '../services/course-offering.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 const statusColors: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'error'> = {
@@ -152,7 +153,7 @@ export const CourseOfferings: React.FC = () => {
           Course Offerings
         </Typography>
         <Box>
-          {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+          {canManageAcademic(user?.roles) && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -292,7 +293,7 @@ export const CourseOfferings: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+                      {(canManageAcademic(user?.roles)) && (
                         <>
                           <Tooltip title="Edit">
                             <IconButton
@@ -334,9 +335,11 @@ export const CourseOfferings: React.FC = () => {
         <MenuItem onClick={() => { handleMenuClose(); navigate(`/course-offerings/${selectedId}/edit`); }}>
           <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
         </MenuItem>
-        <MenuItem onClick={() => { if (selectedId) handleDeleteClick(selectedId); }} sx={{ color: 'error.main' }}>
-          <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
-        </MenuItem>
+        {canAdministrate(user?.roles) && (
+          <MenuItem onClick={() => { if (selectedId) handleDeleteClick(selectedId); }} sx={{ color: 'error.main' }}>
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
+          </MenuItem>
+        )}
       </Menu>
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>

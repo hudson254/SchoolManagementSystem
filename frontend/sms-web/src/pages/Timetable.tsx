@@ -48,8 +48,11 @@ import {
   Print as PrintIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { timetableService } from '../services/timetable.service';
+import { timetableService, TimetableEntry } from '../services/timetable.service';
+import { classesService } from '../services/classes.service';
+import { semesterService } from '../services/semester.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -102,6 +105,34 @@ export const Timetable: React.FC = () => {
   const [selectedEntity, setSelectedEntity] = useState<string>('');
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [conflictData, setConflictData] = useState<any>(null);
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [entryForm, setEntryForm] = useState({
+    classId: '',
+    date: '',
+    dayOfWeek: '',
+    startTime: '',
+    endTime: '',
+    venue: '',
+  });
+  const [entryFormError, setEntryFormError] = useState('');
+
+  const canManage = canManageAcademic(user?.roles);
+  const canAdmin = canAdministrate(user?.roles);
+
+  const { data: classOptions } = useQuery({
+    queryKey: ['classes', 'select'],
+    queryFn: () => classesService.getClasses({ includeInactive: true }),
+    enabled: canManage,
+  });
+  const classesForSelect = classOptions || [];
+
+  const { data: semesterOptions } = useQuery({
+    queryKey: ['semesters', 'select'],
+    queryFn: () => semesterService.getSemesters(),
+    enabled: canManage,
+  });
+  const semestersForSelect = semesterOptions || [];
 
   const { data: timetables, isLoading, isError, refetch } = useQuery({
     queryKey: ['timetables', page, rowsPerPage, searchTerm, filterSemester, filterClass, filterDay],
@@ -122,6 +153,84 @@ export const Timetable: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['timetables'] });
     },
   });
+
+  const createEntryMutation = useMutation({
+    mutationFn: (payload: any) => timetableService.createTimetable(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timetables'] });
+      setEntryDialogOpen(false);
+      setEditingEntryId(null);
+      setEntryFormError('');
+    },
+    onError: (error: any) => {
+      setEntryFormError(error?.message || 'Failed to create timetable entry. Please try again.');
+    },
+  });
+
+  const updateEntryMutation = useMutation({
+    mutationFn: (payload: any) => timetableService.updateTimetable(payload.id, payload.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timetables'] });
+      setEntryDialogOpen(false);
+      setEditingEntryId(null);
+      setEntryFormError('');
+    },
+    onError: (error: any) => {
+      setEntryFormError(error?.message || 'Failed to update timetable entry. Please try again.');
+    },
+  });
+
+  const openCreateEntry = () => {
+    setEditingEntryId(null);
+    setEntryForm({ classId: '', date: '', dayOfWeek: '', startTime: '', endTime: '', venue: '' });
+    setEntryFormError('');
+    setEntryDialogOpen(true);
+  };
+
+  const openEditEntry = (entry: TimetableEntry) => {
+    setEditingEntryId(entry.id);
+    const datePart = entry.date ? entry.date.slice(0, 10) : '';
+    setEntryForm({
+      classId: entry.classId,
+      date: datePart,
+      dayOfWeek: entry.dayOfWeek || '',
+      startTime: entry.startTime?.slice(0, 5) || '',
+      endTime: entry.endTime?.slice(0, 5) || '',
+      venue: entry.venue || '',
+    });
+    setEntryFormError('');
+    setEntryDialogOpen(true);
+  };
+
+  const handleEntrySubmit = () => {
+    setEntryFormError('');
+    if (!entryForm.classId) return setEntryFormError('Please select a class.');
+    if (!entryForm.date) return setEntryFormError('Date is required.');
+    if (!entryForm.dayOfWeek) return setEntryFormError('Day of week is required.');
+    if (!entryForm.startTime) return setEntryFormError('Start time is required.');
+    if (!entryForm.endTime) return setEntryFormError('End time is required.');
+    if (entryForm.endTime <= entryForm.startTime) {
+      return setEntryFormError('End time must be after start time.');
+    }
+
+    const klass = classesForSelect.find((c: any) => c.id === entryForm.classId);
+    const payload = {
+      classId: entryForm.classId,
+      unitId: klass?.unitId,
+      lecturerId: klass?.lecturerId || null,
+      date: new Date(entryForm.date).toISOString(),
+      dayOfWeek: entryForm.dayOfWeek,
+      startTime: `${entryForm.startTime}:00`,
+      endTime: `${entryForm.endTime}:00`,
+      venue: entryForm.venue || undefined,
+    };
+
+    if (editingEntryId) {
+      updateEntryMutation.mutate({ id: editingEntryId, data: payload });
+    } else {
+      createEntryMutation.mutate(payload);
+    }
+  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -193,10 +302,11 @@ export const Timetable: React.FC = () => {
           Timetable Management
         </Typography>
         <Box>
-          {(user?.roles?.includes('Moderator') || user?.roles?.includes('Administrator')) && (
+          {canManage && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
+              onClick={openCreateEntry}
               sx={{ mr: 1 }}
             >
               Add Entry
@@ -255,8 +365,9 @@ export const Timetable: React.FC = () => {
                   label="Semester"
                 >
                   <MenuItem value="">All</MenuItem>
-                  <MenuItem value="sem1">Fall 2024</MenuItem>
-                  <MenuItem value="sem2">Spring 2025</MenuItem>
+                  {semestersForSelect.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -284,8 +395,9 @@ export const Timetable: React.FC = () => {
                   label="Class"
                 >
                   <MenuItem value="">All</MenuItem>
-                  <MenuItem value="class1">CSC101 - Class A</MenuItem>
-                  <MenuItem value="class2">CSC201 - Class B</MenuItem>
+                  {classesForSelect.map((c: any) => (
+                    <MenuItem key={c.id} value={c.id}>{c.name} ({c.code})</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -345,14 +457,14 @@ export const Timetable: React.FC = () => {
                       <TableCell>{entry.semesterName}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="View">
-                          <IconButton size="small">
+                          <IconButton size="small" onClick={() => openEditEntry(entry as TimetableEntry)}>
                             <ViewIcon />
                           </IconButton>
                         </Tooltip>
-                        {(user?.roles?.includes('Moderator') || user?.roles?.includes('Administrator')) && (
+                        {canManage && (
                           <>
                             <Tooltip title="Edit">
-                              <IconButton size="small">
+                              <IconButton size="small" onClick={() => openEditEntry(entry as TimetableEntry)}>
                                 <EditIcon />
                               </IconButton>
                             </Tooltip>
@@ -577,4 +689,100 @@ export const Timetable: React.FC = () => {
       </Dialog>
     </Box>
   );
+<Dialog open={entryDialogOpen} onClose={() => setEntryDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingEntryId ? 'Edit Timetable Entry' : 'Add Timetable Entry'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {entryFormError && (
+              <Alert severity="error" onClose={() => setEntryFormError('')}>
+                {entryFormError}
+              </Alert>
+            )}
+            <FormControl fullWidth required>
+              <InputLabel>Class</InputLabel>
+              <Select
+                value={entryForm.classId}
+                onChange={(e) => setEntryForm({ ...entryForm, classId: e.target.value })}
+                label="Class"
+              >
+                {classesForSelect.map((c: any) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name} ({c.code}) — {c.unitName} / {c.lecturerName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Date"
+              type="date"
+              value={entryForm.date}
+              onChange={(e) => {
+                const d = new Date(e.target.value);
+                setEntryForm({
+                  ...entryForm,
+                  date: e.target.value,
+                  dayOfWeek: isNaN(d.getTime())
+                    ? entryForm.dayOfWeek
+                    : d.toLocaleDateString('en-US', { weekday: 'long' }),
+                });
+              }}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              required
+            />
+            <TextField
+              label="Day of Week"
+              value={entryForm.dayOfWeek}
+              onChange={(e) => setEntryForm({ ...entryForm, dayOfWeek: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              placeholder="Auto-filled from date"
+            />
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <TextField
+                  label="Start Time"
+                  type="time"
+                  value={entryForm.startTime}
+                  onChange={(e) => setEntryForm({ ...entryForm, startTime: e.target.value })}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  label="End Time"
+                  type="time"
+                  value={entryForm.endTime}
+                  onChange={(e) => setEntryForm({ ...entryForm, endTime: e.target.value })}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
+              </Grid>
+            </Grid>
+            <TextField
+              label="Venue / Room"
+              value={entryForm.venue}
+              onChange={(e) => setEntryForm({ ...entryForm, venue: e.target.value })}
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEntryDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleEntrySubmit}
+            disabled={createEntryMutation.isPending || updateEntryMutation.isPending}
+          >
+            {createEntryMutation.isPending || updateEntryMutation.isPending
+              ? 'Saving...'
+              : editingEntryId
+                ? 'Save Changes'
+                : 'Create Entry'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 };

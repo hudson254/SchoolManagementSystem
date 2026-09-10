@@ -45,6 +45,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { lecturerService } from '../services/lecturer.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 export const Lecturers: React.FC = () => {
@@ -179,7 +180,7 @@ export const Lecturers: React.FC = () => {
           Lecturers
         </Typography>
         <Box>
-          {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+          {canManageAcademic(user?.roles) && (
             <Button
               variant="contained"
               startIcon={<PersonAddIcon />}
@@ -350,7 +351,7 @@ export const Lecturers: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+                      {canManageAcademic(user?.roles) && (
                         <>
                           <Tooltip title="Edit">
                             <IconButton
@@ -360,6 +361,7 @@ export const Lecturers: React.FC = () => {
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
+                          {canAdministrate(user?.roles) && (
                           <Tooltip title="More">
                             <IconButton
                               size="small"
@@ -368,6 +370,7 @@ export const Lecturers: React.FC = () => {
                               <MoreVertIcon />
                             </IconButton>
                           </Tooltip>
+                          )}
                         </>
                       )}
                     </TableCell>

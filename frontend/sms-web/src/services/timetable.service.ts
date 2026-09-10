@@ -7,15 +7,17 @@ export interface TimetableEntry {
   unitId: string;
   unitName: string;
   unitCode: string;
-  lecturerId: string;
+  lecturerId?: string | null;
   lecturerName: string;
   semesterId: string;
   semesterName: string;
+  date: string;
   dayOfWeek: string;
   startTime: string;
   endTime: string;
   venue: string;
-  createdDate: string;
+  isActive: boolean;
+  createdDate?: string;
 }
 
 export interface PagedResponse<T> {
@@ -41,8 +43,8 @@ export interface GetTimetablesParams {
 export interface CreateTimetableRequest {
   classId: string;
   unitId: string;
-  lecturerId: string;
-  semesterId: string;
+  lecturerId?: string | null;
+  date: string;
   dayOfWeek: string;
   startTime: string;
   endTime: string;
@@ -101,13 +103,13 @@ export const timetableService = {
   getStudentTimetable: (studentId: string, semesterId?: string) =>
     api.get<TimetableEntry[]>(`/timetables/student/${studentId}`, { params: { semesterId } }),
 
-  getWeeklyTimetable: (semesterId: string, weekStart?: string) =>
-    api.get<TimetableEntry[]>('/timetables/weekly', { params: { semesterId, weekStart } }),
+  getWeeklyTimetable: (classId: string, weekStart?: string) =>
+    api.get<TimetableEntry[]>(`/timetables/weekly/class/${classId}`, { params: { weekStartDate: weekStart } }),
 
   getAvailableVenues: (params: { dayOfWeek?: string; startTime?: string; endTime?: string; semesterId?: string }) =>
-    api.get<Venue[]>('/timetables/venues/available', { params }),
+    api.get<Venue[]>('/timetables/available-venues', { params }),
 
   checkConflicts: (params: ConflictCheckRequest) =>
-    api.get<ConflictCheckResponse>('/timetables/conflicts', { params }),
+    api.post<ConflictCheckResponse>('/timetables/check-conflicts', params),
 };
 

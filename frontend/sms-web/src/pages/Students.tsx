@@ -45,6 +45,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { studentService } from '../services/student.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 export const Students: React.FC = () => {
@@ -184,7 +185,7 @@ export const Students: React.FC = () => {
           Students
         </Typography>
         <Box>
-          {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+          {canManageAcademic(user?.roles) && (
             <Button
               variant="contained"
               startIcon={<PersonAddIcon />}
@@ -365,7 +366,7 @@ export const Students: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+                      {(canManageAcademic(user?.roles)) && (
                         <>
                           <Tooltip title="Edit">
                             <IconButton
@@ -375,14 +376,16 @@ export const Students: React.FC = () => {
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="More">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => handleMenuOpen(e, student.id)}
-                            >
-                              <MoreVertIcon />
-                            </IconButton>
-                          </Tooltip>
+                          {canAdministrate(user?.roles) && (
+                            <Tooltip title="More">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => handleMenuOpen(e, student.id)}
+                              >
+                                <MoreVertIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </>
                       )}
                     </TableCell>
@@ -414,9 +417,11 @@ export const Students: React.FC = () => {
         <MenuItem onClick={() => { handleMenuClose(); navigate(`/students/${selectedStudentId}/edit`); }}>
           <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
         </MenuItem>
+        {canAdministrate(user?.roles) && (
         <MenuItem onClick={() => { if (selectedStudentId) handleDeleteClick(selectedStudentId); }} sx={{ color: 'error.main' }}>
           <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
         </MenuItem>
+        )}
       </Menu>
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>

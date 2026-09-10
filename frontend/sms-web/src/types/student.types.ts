@@ -36,16 +36,45 @@ export interface StudentDetails extends Student {
   inProgressUnits: number;
   enrollments: EnrollmentSummary[];
   grades: GradeSummary[];
+  courseEnrollments: CourseOfferingEnrollmentSummary[];
   accommodation?: {
     assignmentId: string;
     houseId: string;
     houseNumber: string;
+    houseName?: string;
     laneId: string;
     laneName: string;
+    roomNumber?: string;
     status: string;
     assignedDate: string;
     vacatedDate?: string;
+    moveInDate?: string;
+    moveOutDate?: string;
+    checkInDate?: string;
+    checkOutDate?: string;
   };
+}
+
+export interface CourseOfferingEnrollmentSummary {
+  id: string;
+  courseOfferingId: string;
+  offeringCode?: string;
+  courseId?: string;
+  courseName?: string;
+  courseCode?: string;
+  academicYearName?: string;
+  semesterName?: string;
+  studentId: string;
+  studentName?: string;
+  studentNumber?: string;
+  enrollmentDate: string;
+  status: string;
+  isActive: boolean;
+  attemptNumber: number;
+  confirmationStatus: string;
+  confirmedDate?: string;
+  dropDate?: string;
+  notes?: string;
 }
 
 export interface EnrollmentSummary {

@@ -8,6 +8,12 @@ namespace SMS.Domain.Interfaces
 {
     public interface ITimetableRepository : IRepository<Timetable>
     {
+        /// <summary>
+        /// Returns timetable entries with their Unit and Lecturer navigation
+        /// properties loaded so list views can render names without N+1 queries.
+        /// </summary>
+        Task<IEnumerable<Timetable>> GetAllWithDetailsAsync(CancellationToken cancellationToken = default);
+
         Task<IEnumerable<Timetable>> GetTimetableByClassAsync(Guid classId);
         Task<IEnumerable<Timetable>> GetTimetableByLecturerAsync(Guid lecturerId);
         Task<IEnumerable<Timetable>> GetTimetableByRoomAsync(Guid roomId);

@@ -33,6 +33,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { calendarService } from '../services/calendar.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 // Import FullCalendar
@@ -82,6 +83,10 @@ export const Calendar: React.FC = () => {
     eventType: 'other',
   });
   const [success, setSuccess] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const canManage = canManageAcademic(user?.roles);
+  const canAdmin = canAdministrate(user?.roles);
 
   const { data: events, isLoading, refetch } = useQuery({
     queryKey: ['calendar-events'],
@@ -94,7 +99,11 @@ export const Calendar: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
       setEventDialogOpen(false);
       setSuccess(true);
+      setFormError('');
       resetForm();
+    },
+    onError: (error: any) => {
+      setFormError(error?.message || 'Failed to create event. Please try again.');
     },
   });
 
@@ -110,10 +119,17 @@ export const Calendar: React.FC = () => {
   };
 
   const handleDateSelect = (selectInfo: any) => {
+    const toLocalInput = (isoStr: string): string => {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr || '';
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setFormError('');
     setNewEvent({
       ...newEvent,
-      startDate: selectInfo.startStr,
-      endDate: selectInfo.endStr || selectInfo.startStr,
+      startDate: toLocalInput(selectInfo.startStr),
+      endDate: toLocalInput(selectInfo.endStr || selectInfo.startStr),
     });
     setEventDialogOpen(true);
   };
@@ -123,7 +139,23 @@ export const Calendar: React.FC = () => {
   };
 
   const handleCreateEvent = () => {
-    createMutation.mutate(newEvent);
+    setFormError('');
+    if (!newEvent.title.trim()) return setFormError('Title is required.');
+    if (!newEvent.startDate) return setFormError('Start date is required.');
+    if (!newEvent.endDate) return setFormError('End date is required.');
+    if (new Date(newEvent.endDate) <= new Date(newEvent.startDate)) {
+      return setFormError('End date must be after start date.');
+    }
+
+    const payload = {
+      title: newEvent.title,
+      description: newEvent.description,
+      startDate: new Date(newEvent.startDate).toISOString(),
+      endDate: new Date(newEvent.endDate).toISOString(),
+      location: newEvent.location,
+      eventType: newEvent.eventType,
+    };
+    createMutation.mutate(payload);
   };
 
   const handleDeleteEvent = (id: string) => {
@@ -185,14 +217,16 @@ export const Calendar: React.FC = () => {
           Calendar
         </Typography>
         <Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setEventDialogOpen(true)}
-            sx={{ mr: 1 }}
-          >
-            Add Event
-          </Button>
+          {canManage && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => { setFormError(''); setEventDialogOpen(true); }}
+              sx={{ mr: 1 }}
+            >
+              Add Event
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
@@ -273,7 +307,7 @@ export const Calendar: React.FC = () => {
                     size="small"
                     color="primary"
                   />
-                  {(user?.roles?.includes('Administrator') || user?.roles?.includes('Moderator')) && (
+                  {canAdmin && (
                     <IconButton
                       size="small"
                       color="error"
@@ -332,6 +366,11 @@ export const Calendar: React.FC = () => {
         <DialogTitle>Add Event</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {formError && (
+              <Alert severity="error" onClose={() => setFormError('')}>
+                {formError}
+              </Alert>
+            )}
             <TextField
               label="Title"
               value={newEvent.title}

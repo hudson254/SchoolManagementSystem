@@ -60,6 +60,11 @@ namespace SMS.Application.Features.CourseOfferings.Queries
                 Id = e.Id,
                 CourseOfferingId = e.CourseOfferingId,
                 OfferingCode = e.CourseOffering?.OfferingCode,
+                CourseId = e.CourseOffering?.CourseId,
+                CourseName = e.CourseOffering?.Course?.Name,
+                CourseCode = e.CourseOffering?.Course?.Code,
+                AcademicYearName = e.CourseOffering?.AcademicYearName,
+                SemesterName = e.CourseOffering?.SemesterName,
                 StudentId = e.StudentId,
                 StudentName = e.Student?.User != null
                     ? $"{e.Student.User.FirstName} {e.Student.User.LastName}"

@@ -69,6 +69,16 @@ namespace SMS.Application.DTOs
         public Guid Id { get; set; }
         public Guid CourseOfferingId { get; set; }
         public string? OfferingCode { get; set; }
+
+        /// <summary>Course template the offering is based on (enrichment for student views).</summary>
+        public Guid? CourseId { get; set; }
+        public string? CourseName { get; set; }
+        public string? CourseCode { get; set; }
+
+        /// <summary>Free-text academic year / semester stored on the offering.</summary>
+        public string? AcademicYearName { get; set; }
+        public string? SemesterName { get; set; }
+
         public Guid StudentId { get; set; }
         public string? StudentName { get; set; }
         public string? StudentNumber { get; set; }

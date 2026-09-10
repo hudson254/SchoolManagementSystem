@@ -78,6 +78,43 @@ namespace SMS.Application.DTOs
         public bool IsEmailVerified { get; set; }
         public List<EnrollmentSummaryDto> Enrollments { get; set; } = new List<EnrollmentSummaryDto>();
         public List<GradeSummaryDto> Grades { get; set; } = new List<GradeSummaryDto>();
+
+        /// <summary>
+        /// The student's currently assigned accommodation (Lane → House model).
+        /// Null when the student has no active assignment. Populated from the
+        /// existing AccommodationAssignment entity — no accommodation data is
+        /// invented or duplicated.
+        /// </summary>
+        public StudentAccommodationDetailDto? Accommodation { get; set; }
+
+        /// <summary>
+        /// Course-offering level enrollments (Course / Course code / Offering /
+        /// Academic year / Semester / status). Populated from the existing
+        /// CourseOfferingEnrollment relationship.
+        /// </summary>
+        public List<CourseOfferingEnrollmentDto> CourseEnrollments { get; set; } = new List<CourseOfferingEnrollmentDto>();
+    }
+
+    /// <summary>
+    /// Minimal accommodation summary embedded in the student detail payload.
+    /// Mirrors the Lane → House assignment and preserves room/check-in context.
+    /// </summary>
+    public class StudentAccommodationDetailDto
+    {
+        public Guid AssignmentId { get; set; }
+        public Guid? HouseId { get; set; }
+        public string HouseNumber { get; set; } = string.Empty;
+        public string? HouseName { get; set; }
+        public Guid? LaneId { get; set; }
+        public string LaneName { get; set; } = string.Empty;
+        public string? RoomNumber { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime AssignedDate { get; set; }
+        public DateTime? VacatedDate { get; set; }
+        public DateTime? MoveInDate { get; set; }
+        public DateTime? MoveOutDate { get; set; }
+        public DateTime? CheckInDate { get; set; }
+        public DateTime? CheckOutDate { get; set; }
     }
 
     public class EnrollmentSummaryDto

@@ -55,7 +55,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpGet("{id}/units")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(IEnumerable<CourseOfferingUnitDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetCourseOfferingUnits(Guid id, CancellationToken cancellationToken)
@@ -66,7 +66,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPost]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(CourseOfferingDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> CreateCourseOffering(
@@ -78,7 +78,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPut("{id}")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(CourseOfferingDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

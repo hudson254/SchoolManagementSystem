@@ -4,6 +4,9 @@ namespace SMS.Application.DTOs
     {
         public Guid Id { get; set; }
         public Guid ClassId { get; set; }
+        public Guid UnitId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public DateTime Date { get; set; }
         public Guid SemesterId { get; set; }
         public string DayOfWeek { get; set; } = string.Empty;
         public TimeSpan StartTime { get; set; }

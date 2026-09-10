@@ -49,6 +49,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { courseOfferingService, CourseOfferingStatus } from '../services/course-offering.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { CourseOfferingUnitForm } from '../components/Forms/CourseOfferingUnitForm';
 import { AssignmentConfirm } from '../components/AssignmentConfirm';
@@ -91,7 +92,11 @@ export const CourseOfferingDetail: React.FC = () => {
   const [studentSearch, setStudentSearch] = useState('');
   const [lecturerSearch, setLecturerSearch] = useState('');
 
-  const isAdmin = user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator');
+  // Offering edit (PUT) is ModeratorAccess — coordinator and above may edit the
+  // offering header. Adding/removing units, students and lecturers remains
+  // AdministratorAccess (isAdmin).
+  const isAdmin = canAdministrate(user?.roles);
+  const canEditOffering = canManageAcademic(user?.roles);
 
   const { data: offering, isLoading, isError, refetch } = useQuery({
     queryKey: ['courseoffering', id],
@@ -179,7 +184,7 @@ export const CourseOfferingDetail: React.FC = () => {
             color={(statusColors[offering.status] as any) || 'default'}
             sx={{ mr: 1 }}
           />
-          {isAdmin && (
+          {canEditOffering && (
             <Button
               variant="outlined"
               startIcon={<EditIcon />}

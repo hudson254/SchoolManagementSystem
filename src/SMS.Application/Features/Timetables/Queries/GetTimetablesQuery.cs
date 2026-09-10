@@ -18,23 +18,31 @@ namespace SMS.Application.Features.Timetables.Queries
     public class GetTimetablesHandler : IRequestHandler<GetTimetablesQuery, PagedResult<TimetableDto>>
     {
         private readonly ITimetableRepository _timetableRepository;
+        private readonly IClassRepository _classRepository;
         private readonly ILogger<GetTimetablesHandler> _logger;
 
         public GetTimetablesHandler(
             ITimetableRepository timetableRepository,
+            IClassRepository classRepository,
             ILogger<GetTimetablesHandler> logger)
         {
             _timetableRepository = timetableRepository;
+            _classRepository = classRepository;
             _logger = logger;
         }
 
         public async Task<PagedResult<TimetableDto>> Handle(GetTimetablesQuery request, CancellationToken cancellationToken)
         {
-            var all = await _timetableRepository.GetAllAsync(cancellationToken);
+            var all = await _timetableRepository.GetAllWithDetailsAsync(cancellationToken);
+            var classes = (await _classRepository.GetAllWithDetailsAsync(cancellationToken))
+                .ToDictionary(c => c.Id);
             var list = all.Where(t => !t.IsDeleted).AsEnumerable();
 
             if (request.ClassId.HasValue)
                 list = list.Where(t => t.ClassId == request.ClassId.Value);
+            if (request.SemesterId.HasValue)
+                list = list.Where(t =>
+                    classes.TryGetValue(t.ClassId, out var c) && c.SemesterId == request.SemesterId.Value);
             if (!string.IsNullOrWhiteSpace(request.DayOfWeek))
                 list = list.Where(t => t.DayOfWeek.Equals(request.DayOfWeek, StringComparison.OrdinalIgnoreCase));
 
@@ -44,19 +52,7 @@ namespace SMS.Application.Features.Timetables.Queries
             var pagedItems = orderedList
                 .Skip((request.Page - 1) * request.PageSize)
                 .Take(request.PageSize)
-                .Select(t => new TimetableDto
-                {
-                    Id = t.Id,
-                    ClassId = t.ClassId,
-                    DayOfWeek = t.DayOfWeek,
-                    StartTime = t.StartTime,
-                    EndTime = t.EndTime,
-                    Venue = t.RoomNumber,
-                    IsActive = t.IsActive,
-                    UnitName = t.Unit != null ? t.Unit.Name : string.Empty,
-                    UnitCode = t.Unit != null ? t.Unit.Code : string.Empty,
-                    LecturerName = t.Lecturer != null ? $"{t.Lecturer.FirstName} {t.Lecturer.LastName}" : string.Empty
-                })
+                .Select(t => MapToDto(t, classes))
                 .ToList();
 
             return new PagedResult<TimetableDto>
@@ -67,6 +63,36 @@ namespace SMS.Application.Features.Timetables.Queries
                 TotalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize)
             };
         }
+
+        internal static class TimetableMap
+        {
+            public static TimetableDto ToDto(Domain.Entities.Timetable t, IReadOnlyDictionary<Guid, Domain.Entities.Class> classes)
+            {
+                classes.TryGetValue(t.ClassId, out var klass);
+                return new TimetableDto
+                {
+                    Id = t.Id,
+                    ClassId = t.ClassId,
+                    ClassName = klass?.Name ?? string.Empty,
+                    UnitId = t.UnitId,
+                    UnitName = t.Unit != null ? t.Unit.Name : klass?.Unit?.Name ?? string.Empty,
+                    UnitCode = t.Unit != null ? t.Unit.Code : klass?.Unit?.Code ?? string.Empty,
+                    LecturerId = t.LecturerId,
+                    LecturerName = t.Lecturer != null ? $"{t.Lecturer.FirstName} {t.Lecturer.LastName}".Trim() : klass?.Lecturer != null ? $"{klass.Lecturer.FirstName} {klass.Lecturer.LastName}".Trim() : string.Empty,
+                    Date = t.Date,
+                    SemesterId = klass?.SemesterId ?? Guid.Empty,
+                    SemesterName = klass?.Semester?.Name ?? string.Empty,
+                    DayOfWeek = t.DayOfWeek,
+                    StartTime = t.StartTime,
+                    EndTime = t.EndTime,
+                    Venue = t.RoomNumber,
+                    IsActive = t.IsActive
+                };
+            }
+        }
+
+        private TimetableDto MapToDto(Domain.Entities.Timetable t, IReadOnlyDictionary<Guid, Domain.Entities.Class> classes)
+            => TimetableMap.ToDto(t, classes);
     }
 
     public class GetTimetableQuery : IRequest<TimetableDto>
@@ -77,13 +103,16 @@ namespace SMS.Application.Features.Timetables.Queries
     public class GetTimetableHandler : IRequestHandler<GetTimetableQuery, TimetableDto>
     {
         private readonly ITimetableRepository _timetableRepository;
+        private readonly IClassRepository _classRepository;
         private readonly ILogger<GetTimetableHandler> _logger;
 
         public GetTimetableHandler(
             ITimetableRepository timetableRepository,
+            IClassRepository classRepository,
             ILogger<GetTimetableHandler> logger)
         {
             _timetableRepository = timetableRepository;
+            _classRepository = classRepository;
             _logger = logger;
         }
 
@@ -93,19 +122,10 @@ namespace SMS.Application.Features.Timetables.Queries
             if (timetable == null)
                 throw new NotFoundException("Timetable", request.TimetableId);
 
-            return new TimetableDto
-            {
-                Id = timetable.Id,
-                ClassId = timetable.ClassId,
-                DayOfWeek = timetable.DayOfWeek,
-                StartTime = timetable.StartTime,
-                EndTime = timetable.EndTime,
-                Venue = timetable.RoomNumber,
-                IsActive = timetable.IsActive,
-                UnitName = timetable.Unit != null ? timetable.Unit.Name : string.Empty,
-                UnitCode = timetable.Unit != null ? timetable.Unit.Code : string.Empty,
-                LecturerName = timetable.Lecturer != null ? $"{timetable.Lecturer.FirstName} {timetable.Lecturer.LastName}" : string.Empty
-            };
+            var classes = (await _classRepository.GetAllWithDetailsAsync(cancellationToken))
+                .ToDictionary(c => c.Id);
+
+            return GetTimetablesHandler.TimetableMap.ToDto(timetable, classes);
         }
     }
 

@@ -53,7 +53,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPost]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(CalendarEventDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> CreateEvent(
@@ -75,7 +75,7 @@ namespace SMS.API.Controllers.v1
         }
 
         [HttpPut("{id}")]
-        [Authorize(Policy = "AdministratorAccess")]
+        [Authorize(Policy = "ModeratorAccess")]
         [ProducesResponseType(typeof(CalendarEventDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -15,13 +15,19 @@ namespace SMS.Application.Features.Students.Queries
     public class GetStudentQueryHandler : IRequestHandler<GetStudentQuery, StudentDetailsDto>
     {
         private readonly IStudentRepository _studentRepository;
+        private readonly IAccommodationRepository _accommodationRepository;
+        private readonly ICourseOfferingEnrollmentRepository _courseOfferingEnrollmentRepository;
         private readonly ILogger<GetStudentQueryHandler> _logger;
 
         public GetStudentQueryHandler(
             IStudentRepository studentRepository,
+            IAccommodationRepository accommodationRepository,
+            ICourseOfferingEnrollmentRepository courseOfferingEnrollmentRepository,
             ILogger<GetStudentQueryHandler> logger)
         {
             _studentRepository = studentRepository;
+            _accommodationRepository = accommodationRepository;
+            _courseOfferingEnrollmentRepository = courseOfferingEnrollmentRepository;
             _logger = logger;
         }
 
@@ -33,6 +39,16 @@ namespace SMS.Application.Features.Students.Queries
             {
                 throw new NotFoundException("Student", request.StudentId);
             }
+
+            // Current accommodation assignment (Lane → House model). Null-safe so
+            // students without an assignment simply show "no accommodation".
+            var accommodationAssignment = await _accommodationRepository
+                .GetAssignmentByStudentAsync(request.StudentId, cancellationToken);
+
+            // Course-offering level enrollments (course, offering, academic year,
+            // semester, status) from the existing relationship.
+            var courseEnrollments = await _courseOfferingEnrollmentRepository
+                .GetActiveByStudentAsync(request.StudentId, cancellationToken);
 
             return new StudentDetailsDto
             {
@@ -89,7 +105,60 @@ namespace SMS.Application.Features.Students.Queries
                     SemesterId = g.Enrollment?.SemesterId ?? g.SemesterId,
                     SemesterName = g.Enrollment?.Semester?.Name ?? g.Semester?.Name ?? ""
                 }).ToList(),
+                Accommodation = accommodationAssignment == null ? null : ToStudentAccommodationDto(accommodationAssignment),
+                CourseEnrollments = courseEnrollments
+                    .Select(ToCourseEnrollmentDto)
+                    .ToList(),
                 CreatedDate = student.CreatedDate ?? DateTime.UtcNow
+            };
+        }
+
+        private static StudentAccommodationDetailDto? ToStudentAccommodationDto(Domain.Entities.AccommodationAssignment a)
+        {
+            return new StudentAccommodationDetailDto
+            {
+                AssignmentId = a.Id,
+                HouseId = a.HouseId != Guid.Empty ? a.HouseId : null,
+                HouseNumber = a.House?.HouseNumber ?? string.Empty,
+                HouseName = a.House?.HouseName,
+                LaneId = a.House?.LaneId ?? (a.LaneId != Guid.Empty ? a.LaneId : null),
+                LaneName = a.Lane?.LaneName ?? a.House?.Lane?.LaneName ?? string.Empty,
+                RoomNumber = a.Room?.RoomNumber ?? string.Empty,
+                Status = a.Status,
+                AssignedDate = a.AssignedDate,
+                VacatedDate = a.VacatedDate,
+                MoveInDate = a.MoveInDate,
+                MoveOutDate = a.MoveOutDate,
+                CheckInDate = a.CheckInDate,
+                CheckOutDate = a.CheckOutDate
+            };
+        }
+
+        private static CourseOfferingEnrollmentDto ToCourseEnrollmentDto(Domain.Entities.CourseOfferingEnrollment e)
+        {
+            return new CourseOfferingEnrollmentDto
+            {
+                Id = e.Id,
+                CourseOfferingId = e.CourseOfferingId,
+                OfferingCode = e.CourseOffering?.OfferingCode,
+                CourseId = e.CourseOffering?.CourseId,
+                CourseName = e.CourseOffering?.Course?.Name,
+                CourseCode = e.CourseOffering?.Course?.Code,
+                AcademicYearName = e.CourseOffering?.AcademicYearName,
+                SemesterName = e.CourseOffering?.SemesterName,
+                StudentId = e.StudentId,
+                StudentName = e.Student?.User != null
+                    ? $"{e.Student.User.FirstName} {e.Student.User.LastName}"
+                    : null,
+                StudentNumber = e.Student?.StudentNumber,
+                EnrollmentDate = e.EnrollmentDate,
+                Status = e.Status,
+                IsActive = e.IsActive,
+                AttemptNumber = e.AttemptNumber,
+                ConfirmationStatus = e.ConfirmationStatus,
+                ConfirmedDate = e.ConfirmedDate,
+                DropDate = e.DropDate,
+                Notes = e.Notes
             };
         }
     }

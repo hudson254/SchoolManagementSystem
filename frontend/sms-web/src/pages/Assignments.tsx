@@ -48,11 +48,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { assignmentService } from '../services/assignment.service';
 import { useAuth } from '../hooks/useAuth';
+import { hasAnyRole, LECTURER, COORDINATOR } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 export const Assignments: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const canManageAssignments = hasAnyRole(user?.roles, LECTURER, COORDINATOR);
   const queryClient = useQueryClient();
 
   const [page, setPage] = useState(0);
@@ -181,7 +183,7 @@ export const Assignments: React.FC = () => {
           Assignments
         </Typography>
         <Box>
-          {(user?.roles?.includes('Lecturer') || user?.roles?.includes('Moderator')) && (
+          {canManageAssignments && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -356,7 +358,7 @@ export const Assignments: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      {(user?.roles?.includes('Lecturer') || user?.roles?.includes('Moderator')) && (
+                      {canManageAssignments && (
                         <>
                           <Tooltip title="Edit">
                             <IconButton

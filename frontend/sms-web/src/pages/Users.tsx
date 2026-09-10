@@ -263,7 +263,7 @@ export const Users: React.FC = () => {
     return `${firstName[0]}${lastName[0]}`.toUpperCase();
   };
 
-  const availableRoles = ['SystemAdministrator', 'Moderator', 'Lecturer', 'Student', 'Receptionist'];
+  const availableRoles = ['SystemAdministrator', 'Administrator', 'Coordinator', 'Lecturer', 'Student', 'Receptionist'];
 
   if (isLoading) {
     return <LoadingSpinner />;

@@ -9,7 +9,9 @@ namespace SMS.Application.Features.Timetables.Commands
     public class CreateTimetableCommand : IRequest<TimetableDto>
     {
         public Guid ClassId { get; set; }
-        public Guid SemesterId { get; set; }
+        public Guid UnitId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public DateTime Date { get; set; }
         public string DayOfWeek { get; set; } = string.Empty;
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
@@ -41,6 +43,9 @@ namespace SMS.Application.Features.Timetables.Commands
             var timetable = new Timetable
             {
                 ClassId = request.ClassId,
+                UnitId = request.UnitId,
+                LecturerId = request.LecturerId,
+                Date = request.Date,
                 DayOfWeek = request.DayOfWeek,
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
@@ -59,6 +64,9 @@ namespace SMS.Application.Features.Timetables.Commands
             {
                 Id = timetable.Id,
                 ClassId = timetable.ClassId,
+                UnitId = timetable.UnitId,
+                LecturerId = timetable.LecturerId,
+                Date = timetable.Date,
                 DayOfWeek = timetable.DayOfWeek,
                 StartTime = timetable.StartTime,
                 EndTime = timetable.EndTime,
@@ -72,7 +80,9 @@ namespace SMS.Application.Features.Timetables.Commands
     {
         public Guid Id { get; set; }
         public Guid ClassId { get; set; }
-        public Guid SemesterId { get; set; }
+        public Guid UnitId { get; set; }
+        public Guid? LecturerId { get; set; }
+        public DateTime Date { get; set; }
         public string DayOfWeek { get; set; } = string.Empty;
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
@@ -106,6 +116,9 @@ namespace SMS.Application.Features.Timetables.Commands
                 throw new NotFoundException("Timetable", request.Id);
 
             timetable.ClassId = request.ClassId;
+            timetable.UnitId = request.UnitId;
+            timetable.LecturerId = request.LecturerId;
+            timetable.Date = request.Date;
             timetable.DayOfWeek = request.DayOfWeek;
             timetable.StartTime = request.StartTime;
             timetable.EndTime = request.EndTime;
@@ -122,6 +135,9 @@ namespace SMS.Application.Features.Timetables.Commands
             {
                 Id = timetable.Id,
                 ClassId = timetable.ClassId,
+                UnitId = timetable.UnitId,
+                LecturerId = timetable.LecturerId,
+                Date = timetable.Date,
                 DayOfWeek = timetable.DayOfWeek,
                 StartTime = timetable.StartTime,
                 EndTime = timetable.EndTime,

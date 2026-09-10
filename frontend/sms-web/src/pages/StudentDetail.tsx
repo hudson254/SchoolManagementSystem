@@ -51,6 +51,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { studentService } from '../services/student.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 interface TabPanelProps {
@@ -176,7 +177,7 @@ export const StudentDetail: React.FC = () => {
               <DownloadIcon />
             </IconButton>
           </Tooltip>
-          {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+          {canManageAcademic(user?.roles) && (
             <>
               <Button
                 variant="outlined"
@@ -186,14 +187,16 @@ export const StudentDetail: React.FC = () => {
               >
                 Edit
               </Button>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDelete}
-              >
-                Delete
-              </Button>
+              {canAdministrate(user?.roles) && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDelete}
+                >
+                  Delete
+                </Button>
+              )}
             </>
           )}
         </Box>
@@ -415,7 +418,49 @@ export const StudentDetail: React.FC = () => {
 
       <TabPanel value={tabValue} index={1}>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          Enrollments
+          Enrolled Courses
+        </Typography>
+        {student.courseEnrollments && student.courseEnrollments.length > 0 ? (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Course</TableCell>
+                  <TableCell>Code</TableCell>
+                  <TableCell>Offering</TableCell>
+                  <TableCell>Academic Year</TableCell>
+                  <TableCell>Semester</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Enrolled</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {student.courseEnrollments.map((enrollment: any) => (
+                  <TableRow key={enrollment.id}>
+                    <TableCell>{enrollment.courseName || '—'}</TableCell>
+                    <TableCell>{enrollment.courseCode || enrollment.offeringCode}</TableCell>
+                    <TableCell>{enrollment.offeringCode || '—'}</TableCell>
+                    <TableCell>{enrollment.academicYearName}</TableCell>
+                    <TableCell>{enrollment.semesterName}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={enrollment.status}
+                        color={enrollment.status === 'Active' ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{new Date(enrollment.enrollmentDate).toLocaleDateString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Alert severity="info">No course enrollments found for this student.</Alert>
+        )}
+
+        <Typography variant="h6" fontWeight={600} gutterBottom sx={{ mt: 4 }}>
+          Unit Enrollments
         </Typography>
         {student.enrollments && student.enrollments.length > 0 ? (
           <TableContainer component={Paper}>
@@ -453,7 +498,7 @@ export const StudentDetail: React.FC = () => {
             </Table>
           </TableContainer>
         ) : (
-          <Alert severity="info">No enrollments found for this student.</Alert>
+          <Alert severity="info">No unit enrollments found for this student.</Alert>
         )}
       </TabPanel>
 
@@ -523,15 +568,35 @@ export const StudentDetail: React.FC = () => {
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
-                    House Number
+                    Status
                   </Typography>
-                  <Typography variant="h6">{student.accommodation.houseNumber}</Typography>
+                  <Chip
+                    label={student.accommodation.status}
+                    color={student.accommodation.status === 'Active' ? 'success' : 'default'}
+                    size="small"
+                  />
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
                     Lane
                   </Typography>
-                  <Typography variant="h6">{student.accommodation.laneName}</Typography>
+                  <Typography variant="h6">{student.accommodation.laneName || '—'}</Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="textSecondary">
+                    House
+                  </Typography>
+                  <Typography variant="h6">
+                    {student.accommodation.houseName
+                      ? `${student.accommodation.houseName} (${student.accommodation.houseNumber})`
+                      : student.accommodation.houseNumber}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="textSecondary">
+                    Room Number
+                  </Typography>
+                  <Typography variant="h6">{student.accommodation.roomNumber || '—'}</Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
@@ -543,13 +608,13 @@ export const StudentDetail: React.FC = () => {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" color="textSecondary">
-                    Status
+                    Checked In
                   </Typography>
-                  <Chip
-                    label={student.accommodation.status}
-                    color={student.accommodation.status === 'Active' ? 'success' : 'default'}
-                    size="small"
-                  />
+                  <Typography variant="h6">
+                    {student.accommodation.checkInDate
+                      ? new Date(student.accommodation.checkInDate).toLocaleDateString()
+                      : '—'}
+                  </Typography>
                 </Grid>
               </Grid>
             </CardContent>

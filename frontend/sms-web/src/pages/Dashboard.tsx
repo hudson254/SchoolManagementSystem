@@ -39,6 +39,7 @@ import { confirmationService, PendingEnrollment } from '../services/confirmation
 import { AssignmentConfirm } from '../components/AssignmentConfirm';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
+import { hasAnyRole, SYSTEM_ADMINISTRATOR, ADMINISTRATOR, COORDINATOR } from '../utils/roles';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export const Dashboard: React.FC = () => {
 
   const isStudent = user?.roles?.includes('Student') || user?.roles?.includes('student');
   const isLecturer = user?.roles?.includes('Lecturer') || user?.roles?.includes('lecturer');
-  const isAdminOrModerator = user?.roles?.some(r => ['Administrator', 'Moderator', 'administrator', 'moderator'].includes(r));
+  const isAdminOrModerator = hasAnyRole(user?.roles, SYSTEM_ADMINISTRATOR, ADMINISTRATOR, COORDINATOR);
 
   const { data: statistics, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboardStatistics'],

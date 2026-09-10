@@ -45,6 +45,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { courseService } from '../services/course.service';
 import { useAuth } from '../hooks/useAuth';
+import { canManageAcademic, canAdministrate } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 export const Courses: React.FC = () => {
@@ -163,7 +164,7 @@ export const Courses: React.FC = () => {
           Courses
         </Typography>
         <Box>
-          {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+          {canManageAcademic(user?.roles) && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -327,7 +328,7 @@ export const Courses: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      {(user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Moderator')) && (
+                      {(canManageAcademic(user?.roles)) && (
                         <>
                           <Tooltip title="Edit">
                             <IconButton
@@ -376,9 +377,11 @@ export const Courses: React.FC = () => {
         <MenuItem onClick={() => { handleMenuClose(); navigate(`/courses/${selectedCourseId}/edit`); }}>
           <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
         </MenuItem>
-        <MenuItem onClick={() => { if (selectedCourseId) handleDeleteClick(selectedCourseId); }} sx={{ color: 'error.main' }}>
-          <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
-        </MenuItem>
+        {canAdministrate(user?.roles) && (
+          <MenuItem onClick={() => { if (selectedCourseId) handleDeleteClick(selectedCourseId); }} sx={{ color: 'error.main' }}>
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
+          </MenuItem>
+        )}
       </Menu>
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
