@@ -2,6 +2,7 @@ using FluentValidation;
 using SMS.Shared.DTOs;
 
 using SMS.Domain.Interfaces;
+using SMS.Application.Common;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -13,7 +14,7 @@ namespace SMS.Application.Features.Assignments.Commands
         public string? Description { get; set; }
         public Guid UnitId { get; set; }
         public Guid LecturerId { get; set; }
-        public Guid SemesterId { get; set; }
+        public Guid? SemesterId { get; set; }
         public int MaxScore { get; set; } = 100;
         public int Weight { get; set; } = 20;
         public DateTime DueDate { get; set; }
@@ -39,7 +40,8 @@ namespace SMS.Application.Features.Assignments.Commands
                 .NotEmpty().WithMessage("Lecturer ID is required");
 
             RuleFor(x => x.SemesterId)
-                .NotEmpty().WithMessage("Semester ID is required");
+                .Must(x => !x.HasValue || x.Value != Guid.Empty)
+                .WithMessage("Semester ID is required");
 
             RuleFor(x => x.MaxScore)
                 .GreaterThan(0).WithMessage("Maximum score must be greater than 0");
@@ -66,6 +68,7 @@ namespace SMS.Application.Features.Assignments.Commands
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IUnitRepository _unitRepository;
         private readonly ILecturerRepository _lecturerRepository;
+        private readonly ISemesterRepository _semesterRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
         private readonly ILogger<CreateAssignmentCommandHandler> _logger;
@@ -74,6 +77,7 @@ namespace SMS.Application.Features.Assignments.Commands
             IAssignmentRepository assignmentRepository,
             IUnitRepository unitRepository,
             ILecturerRepository lecturerRepository,
+            ISemesterRepository semesterRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
             ILogger<CreateAssignmentCommandHandler> logger)
@@ -81,6 +85,7 @@ namespace SMS.Application.Features.Assignments.Commands
             _assignmentRepository = assignmentRepository;
             _unitRepository = unitRepository;
             _lecturerRepository = lecturerRepository;
+            _semesterRepository = semesterRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
             _logger = logger;
@@ -94,24 +99,49 @@ namespace SMS.Application.Features.Assignments.Commands
                 throw new NotFoundException("Unit", request.UnitId);
             }
 
+            // The client may send the identity user id of the current lecturer
+            // (the frontend assignment form uses user?.id). Fall back to the
+            // lecturer profile by its linked user id.
             var lecturer = await _lecturerRepository.GetByIdAsync(request.LecturerId, cancellationToken);
+            if (lecturer == null)
+            {
+                lecturer = await _lecturerRepository.GetByUserIdAsync(request.LecturerId, cancellationToken);
+            }
             if (lecturer == null)
             {
                 throw new NotFoundException("Lecturer", request.LecturerId);
             }
 
+            // Resolve the semester client-side when not supplied (the web form
+            // has no semester picker): prefer the current/default semester.
+            Guid? semesterId = null;
+            if (request.SemesterId.HasValue)
+            {
+                semesterId = request.SemesterId.Value;
+            }
+            else
+            {
+                var currentSemester = await _semesterRepository.GetCurrentOrDefaultAsync(cancellationToken);
+                semesterId = currentSemester?.Id;
+            }
+
+            // Normalize to UTC so PostgreSQL 'timestamp with time zone' columns
+            // accept the values (web forms submit datetimes without an offset).
+            var dueDate = DateTimeUtc.From(request.DueDate);
+            var closingDate = DateTimeUtc.From(request.ClosingDate);
+
             var assignment = new Assignment
             {
                 Title = request.Title,
-                Description = request.Description,
+                Description = request.Description ?? string.Empty,
                 UnitId = request.UnitId,
-                LecturerId = request.LecturerId,
-                SemesterId = request.SemesterId,
+                LecturerId = lecturer.Id,
+                SemesterId = semesterId,
                 MaxScore = request.MaxScore,
                 Weight = request.Weight,
-                DueDate = request.DueDate,
+                DueDate = dueDate.Value,
                 PublishedDate = DateTime.UtcNow,
-                ClosingDate = request.ClosingDate,
+                ClosingDate = closingDate,
                 Instructions = request.Instructions,
                 Attachments = request.Attachments,
                 AllowLateSubmission = request.AllowLateSubmission,

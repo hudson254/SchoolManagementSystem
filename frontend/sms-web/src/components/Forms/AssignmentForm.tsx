@@ -97,9 +97,22 @@ export const AssignmentForm: React.FC<AssignmentFormProps> = ({
   // Create/Update mutation
   const mutation = useMutation({
     mutationFn: (data: AssignmentFormData) => {
+      // HTML datetime-local inputs yield 'yyyy-MM-ddTHH:mm' and an empty string
+      // when left blank. The API binds DateTime fields to PostgreSQL
+      // 'timestamp with time zone' columns, which require a sortable ISO-8601
+      // UTC value (and null when blank).
+      const toUtcDateTime = (value?: string): string | null => {
+        if (!value) return null;
+        return value.length === 16 ? `${value}:00Z` : `${value}Z`;
+      };
+
       const payload = {
         ...data,
+        description: data.description || '',
+        instructions: data.instructions || '',
         lecturerId: user?.id,
+        dueDate: toUtcDateTime(data.dueDate),
+        closingDate: toUtcDateTime(data.closingDate),
       };
       if (isEditMode) {
         return assignmentService.updateAssignment(assignmentId!, payload);

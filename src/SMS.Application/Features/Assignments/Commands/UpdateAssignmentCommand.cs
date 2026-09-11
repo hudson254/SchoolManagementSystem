@@ -2,6 +2,7 @@ using FluentValidation;
 using SMS.Shared.DTOs;
 
 using SMS.Domain.Interfaces;
+using SMS.Application.Common;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -89,11 +90,11 @@ namespace SMS.Application.Features.Assignments.Commands
             }
 
             assignment.Title = request.Title;
-            assignment.Description = request.Description;
+            assignment.Description = request.Description ?? string.Empty;
             assignment.MaxScore = request.MaxScore;
             assignment.Weight = request.Weight;
-            assignment.DueDate = request.DueDate;
-            assignment.ClosingDate = request.ClosingDate;
+            assignment.DueDate = DateTimeUtc.From(request.DueDate).Value;
+            assignment.ClosingDate = DateTimeUtc.From(request.ClosingDate);
             assignment.Instructions = request.Instructions;
             assignment.Attachments = request.Attachments;
             assignment.AllowLateSubmission = request.AllowLateSubmission;

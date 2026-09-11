@@ -37,6 +37,12 @@ namespace SMS.Persistence.Repositories
         {
             return await _dbSet.CountAsync(l => !l.IsDeleted, cancellationToken);
         }
+
+        public async Task<Lecturer> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _dbSet
+                .FirstOrDefaultAsync(l => l.UserId == userId.ToString() && !l.IsDeleted, cancellationToken);
+        }
     }
 }
 

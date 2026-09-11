@@ -19,6 +19,7 @@ namespace SMS.UnitTests.Assignments
         private readonly Mock<IAssignmentRepository> _assignmentRepositoryMock;
         private readonly Mock<IUnitRepository> _unitRepositoryMock;
         private readonly Mock<ILecturerRepository> _lecturerRepositoryMock;
+        private readonly Mock<ISemesterRepository> _semesterRepositoryMock;
         private readonly Mock<IUnitOfWork> _unitOfWorkMock;
         private readonly Mock<IAuditService> _auditServiceMock;
 
@@ -28,6 +29,7 @@ namespace SMS.UnitTests.Assignments
             _assignmentRepositoryMock = new Mock<IAssignmentRepository>();
             _unitRepositoryMock = new Mock<IUnitRepository>();
             _lecturerRepositoryMock = new Mock<ILecturerRepository>();
+            _semesterRepositoryMock = new Mock<ISemesterRepository>();
             _unitOfWorkMock = new Mock<IUnitOfWork>();
             _auditServiceMock = new Mock<IAuditService>();
         }
@@ -98,6 +100,7 @@ namespace SMS.UnitTests.Assignments
                 _assignmentRepositoryMock.Object,
                 _unitRepositoryMock.Object,
                 _lecturerRepositoryMock.Object,
+                _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
@@ -140,6 +143,7 @@ namespace SMS.UnitTests.Assignments
                 _assignmentRepositoryMock.Object,
                 _unitRepositoryMock.Object,
                 _lecturerRepositoryMock.Object,
+                _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
@@ -201,10 +205,15 @@ namespace SMS.UnitTests.Assignments
                             .Setup(x => x.AddAsync(It.IsAny<Assignment>(), It.IsAny<CancellationToken>()))
                             .ReturnsAsync((Assignment a, CancellationToken ct) => a);
 
+            _semesterRepositoryMock
+                            .Setup(x => x.GetCurrentOrDefaultAsync(It.IsAny<CancellationToken>()))
+                            .ReturnsAsync((Semester?)null);
+
             var handler = new CreateAssignmentCommandHandler(
                 _assignmentRepositoryMock.Object,
                 _unitRepositoryMock.Object,
                 _lecturerRepositoryMock.Object,
+                _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
@@ -225,6 +234,141 @@ namespace SMS.UnitTests.Assignments
 
             _assignmentRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Assignment>(), It.IsAny<CancellationToken>()), Times.Once);
             _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+    [Fact]
+        public async Task Handle_WithoutSemester_ShouldResolveCurrentOrDefault()
+        {
+            var unitId = Guid.NewGuid();
+            var lecturerId = Guid.NewGuid();
+            var resolvedSemesterId = Guid.NewGuid();
+
+            var command = new CreateAssignmentCommand
+            {
+                Title = "Data Structures Assignment 2",
+                UnitId = unitId,
+                LecturerId = lecturerId,
+                MaxScore = 100,
+                Weight = 20,
+                DueDate = DateTime.UtcNow.AddDays(7)
+            };
+
+            var unit = new SMS.Domain.Entities.Unit
+            {
+                Id = unitId,
+                Name = "Data Structures",
+                Code = "CSC201"
+            };
+
+            var lecturer = new Lecturer
+            {
+                Id = lecturerId,
+                EmployeeNumber = "LEC-001",
+                User = new User
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FirstName = "John",
+                    LastName = "Smith"
+                }
+            };
+
+            _unitRepositoryMock
+                .Setup(x => x.GetByIdAsync(unitId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(unit);
+
+            _lecturerRepositoryMock
+                .Setup(x => x.GetByIdAsync(lecturerId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(lecturer);
+
+            _semesterRepositoryMock
+                .Setup(x => x.GetCurrentOrDefaultAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Semester?)new Semester { Id = resolvedSemesterId, Name = "Semester 1" });
+
+            _assignmentRepositoryMock
+                            .Setup(x => x.AddAsync(It.IsAny<Assignment>(), It.IsAny<CancellationToken>()))
+                            .ReturnsAsync((Assignment a, CancellationToken ct) => a);
+
+            var handler = new CreateAssignmentCommandHandler(
+                _assignmentRepositoryMock.Object,
+                _unitRepositoryMock.Object,
+                _lecturerRepositoryMock.Object,
+                _semesterRepositoryMock.Object,
+                _unitOfWorkMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.Should().NotBeNull();
+            result.SemesterId.Should().Be(resolvedSemesterId);
+            _semesterRepositoryMock.Verify(x => x.GetCurrentOrDefaultAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task Handle_WithLecturerUserFallback_ShouldResolveLecturerByUserId()
+        {
+            var unitId = Guid.NewGuid();
+            var userId = Guid.NewGuid();
+            var lecturerId = Guid.NewGuid();
+
+            var command = new CreateAssignmentCommand
+            {
+                Title = "Data Structures Assignment 3",
+                UnitId = unitId,
+                LecturerId = userId,
+                SemesterId = Guid.NewGuid(),
+                MaxScore = 100,
+                Weight = 20,
+                DueDate = DateTime.UtcNow.AddDays(7)
+            };
+
+            var unit = new SMS.Domain.Entities.Unit
+            {
+                Id = unitId,
+                Name = "Data Structures",
+                Code = "CSC201"
+            };
+
+            var lecturer = new Lecturer
+            {
+                Id = lecturerId,
+                EmployeeNumber = "LEC-001",
+                User = new User
+                {
+                    Id = userId.ToString(),
+                    FirstName = "John",
+                    LastName = "Smith"
+                }
+            };
+
+            _unitRepositoryMock
+                .Setup(x => x.GetByIdAsync(unitId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(unit);
+
+            _lecturerRepositoryMock
+                .Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Lecturer?)null);
+
+            _lecturerRepositoryMock
+                .Setup(x => x.GetByUserIdAsync(userId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(lecturer);
+
+            _assignmentRepositoryMock
+                            .Setup(x => x.AddAsync(It.IsAny<Assignment>(), It.IsAny<CancellationToken>()))
+                            .ReturnsAsync((Assignment a, CancellationToken ct) => a);
+
+            var handler = new CreateAssignmentCommandHandler(
+                _assignmentRepositoryMock.Object,
+                _unitRepositoryMock.Object,
+                _lecturerRepositoryMock.Object,
+                _semesterRepositoryMock.Object,
+                _unitOfWorkMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.Should().NotBeNull();
+            result.LecturerId.Should().Be(lecturerId);
         }
     }
 }
