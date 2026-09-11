@@ -36,6 +36,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { notificationService } from '../../services/notification.service';
 
 interface NotificationItem {
   id: string;
@@ -47,35 +49,14 @@ interface NotificationItem {
   link?: string;
 }
 
-const mockNotifications: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'New Assignment',
-    message: 'Assignment "Data Structures" has been posted',
-    type: 'info',
-    read: false,
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    link: '/assignments',
-  },
-  {
-    id: '2',
-    title: 'Grade Posted',
-    message: 'Your grade for CSC101 has been posted',
-    type: 'success',
-    read: false,
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    link: '/grades',
-  },
-  {
-    id: '3',
-    title: 'Room Assignment',
-    message: 'Room B104 has been assigned to you',
-    type: 'info',
-    read: true,
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-    link: '/accommodation',
-  },
-];
+const typeOf = (raw: string): NotificationItem['type'] => {
+  switch ((raw || 'info').toLowerCase()) {
+    case 'success': return 'success';
+    case 'warning': return 'warning';
+    case 'error': return 'error';
+    default: return 'info';
+  }
+};
 
 export const Header: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -84,8 +65,36 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
+  const queryClient = useQueryClient();
 
-  const unreadCount = mockNotifications.filter(n => !n.read).length;
+  const { data: notificationsData } = useQuery({
+    queryKey: ['header-notifications'],
+    queryFn: () => notificationService.getNotifications({ page: 1, pageSize: 10 }),
+    enabled: true,
+  });
+  const { data: unreadData } = useQuery({
+    queryKey: ['header-unread-count'],
+    queryFn: () => notificationService.getUnreadCount(),
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => notificationService.markAllAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['header-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['header-unread-count'] });
+    },
+  });
+
+  const rawNotifications = notificationsData?.items || [];
+  const notifications: NotificationItem[] = rawNotifications.map((n: any) => ({
+    id: n.id,
+    title: n.title || 'Notification',
+    message: n.message || '',
+    type: typeOf(n.type),
+    read: !!n.isRead,
+    timestamp: new Date(n.createdDate || Date.now()),
+  }));
+  const unreadCount = unreadData?.count || 0;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -277,13 +286,26 @@ export const Header: React.FC = () => {
           <Typography variant="subtitle1" fontWeight={600}>
             Notifications
           </Typography>
-          <Typography variant="caption" color="primary" sx={{ cursor: 'pointer' }}>
+          <Typography
+            variant="caption"
+            color="primary"
+            sx={{ cursor: 'pointer' }}
+            onClick={() => markAllReadMutation.mutate()}
+          >
             Mark all as read
           </Typography>
         </Box>
         <Divider />
         <List sx={{ p: 0 }}>
-          {mockNotifications.map((notification) => (
+          {notifications.length === 0 && (
+            <ListItem sx={{ py: 2 }}>
+              <ListItemText
+                primary={<Typography variant="body2">No notifications</Typography>}
+                secondary="You're all caught up."
+              />
+            </ListItem>
+          )}
+          {notifications.map((notification) => (
             <ListItem
               key={notification.id}
               sx={{
@@ -325,7 +347,15 @@ export const Header: React.FC = () => {
         </List>
         <Divider />
         <Box sx={{ p: 1, textAlign: 'center' }}>
-          <Typography variant="caption" color="primary" sx={{ cursor: 'pointer' }}>
+          <Typography
+            variant="caption"
+            color="primary"
+            sx={{ cursor: 'pointer' }}
+            onClick={() => {
+              handleNotificationClose();
+              navigate('/notifications');
+            }}
+          >
             View all notifications
           </Typography>
         </Box>

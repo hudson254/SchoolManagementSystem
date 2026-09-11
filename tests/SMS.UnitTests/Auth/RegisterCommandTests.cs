@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -239,7 +239,7 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync(new List<string> { "Student" });
 
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
             _userManagerMock
@@ -426,7 +426,7 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync(new List<string> { "Student" });
 
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
             _userManagerMock
@@ -512,7 +512,7 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync(new List<string> { "Lecturer" });
 
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
             _userManagerMock

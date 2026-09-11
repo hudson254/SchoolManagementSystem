@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -51,8 +51,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { timetableService, TimetableEntry } from '../services/timetable.service';
 import { classesService } from '../services/classes.service';
 import { semesterService } from '../services/semester.service';
+import { lecturerService } from '../services/lecturer.service';
+import { studentService } from '../services/student.service';
+import { enrollmentService } from '../services/enrollment.service';
+import { api } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { canManageAcademic, canAdministrate } from '../utils/roles';
+import { canManageAcademic, canAdministrate, hasAnyRole } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -93,7 +97,12 @@ const a11yProps = (index: number) => ({
 export const Timetable: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [tabValue, setTabValue] = useState(0);
+  const canManage = canManageAcademic(user?.roles);
+  const canAdmin = canAdministrate(user?.roles);
+  const isStudent = hasAnyRole(user?.roles, 'Student');
+  const isLecturer = hasAnyRole(user?.roles, 'Lecturer');
+  // Non-moderators land directly on their own timetable.
+  const [tabValue, setTabValue] = useState(isStudent || isLecturer ? 2 : 0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,15 +126,69 @@ export const Timetable: React.FC = () => {
   });
   const [entryFormError, setEntryFormError] = useState('');
 
-  const canManage = canManageAcademic(user?.roles);
-  const canAdmin = canAdministrate(user?.roles);
-
   const { data: classOptions } = useQuery({
     queryKey: ['classes', 'select'],
     queryFn: () => classesService.getClasses({ includeInactive: true }),
     enabled: canManage,
   });
   const classesForSelect = classOptions || [];
+
+  // Entity options for the "My Timetable" tab (management roles only; the
+  // current student/lecturer is auto-resolved by email through the
+  // self-service status endpoints, which the backend populates from the JWT
+  // "email" claim).
+  const { data: lecturerOptionsData } = useQuery({
+    queryKey: ['timetable-lecturers'],
+    queryFn: () => lecturerService.getLecturers({ pageSize: 100, isActive: true }),
+    enabled: canManage,
+  });
+  const { data: studentOptionsData } = useQuery({
+    queryKey: ['timetable-students'],
+    queryFn: () => studentService.getStudents({ pageSize: 100 }),
+    enabled: canManage,
+  });
+  const lecturerForSelect = lecturerOptionsData?.items || [];
+  const studentForSelect = studentOptionsData?.items || [];
+
+  // Self identification for students/lecturers so "My Timetable" works for
+  // their own record without needing directory access.
+  const { data: myEnrollmentStatus } = useQuery({
+    queryKey: ['my-enrollment-status'],
+    queryFn: () => enrollmentService.getMyStatus(),
+    enabled: isStudent,
+  });
+  const { data: myTeachingStatus } = useQuery({
+    queryKey: ['my-teaching-status'],
+    queryFn: () => api.get<any>('/lecturer-assignments/my-status'),
+    enabled: isLecturer,
+  });
+  const myStudentId = (myEnrollmentStatus && myEnrollmentStatus.studentId) || '';
+  const myLecturerId = (myTeachingStatus && myTeachingStatus.lecturerId) || '';
+
+  // The current student's/lecturer's own timetable entries.
+  const { data: myTimetableEntries } = useQuery({
+    queryKey: ['my-timetable', selectedView, selectedEntity],
+    queryFn: () => {
+      if (!selectedEntity) return Promise.resolve([]);
+      if (selectedView === 'lecturer') return timetableService.getLecturerTimetable(selectedEntity);
+      if (selectedView === 'student') return timetableService.getStudentTimetable(selectedEntity);
+      return timetableService.getClassTimetable(selectedEntity);
+    },
+    enabled: !!selectedEntity,
+  });
+  const myEntries: any[] = myTimetableEntries || [];
+
+  // Auto-select the current student's/lecturer's own timetable so the
+  // "My Timetable" tab loads their schedule as soon as it resolves.
+  useEffect(() => {
+    const selfId = isStudent ? myStudentId : (isLecturer ? myLecturerId : '');
+    if (!selectedEntity && selfId) {
+      if (isStudent) setSelectedView('student');
+      if (isLecturer) setSelectedView('lecturer');
+      setSelectedEntity(selfId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myStudentId, myLecturerId, isStudent, isLecturer]);
 
   const { data: semesterOptions } = useQuery({
     queryKey: ['semesters', 'select'],
@@ -145,6 +208,7 @@ export const Timetable: React.FC = () => {
         classId: filterClass || undefined,
         dayOfWeek: filterDay || undefined,
       }),
+    enabled: canManage,
   });
 
   const deleteMutation = useMutation({
@@ -264,10 +328,12 @@ export const Timetable: React.FC = () => {
 
   const handleCheckConflicts = async () => {
     try {
-      const result = await timetableService.checkConflicts({
-        classId: selectedEntity,
-        semesterId: filterSemester,
-      });
+      if (!selectedEntity) return;
+      const payload: any = { semesterId: filterSemester || undefined };
+      if (selectedView === 'class') payload.classId = selectedEntity;
+      else if (selectedView === 'lecturer') payload.lecturerId = selectedEntity;
+      else payload.studentId = selectedEntity;
+      const result = await timetableService.checkConflicts(payload);
       setConflictData(result);
       setConflictDialogOpen(true);
     } catch (error) {
@@ -312,13 +378,15 @@ export const Timetable: React.FC = () => {
               Add Entry
             </Button>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => refetch()}
-          >
-            Refresh
-          </Button>
+          {canManage && (
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => refetch()}
+            >
+              Refresh
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -586,22 +654,19 @@ export const Timetable: React.FC = () => {
                 >
                   <MenuItem value="">Select...</MenuItem>
                   {selectedView === 'class' && (
-                    <>
-                      <MenuItem value="class1">CSC101 - Class A</MenuItem>
-                      <MenuItem value="class2">CSC201 - Class B</MenuItem>
-                    </>
+                    classesForSelect.map((c: any) => (
+                      <MenuItem key={c.id} value={c.id}>{c.name} ({c.code}) — {c.unitName} / {c.lecturerName}</MenuItem>
+                    ))
                   )}
                   {selectedView === 'lecturer' && (
-                    <>
-                      <MenuItem value="lecturer1">Dr. Smith</MenuItem>
-                      <MenuItem value="lecturer2">Prof. Johnson</MenuItem>
-                    </>
+                    lecturerForSelect.map((l: any) => (
+                      <MenuItem key={l.id} value={l.id}>{l.firstName} {l.lastName} ({l.employeeNumber})</MenuItem>
+                    ))
                   )}
                   {selectedView === 'student' && (
-                    <>
-                      <MenuItem value="student1">John Doe</MenuItem>
-                      <MenuItem value="student2">Jane Smith</MenuItem>
-                    </>
+                    studentForSelect.map((s: any) => (
+                      <MenuItem key={s.id} value={s.id}>{s.firstName} {s.lastName} ({s.studentNumber})</MenuItem>
+                    ))
                   )}
                 </Select>
               </FormControl>
@@ -620,33 +685,66 @@ export const Timetable: React.FC = () => {
           </Grid>
 
           <Box sx={{ mt: 3, overflowX: 'auto' }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Time</TableCell>
-                  {daysOfWeek.map((day) => (
-                    <TableCell key={day} sx={{ fontWeight: 600 }}>
-                      {day}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {timeSlots.map((time) => (
-                  <TableRow key={time}>
-                    <TableCell sx={{ fontWeight: 500, fontSize: '0.75rem' }}>
-                      {time}
-                    </TableCell>
+            {myEntries.length === 0 ? (
+              <Alert severity="info" sx={{ my: 2 }}>
+                {selectedEntity
+                  ? 'No timetable entries found for the selected entity.'
+                  : 'Select a class, lecturer or student above to view their timetable.'}
+              </Alert>
+            ) : (
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Time</TableCell>
                     {daysOfWeek.map((day) => (
-                      <TableCell key={`${day}-${time}`} sx={{ p: 0.5 }}>
-                        {/* Entry would be displayed here based on selection */}
-                        <Box sx={{ height: 40, border: '1px dashed #e0e0e0', borderRadius: 1 }} />
+                      <TableCell key={day} sx={{ fontWeight: 600 }}>
+                        {day}
                       </TableCell>
                     ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {timeSlots.map((time) => (
+                    <TableRow key={time}>
+                      <TableCell sx={{ fontWeight: 500, fontSize: '0.75rem' }}>
+                        {time}
+                      </TableCell>
+                      {daysOfWeek.map((day) => {
+                        const entry = myEntries.find(
+                          (e: any) => e.dayOfWeek === day && e.startTime <= time && e.endTime > time
+                        );
+                        return (
+                          <TableCell key={`${day}-${time}`} sx={{ p: 0.5 }}>
+                            {entry && (
+                              <Box
+                                sx={{
+                                  bgcolor: '#576426',
+                                  color: 'white',
+                                  p: 1,
+                                  borderRadius: 1,
+                                  fontSize: '0.7rem',
+                                  minHeight: 40,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Typography variant="caption" fontWeight={600}>
+                                  {entry.unitCode || entry.unitName}
+                                </Typography>
+                                <Typography variant="caption" sx={{ fontSize: '0.6rem', opacity: 0.9 }}>
+                                  {entry.venue || 'TBD'}
+                                </Typography>
+                              </Box>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </Box>
         </Paper>
       </TabPanel>

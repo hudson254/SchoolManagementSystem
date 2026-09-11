@@ -137,7 +137,7 @@ namespace SMS.Application.Features.Auth.Commands
                 var rolesList = roles?.ToList() ?? new List<string>();
 
                 // Generate tokens
-                var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, rolesList);
+                var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, typedUser.Email, rolesList);
                 var refreshToken = await _userManagerService.GenerateRefreshTokenAsync(typedUser.Id.ToString());
 
                 // RISK-27: Persist a successful login record for audit/security

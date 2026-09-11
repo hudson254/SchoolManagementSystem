@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -261,7 +261,7 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync(roles);
 
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
             _userManagerMock
@@ -325,7 +325,7 @@ namespace SMS.UnitTests.Auth
                 .ReturnsAsync(roles);
 
             _jwtServiceMock
-                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
                 .Returns("test-access-token");
 
             _userManagerMock

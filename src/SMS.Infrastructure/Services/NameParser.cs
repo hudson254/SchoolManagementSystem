@@ -164,6 +164,15 @@ namespace SMS.Infrastructure.Services
 
             // Check for multiple consecutive titles at the beginning (validation)
             var consecutiveTitleCount = 0;
+            var shouldCheckLeadingTitles = preSeededTitle != null || tokens.Length > 2;
+
+            // Only strip a title when there are enough remaining tokens to form a
+            // proper name after it. Otherwise a real name like "Justice Waweru" would
+            // be mistaken for a title prefix.
+            if (!shouldCheckLeadingTitles)
+            {
+                i = tokens.Length;
+            }
 
             // Helper: try to match any known title entry at a given start index.
             bool TryMatchTitleAt(int start, out string? matchedCode, out int matchedSpan)

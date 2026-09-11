@@ -205,6 +205,41 @@ namespace SMS.UnitTests.Names
             }
         }
 
+        [Theory]
+        [InlineData("Justice Waweru", "", "Justice", "", "Waweru")]
+        [InlineData("Governor Kibet", "", "Governor", "", "Kibet")]
+        public void ParseName_KeepsTitleLikeFirstNamesWhenTheyAreNotActualTitles(string input, string expectedTitle, string expectedFirst, string expectedMiddle, string expectedLast)
+        {
+            var result = _parser.ParseName(input);
+
+            result.Title.Should().Be(expectedTitle);
+            result.FirstName.Should().Be(expectedFirst);
+            result.MiddleName.Should().Be(expectedMiddle);
+            result.LastName.Should().Be(expectedLast);
+            result.IsValid.Should().BeTrue();
+        }
+
+// Regression: production POST /api/v1/users rejects legitimate users whose
+        // surname or first name is itself a recognised title/designation (e.g.
+        // lastName = "Lecturer", lastName = "Dr", firstName = "Dr"). The guard
+        // must keep the title token as a name part when stripping it would leave
+        // fewer than two name tokens ("Only a single name part provided" 400).
+        [Theory]
+        [InlineData("Alice Lecturer", "", "Alice", "", "Lecturer")]
+        [InlineData("Bob Dr", "", "Bob", "", "Dr")]
+        [InlineData("Carol PhD", "", "Carol", "", "Phd")]
+        [InlineData("Dr Smith", "", "Dr", "", "Smith")]
+        [InlineData("Lecturer Mwangi", "", "Lecturer", "", "Mwangi")]
+        public void ParseName_PreservesTitleLikeSurnamesAndFirstNames(string input, string expectedTitle, string expectedFirst, string expectedMiddle, string expectedLast)
+        {
+            var result = _parser.ParseName(input);
+
+            result.Title.Should().Be(expectedTitle);
+            result.FirstName.Should().Be(expectedFirst);
+            result.MiddleName.Should().Be(expectedMiddle);
+            result.LastName.Should().Be(expectedLast);
+            result.IsValid.Should().BeTrue();
+        }
         [Fact]
         public void ParseName_UnknownTitleTreatedAsFirstName()
         {

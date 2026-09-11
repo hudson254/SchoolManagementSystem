@@ -499,7 +499,7 @@ export const Dashboard: React.FC = () => {
               </List>
             )}
             <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <Button variant="outlined" size="small" fullWidth>
+              <Button variant="outlined" size="small" fullWidth onClick={() => navigate('/calendar')}>
                 View Full Calendar
               </Button>
             </Box>

@@ -25,7 +25,7 @@ namespace SMS.Identity.Services
             _logger = logger;
         }
 
-        public string GenerateToken(string userId, string username, IEnumerable<string> roles)
+        public string GenerateToken(string userId, string username, string email, IEnumerable<string> roles)
         {
             var claims = new List<Claim>
             {
@@ -40,6 +40,14 @@ namespace SMS.Identity.Services
                 new Claim(ClaimTypes.NameIdentifier, userId),
 
                 new Claim(JwtRegisteredClaimNames.Name, username),
+
+                // The authenticated user's email. Self-service enrollment /
+                // returning-user / lecturer-assignment handlers resolve the
+                // current user's Student/Lecturer record via
+                // ICurrentUserService.Email, which reads the standard "email"
+                // claim. Without this claim every one of those endpoints
+                // treated the caller as unauthenticated and returned 403.
+                new Claim(ClaimTypes.Email, email ?? string.Empty),
 
                 // Standard "role" claim name so [Authorize(Roles="...")]
                 // and User.IsInRole(...) work with RoleClaimType="role".
@@ -82,14 +90,14 @@ namespace SMS.Identity.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public string GenerateAccessToken(string userId, string username, IEnumerable<string> roles)
+        public string GenerateAccessToken(string userId, string username, string email, IEnumerable<string> roles)
         {
-            return GenerateToken(userId, username, roles);
+            return GenerateToken(userId, username, email, roles);
         }
 
         public async Task<string> GenerateAccessTokenAsync(User user, IEnumerable<string> roles)
         {
-            return await Task.Run(() => GenerateToken(user.Id, user.UserName ?? user.Email, roles));
+            return await Task.Run(() => GenerateToken(user.Id, user.UserName ?? user.Email, user.Email, roles));
         }
 
         public string GenerateRefreshToken()

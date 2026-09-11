@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
@@ -62,7 +62,7 @@ namespace SMS.UnitTests.Auth
             var roles = new[] { "Lecturer" };
 
             // Act
-            var token = jwt.GenerateAccessToken(userId, "lecturer@school.edu", roles);
+            var token = jwt.GenerateAccessToken(userId, "lecturer@school.edu", "lecturer@school.edu", roles);
 
             // Assert
             var handler = new JwtSecurityTokenHandler();
@@ -86,7 +86,7 @@ namespace SMS.UnitTests.Auth
             var roles = new[] { "Administrator" };
 
             // Act
-            var token = jwt.GenerateAccessToken(userId, "admin@school.edu", roles);
+            var token = jwt.GenerateAccessToken(userId, "admin@school.edu", "admin@school.edu", roles);
 
             // Assert
             var handler = new JwtSecurityTokenHandler();
@@ -110,7 +110,7 @@ namespace SMS.UnitTests.Auth
             var roles = Array.Empty<string>();
 
             // Act
-            var token = jwt.GenerateAccessToken(userId, "noroles@school.edu", roles);
+            var token = jwt.GenerateAccessToken(userId, "noroles@school.edu", "noroles@school.edu", roles);
 
             // Assert
             var handler = new JwtSecurityTokenHandler();
@@ -136,7 +136,7 @@ namespace SMS.UnitTests.Auth
             // Build an expired access token carrying the user id so the
             // handler can extract it.
             var jwt = CreateJwtService();
-            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", new[] { "Student" });
+            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", "user@school.edu", new[] { "Student" });
 
             var user = new User { Id = userId, Email = "user@school.edu", IsActive = true };
 
@@ -173,7 +173,7 @@ namespace SMS.UnitTests.Auth
             var expiredRefreshToken = "expired-but-shape-valid-token";
 
             var jwt = CreateJwtService();
-            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", new[] { "Student" });
+            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", "user@school.edu", new[] { "Student" });
 
             var user = new User { Id = userId, Email = "user@school.edu", IsActive = true };
 
@@ -208,7 +208,7 @@ namespace SMS.UnitTests.Auth
             var rotatedRefreshToken = "new-rotated-refresh-token";
 
             var jwt = CreateJwtService();
-            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", new[] { "Student" });
+            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", "user@school.edu", new[] { "Student" });
 
             var user = new User { Id = userId, Email = "user@school.edu", IsActive = true, FirstName = "Test", LastName = "User" };
 
@@ -247,7 +247,7 @@ namespace SMS.UnitTests.Auth
             // Arrange
             var userId = Guid.NewGuid().ToString();
             var jwt = CreateJwtService();
-            var accessToken = jwt.GenerateAccessToken(userId, "inactive@school.edu", new[] { "Student" });
+            var accessToken = jwt.GenerateAccessToken(userId, "inactive@school.edu", "inactive@school.edu", new[] { "Student" });
 
             var inactiveUser = new User { Id = userId, Email = "inactive@school.edu", IsActive = false };
 
@@ -313,7 +313,7 @@ namespace SMS.UnitTests.Auth
             var revokedRefreshToken = "now-revoked-refresh-token";
 
             var jwt = CreateJwtService();
-            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", new[] { "Student" });
+            var accessToken = jwt.GenerateAccessToken(userId, "user@school.edu", "user@school.edu", new[] { "Student" });
 
             var user = new User { Id = userId, Email = "user@school.edu", IsActive = true };
 
@@ -379,7 +379,7 @@ namespace SMS.UnitTests.Auth
         {
             // Arrange - Create a valid token, then modify its payload
             var jwt = CreateJwtService();
-            var validToken = jwt.GenerateAccessToken("test-user", "test@school.edu", new[] { "Student" });
+            var validToken = jwt.GenerateAccessToken("test-user", "test@school.edu", "test@school.edu", new[] { "Student" });
             var forgedToken = ForgeJwtPayload(validToken, "different-user");
 
             // Act
@@ -397,7 +397,7 @@ namespace SMS.UnitTests.Auth
         {
             // Arrange - Create a valid token, then modify its role claims
             var jwt = CreateJwtService();
-            var validToken = jwt.GenerateAccessToken("test-user", "test@school.edu", new[] { "Student" });
+            var validToken = jwt.GenerateAccessToken("test-user", "test@school.edu", "test@school.edu", new[] { "Student" });
             var escalatedToken = ForgeJwtPayload(validToken, "test-user", new[] { "Administrator" });
 
             // Act
@@ -466,7 +466,7 @@ namespace SMS.UnitTests.Auth
         {
             // Arrange
             var jwt = CreateJwtService();
-            var token = jwt.GenerateAccessToken("test-user", "test@school.edu", new[] { "Student" });
+            var token = jwt.GenerateAccessToken("test-user", "test@school.edu", "test@school.edu", new[] { "Student" });
 
             // Act
             var result = jwt.ValidateToken(token);
@@ -483,7 +483,7 @@ namespace SMS.UnitTests.Auth
         {
             // Arrange
             var jwt = CreateJwtService();
-            var token = jwt.GenerateAccessToken("test-user", "test@school.edu", new[] { "Student" });
+            var token = jwt.GenerateAccessToken("test-user", "test@school.edu", "test@school.edu", new[] { "Student" });
 
             // Act
             var handler = new JwtSecurityTokenHandler();
@@ -502,7 +502,7 @@ namespace SMS.UnitTests.Auth
         {
             // Arrange
             var jwt = CreateJwtService();
-            var token = jwt.GenerateAccessToken("test-user", "test@school.edu", new[] { "Student" });
+            var token = jwt.GenerateAccessToken("test-user", "test@school.edu", "test@school.edu", new[] { "Student" });
 
             // Act
             var handler = new JwtSecurityTokenHandler();

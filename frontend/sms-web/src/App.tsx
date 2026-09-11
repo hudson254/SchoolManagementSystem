@@ -53,6 +53,9 @@ const EnrollmentStatusPage = loadPage(() => import('./pages/EnrollmentStatusPage
 const CourseHistoryPage = loadPage(() => import('./pages/CourseHistoryPage'), 'CourseHistoryPage');
 const AssessmentWorkspace = loadPage(() => import('./pages/AssessmentWorkspace'), 'AssessmentWorkspace');
 const StudentResults = loadPage(() => import('./pages/StudentResults'), 'StudentResults');
+const Notifications = loadPage(() => import('./pages/Notifications'), 'Notifications');
+const AddUserPage = loadPage(() => import('./pages/AddUserPage'), 'AddUserPage');
+const Search = loadPage(() => import('./pages/Search'), 'Search');
 const NotFound = loadPage(() => import('./pages/NotFound'), 'NotFound');
 
 const queryClient = new QueryClient({
@@ -123,8 +126,11 @@ function App() {
                         <Route path="my-results" element={<StudentResults />} />
                         <Route path="reports" element={<Reports />} />
                         <Route path="users" element={<Users />} />
+                        <Route path="users/new" element={<AddUserPage />} />
                         <Route path="settings" element={<Settings />} />
                         <Route path="profile" element={<Profile />} />
+                        <Route path="notifications" element={<Notifications />} />
+                        <Route path="search" element={<Search />} />
                         <Route path="calendar" element={<Calendar />} />
                         <Route path="certificates" element={<Certificates />} />
                         <Route path="certificates/templates" element={<CertificateTemplates />} />

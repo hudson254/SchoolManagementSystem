@@ -237,7 +237,7 @@ namespace SMS.Application.Features.Auth.Commands
             var roles = await _userManagerService.GetRolesAsync(typedUser);
             var rolesList = roles?.ToList() ?? new List<string>();
 
-            var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, rolesList);
+            var accessToken = _jwtService.GenerateAccessToken(typedUser.Id.ToString(), typedUser.Email ?? typedUser.UserName, typedUser.Email, rolesList);
             var refreshToken = await _userManagerService.GenerateRefreshTokenAsync(typedUser.Id.ToString());
 
             await _auditService.LogAsync("Register", typedUser.Id.ToString(), $"User registered successfully as {request.Role} (pending course selection)");
