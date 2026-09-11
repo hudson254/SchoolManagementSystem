@@ -8,6 +8,7 @@ namespace SMS.API.Controllers.v1
 {
     [ApiVersion("1.0")]
     [Authorize]
+    [Route("api/v{version:apiVersion}/returning-user")]
     public class ReturningUserController : BaseApiController
     {
         private readonly ILogger<ReturningUserController> _logger;

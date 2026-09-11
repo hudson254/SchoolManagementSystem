@@ -8,6 +8,7 @@ namespace SMS.API.Controllers.v1
 {
     [ApiVersion("1.0")]
     [Authorize]
+    [Route("api/v{version:apiVersion}/lecturer-assignments")]
     public class LecturerAssignmentController : BaseApiController
     {
         private readonly ILogger<LecturerAssignmentController> _logger;
