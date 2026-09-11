@@ -129,7 +129,22 @@ interface PagedResponse<T> {
 
 export const courseOfferingService = {
   getCourseOfferings: (params: GetCourseOfferingsParams = {}) =>
-    api.get<PagedResponse<CourseOffering>>('/courseoffering', { params }),
+    api
+      .get<CourseOffering[] | PagedResponse<CourseOffering>>('/courseoffering', { params })
+      .then((data) => {
+        // The backend returns a plain array (not a paged envelope). Normalize
+        // it here so the pages can keep consuming { items, totalCount, ... }.
+        if (Array.isArray(data)) {
+          return {
+            items: data,
+            totalCount: data.length,
+            page: 1,
+            pageSize: data.length,
+            totalPages: 1,
+          };
+        }
+        return data;
+      }),
 
   getCourseOffering: (id: string) =>
     api.get<CourseOfferingDetails>(`/courseoffering/${id}`),
