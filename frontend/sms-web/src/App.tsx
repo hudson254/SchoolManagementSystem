@@ -36,6 +36,8 @@ const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
 const Assignments = loadPage(() => import('./pages/Assignments'), 'Assignments');
+const AssignmentFormPage = loadPage(() => import('./pages/AssignmentFormPage'), 'AssignmentFormPage');
+const AssignmentDetailPage = loadPage(() => import('./pages/AssignmentDetailPage'), 'AssignmentDetailPage');
 const Grades = loadPage(() => import('./pages/Grades'), 'Grades');
 const Reports = loadPage(() => import('./pages/Reports'), 'Reports');
 const Users = loadPage(() => import('./pages/Users'), 'Users');
@@ -113,6 +115,9 @@ function App() {
                         <Route path="timetable" element={<Timetable />} />
                         <Route path="accommodation" element={<Accommodation />} />
                         <Route path="assignments" element={<Assignments />} />
+                        <Route path="assignments/new" element={<AssignmentFormPage />} />
+                        <Route path="assignments/:id" element={<AssignmentDetailPage />} />
+                        <Route path="assignments/:id/edit" element={<AssignmentFormPage />} />
                         <Route path="grades" element={<Grades />} />
                         <Route path="assessment" element={<AssessmentWorkspace />} />
                         <Route path="my-results" element={<StudentResults />} />

@@ -119,10 +119,24 @@ export const CourseOfferingForm: React.FC<CourseOfferingFormProps> = ({
   // Create/Update mutation
   const mutation = useMutation({
     mutationFn: (data: CourseOfferingFormData) => {
+      // The backend binds DateTime fields to PostgreSQL 'timestamp with time
+      // zone' columns, which require ISO-8601 UTC strings. HTML date inputs
+      // yield 'yyyy-MM-dd' (and an empty string when left blank), which the
+      // API cannot deserialize into its nullable DateTime fields.
+      const toUtcDateTime = (value?: string): string | null =>
+        value ? `${value}T00:00:00Z` : null;
+
+      const payload = {
+        ...data,
+        startDate: toUtcDateTime(data.startDate),
+        endDate: toUtcDateTime(data.endDate),
+        registrationStartDate: toUtcDateTime(data.registrationStartDate),
+        registrationEndDate: toUtcDateTime(data.registrationEndDate),
+      };
       if (isEditMode) {
-        return courseOfferingService.updateCourseOffering(offeringId!, data);
+        return courseOfferingService.updateCourseOffering(offeringId!, payload);
       }
-      return courseOfferingService.createCourseOffering(data);
+      return courseOfferingService.createCourseOffering(payload);
     },
     onSuccess: (result) => {
       onSuccess?.(result?.id);

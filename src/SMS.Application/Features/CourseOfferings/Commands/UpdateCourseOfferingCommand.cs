@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Enums;
@@ -62,11 +63,14 @@ namespace SMS.Application.Features.CourseOfferings.Commands
             if (offering == null)
                 throw new NotFoundException("CourseOffering", request.Id);
 
+            // Normalize to UTC so PostgreSQL 'timestamp with time zone' columns
+            // accept the values (web forms submit date-only strings that bind as
+            // DateTimes with an unspecified kind).
             offering.Intake = request.Intake;
-            offering.StartDate = request.StartDate;
-            offering.EndDate = request.EndDate;
-            offering.RegistrationStartDate = request.RegistrationStartDate;
-            offering.RegistrationEndDate = request.RegistrationEndDate;
+            offering.StartDate = DateTimeUtc.From(request.StartDate).Value;
+            offering.EndDate = DateTimeUtc.From(request.EndDate).Value;
+            offering.RegistrationStartDate = DateTimeUtc.From(request.RegistrationStartDate);
+            offering.RegistrationEndDate = DateTimeUtc.From(request.RegistrationEndDate);
             offering.Status = request.Status;
             offering.IsActive = request.IsActive;
             offering.Notes = request.Notes;

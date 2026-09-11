@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
@@ -75,16 +76,24 @@ namespace SMS.Application.Features.CourseOfferings.Commands
             if (course == null)
                 throw new NotFoundException("Course", request.CourseId);
 
+            // Normalize to UTC so PostgreSQL 'timestamp with time zone' columns
+            // accept the values (web forms submit date-only strings that bind as
+            // DateTimes with an unspecified kind).
+            var startDate = DateTimeUtc.From(request.StartDate);
+            var endDate = DateTimeUtc.From(request.EndDate);
+            var registrationStartDate = DateTimeUtc.From(request.RegistrationStartDate);
+            var registrationEndDate = DateTimeUtc.From(request.RegistrationEndDate);
+
             // Generate the next sequence number for this course in the given academic year/semester
             var sequence = await _courseOfferingRepository.GetNextSequenceForCourseAsync(
                 request.CourseId,
-                request.StartDate.Year,
+                startDate.Value.Year,
                 request.SemesterName.GetHashCode(),
                 cancellationToken);
 
             var offeringCode = await _courseOfferingRepository.GenerateOfferingCodeAsync(
                 course.Code,
-                request.StartDate.Year,
+                startDate.Value.Year,
                 1,
                 sequence,
                 cancellationToken);
@@ -97,10 +106,10 @@ namespace SMS.Application.Features.CourseOfferings.Commands
                 AcademicYearName = request.AcademicYearName,
                 SemesterName = request.SemesterName,
                 Intake = request.Intake,
-                StartDate = request.StartDate,
-                EndDate = request.EndDate,
-                RegistrationStartDate = request.RegistrationStartDate,
-                RegistrationEndDate = request.RegistrationEndDate,
+                StartDate = startDate.Value,
+                EndDate = endDate.Value,
+                RegistrationStartDate = registrationStartDate,
+                RegistrationEndDate = registrationEndDate,
                 Status = request.Status,
                 IsActive = true,
                 Notes = request.Notes

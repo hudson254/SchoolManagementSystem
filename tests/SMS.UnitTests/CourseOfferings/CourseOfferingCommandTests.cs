@@ -168,6 +168,68 @@ namespace SMS.UnitTests.CourseOfferings
             _offeringRepoMock.Verify(x => x.AddAsync(It.IsAny<CourseOffering>(), It.IsAny<CancellationToken>()), Times.Once);
             _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
+    [Fact]
+        public async Task Handle_WithUnspecifiedDateTimes_ShouldNormalizeToUtc()
+        {
+            var courseId = Guid.NewGuid();
+            var command = new CreateCourseOfferingCommand
+            {
+                CourseId = courseId,
+                AcademicYearName = "2026/2027",
+                SemesterName = "Semester 1",
+                Intake = "2026 Intake A",
+                // Bound from "2026-09-01" style web-form payloads (Kind = Unspecified)
+                StartDate = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                EndDate = new DateTime(2026, 12, 15, 0, 0, 0, DateTimeKind.Unspecified),
+                RegistrationStartDate = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                RegistrationEndDate = new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                Status = CourseOfferingStatus.Draft
+            };
+
+            var course = new Course
+            {
+                Id = courseId,
+                Name = "Wildlife Management",
+                Code = "WM101",
+                IsActive = true
+            };
+
+            _courseRepoMock
+                .Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(course);
+
+            _offeringRepoMock
+                .Setup(x => x.GetNextSequenceForCourseAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(1);
+
+            _offeringRepoMock
+                .Setup(x => x.GenerateOfferingCodeAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync("WM101-2026-1-1");
+
+            _offeringRepoMock
+                .Setup(x => x.AddAsync(It.IsAny<CourseOffering>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((CourseOffering o, CancellationToken ct) => o);
+
+            var handler = new CreateCourseOfferingCommandHandler(
+                _offeringRepoMock.Object,
+                _courseRepoMock.Object,
+                _unitOfWorkMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<ILogger<CreateCourseOfferingCommandHandler>>());
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.StartDate.Kind.Should().Be(DateTimeKind.Utc);
+            result.StartDate.Year.Should().Be(2026);
+            result.StartDate.Month.Should().Be(9);
+            result.StartDate.Day.Should().Be(1);
+            result.EndDate.Kind.Should().Be(DateTimeKind.Utc);
+            result.EndDate.Year.Should().Be(2026);
+            result.EndDate.Month.Should().Be(12);
+            result.EndDate.Day.Should().Be(15);
+            result.RegistrationStartDate.Should().NotBeNull();
+            result.RegistrationEndDate.Should().NotBeNull();
+        }
     }
 
     public class UpdateCourseOfferingCommandTests
@@ -294,6 +356,63 @@ namespace SMS.UnitTests.CourseOfferings
 
             _offeringRepoMock.Verify(x => x.UpdateAsync(It.IsAny<CourseOffering>(), It.IsAny<CancellationToken>()), Times.Once);
             _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+    [Fact]
+        public async Task Handle_WithUnspecifiedDateTimes_ShouldNormalizeToUtcBeforeUpdate()
+        {
+            var offeringId = Guid.NewGuid();
+            var command = new UpdateCourseOfferingCommand
+            {
+                Id = offeringId,
+                // Bound from "2026-09-01" style web-form payloads (Kind = Unspecified)
+                StartDate = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                EndDate = new DateTime(2026, 12, 15, 0, 0, 0, DateTimeKind.Unspecified),
+                RegistrationStartDate = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                RegistrationEndDate = new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                Status = CourseOfferingStatus.Active,
+                IsActive = true
+            };
+
+            var offering = new CourseOffering
+            {
+                Id = offeringId,
+                OfferingCode = "WM101-2026-1-1",
+                CourseId = Guid.NewGuid(),
+                AcademicYearId = Guid.NewGuid(),
+                SemesterId = Guid.NewGuid(),
+                Intake = "2026 Intake A",
+                StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2026, 6, 30, 0, 0, 0, DateTimeKind.Utc),
+                Status = CourseOfferingStatus.Draft,
+                IsActive = true
+            };
+
+            _offeringRepoMock
+                .Setup(x => x.GetByIdAsync(offeringId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(offering);
+
+            _offeringRepoMock
+                .Setup(x => x.UpdateAsync(It.IsAny<CourseOffering>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            var handler = new UpdateCourseOfferingCommandHandler(
+                _offeringRepoMock.Object,
+                _unitOfWorkMock.Object,
+                _auditServiceMock.Object,
+                Mock.Of<ILogger<UpdateCourseOfferingCommandHandler>>());
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.StartDate.Kind.Should().Be(DateTimeKind.Utc);
+            result.StartDate.Year.Should().Be(2026);
+            result.StartDate.Month.Should().Be(9);
+            result.StartDate.Day.Should().Be(1);
+            result.EndDate.Kind.Should().Be(DateTimeKind.Utc);
+            result.EndDate.Year.Should().Be(2026);
+            result.EndDate.Month.Should().Be(12);
+            result.EndDate.Day.Should().Be(15);
+            result.RegistrationStartDate.Should().NotBeNull();
+            result.RegistrationEndDate.Should().NotBeNull();
         }
     }
 
