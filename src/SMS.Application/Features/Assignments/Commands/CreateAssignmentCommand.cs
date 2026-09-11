@@ -178,7 +178,9 @@ namespace SMS.Application.Features.Assignments.Commands
                 LatePenaltyPercent = assignment.LatePenaltyPercent,
                 UnitName = unit.Name,
                 UnitCode = unit.Code,
-                LecturerName = lecturer.User.FullName,
+                LecturerName = lecturer.User != null
+                    ? lecturer.User.FullName
+                    : $"{lecturer.FirstName} {lecturer.LastName}".Trim(),
                 SemesterName = assignment.Semester?.Name ?? string.Empty,
                 SubmissionCount = 0,
                 GradedCount = 0
