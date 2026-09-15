@@ -30,10 +30,12 @@ import {
   CheckCircle,
   ReportProblem,
   Schedule,
+  Apartment,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { dashboardService } from '../services/dashboard.service';
+import type { DashboardUnit, LecturerCourse, StudentCourse } from '../services/dashboard.service';
 import { courseOfferingService, CourseOffering, CourseOfferingStatus, ConfirmationStatus } from '../services/course-offering.service';
 import { confirmationService, PendingEnrollment } from '../services/confirmation.service';
 import { AssignmentConfirm } from '../components/AssignmentConfirm';
@@ -86,6 +88,23 @@ export const Dashboard: React.FC = () => {
     queryKey: ['student-course-enrollments', user?.id],
     queryFn: () => confirmationService.getPendingEnrollments(user?.id || ''),
     enabled: !!isStudent && !!user?.id,
+  });
+
+  // Lecturer: real teaching dashboard (courses, units, accommodation) resolved
+  // server-side from persisted relationships.
+  const { data: lecturerMe, isLoading: lecturerMeLoading } = useQuery({
+    queryKey: ['dashboard-lecturer-me'],
+    queryFn: dashboardService.getMyLecturerDashboard,
+    enabled: !!isLecturer,
+    retry: false,
+  });
+
+  // Student: real enrolled courses (with units) and accommodation assignment.
+  const { data: studentMe, isLoading: studentMeLoading } = useQuery({
+    queryKey: ['dashboard-student-me'],
+    queryFn: dashboardService.getMyStudentDashboard,
+    enabled: !!isStudent,
+    retry: false,
   });
 
   if (statsLoading) {
@@ -174,6 +193,135 @@ export const Dashboard: React.FC = () => {
       </CardContent>
     </Card>
   );
+
+  // Unit chip linking to the unit's Study Materials page. Only template units
+  // (real UnitId) expose materials; offering-only units have no UnitId yet.
+  const renderUnitChip = (unit: DashboardUnit) => (
+    <Chip
+      key={unit.courseOfferingUnitId || unit.unitId}
+      label={unit.code ? `${unit.code} — ${unit.name}` : unit.name}
+      size="small"
+      variant="outlined"
+      icon={<MenuBook sx={{ fontSize: 16 }} />}
+      onClick={
+        unit.unitId
+          ? () =>
+              navigate(
+                `/units/${unit.unitId}/materials?name=${encodeURIComponent(unit.name)}&code=${encodeURIComponent(unit.code)}`
+              )
+          : undefined
+      }
+      sx={unit.unitId ? { cursor: 'pointer' } : undefined}
+    />
+  );
+
+  // Lecturer course card from the persisted teaching assignments.
+  const renderLecturerCourseCard = (course: LecturerCourse) => (
+    <Card key={course.courseOfferingId} sx={{ mb: 1.5 }}>
+      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle2" fontWeight={600}>
+            {course.courseName || course.offeringCode}
+            {course.courseCode ? ` (${course.courseCode})` : ''}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {course.isPrimary && <Chip label="Primary" size="small" color="primary" variant="outlined" />}
+            <Chip label={course.status} size="small" color={course.status === 'Active' ? 'success' : 'default'} />
+          </Box>
+        </Box>
+        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+          {course.academicYearName} â€¢ Semester {course.semesterName} â€¢ {course.offeringCode}
+          {course.intake ? ` â€¢ ${course.intake}` : ''}
+        </Typography>
+        {course.units.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+            {course.units.map(renderUnitChip)}
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  // Student enrolled course card from the persisted enrollments.
+  const renderStudentCourseCard = (course: StudentCourse) => (
+    <Card key={course.courseOfferingId} sx={{ mb: 1.5 }}>
+      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle2" fontWeight={600}>
+            {course.courseName || course.offeringCode}
+            {course.courseCode ? ` (${course.courseCode})` : ''}
+          </Typography>
+          <Chip
+            label={course.confirmationStatus || course.status}
+            size="small"
+            color={
+              course.confirmationStatus === 'Confirmed' ? 'success' :
+              course.confirmationStatus === 'Pending' ? 'warning' : 'default'
+            }
+          />
+        </Box>
+        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+          {course.academicYearName} â€¢ Semester {course.semesterName} â€¢ {course.offeringCode}
+          {course.attemptNumber > 1 ? ` â€¢ Attempt ${course.attemptNumber}` : ''}
+        </Typography>
+        {course.units.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+            {course.units.map(renderUnitChip)}
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  // Accommodation card (lecturer or student) from the accommodation module.
+  const myAccommodation = isLecturer ? lecturerMe?.accommodation : studentMe?.accommodation;
+  const renderAccommodationCard = () => {
+    if (!myAccommodation) {
+      return (
+        <Paper sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Avatar sx={{ bgcolor: 'secondary.main' }}>
+              <Apartment />
+            </Avatar>
+            <Typography variant="h6" fontWeight={600}>
+              My Accommodation
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="textSecondary">
+            {isStudent
+              ? 'No accommodation has been assigned to you yet. Contact the accommodation office.'
+              : 'No accommodation has been assigned to you.'}
+          </Typography>
+        </Paper>
+      );
+    }
+    return (
+      <Paper sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Avatar sx={{ bgcolor: 'secondary.main' }}>
+            <Apartment />
+          </Avatar>
+          <Typography variant="h6" fontWeight={600}>
+            My Accommodation
+          </Typography>
+        </Box>
+        <List dense sx={{ px: 0 }}>
+          <ListItem sx={{ px: 0 }}>
+            <ListItemText primary="House" secondary={myAccommodation.houseNumber || '—'} />
+          </ListItem>
+          <ListItem sx={{ px: 0 }}>
+            <ListItemText primary="Lane" secondary={myAccommodation.laneName || '—'} />
+          </ListItem>
+          <ListItem sx={{ px: 0 }}>
+            <ListItemText primary="Semester" secondary={myAccommodation.semesterName || '—'} />
+          </ListItem>
+          <ListItem sx={{ px: 0 }}>
+            <ListItemText primary="Status" secondary={myAccommodation.status || '—'} />
+          </ListItem>
+        </List>
+      </Paper>
+    );
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -309,6 +457,69 @@ export const Dashboard: React.FC = () => {
                     )}
                   </Grid>
                 </Grid>
+              )}
+            </Paper>
+          )}
+
+          {/* Lecturer: My Courses & Units (persisted teaching assignments) */}
+          {isLecturer && (
+            <Paper sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" fontWeight={600}>
+                  My Courses &amp; Units
+                </Typography>
+                <Button variant="outlined" size="small" onClick={() => navigate('/assignments')}>
+                  My Assignments
+                </Button>
+              </Box>
+              {lecturerMeLoading ? (
+                <LinearProgress />
+              ) : (lecturerMe?.courses || []).length === 0 ? (
+                <Box>
+                  <Typography variant="body2" color="textSecondary">
+                    You are not assigned to teach any course offerings yet. Once an administrator
+                    assigns you to a course offering, it will appear here.
+                  </Typography>
+                  {lecturerMe && lecturerMe.unitAllocations.length > 0 && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        Unit Allocations
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        {lecturerMe.unitAllocations.map(renderUnitChip)}
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              ) : (
+                <Box>
+                  {lecturerMe!.courses.map(renderLecturerCourseCard)}
+                </Box>
+              )}
+            </Paper>
+          )}
+
+          {/* Student: My Course (persisted enrollments) */}
+          {isStudent && (
+            <Paper sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" fontWeight={600}>
+                  My Course
+                </Typography>
+                <Button variant="outlined" size="small" onClick={() => navigate('/enrollment-status')}>
+                  Enrollment Status
+                </Button>
+              </Box>
+              {studentMeLoading ? (
+                <LinearProgress />
+              ) : (studentMe?.enrollments || []).length === 0 ? (
+                <Typography variant="body2" color="textSecondary">
+                  You have no active course enrollments. Browse available courses to enroll.
+                </Typography>
+              ) : (
+                <Box>
+                  {studentMe!.enrollments.map(renderStudentCourseCard)}
+                </Box>
               )}
             </Paper>
           )}
@@ -469,6 +680,9 @@ export const Dashboard: React.FC = () => {
               </Button>
             </Paper>
           )}
+
+          {/* My Accommodation (lecturer/student) */}
+          {(isLecturer || isStudent) && renderAccommodationCard()}
 
           {/* Upcoming Events */}
           <Paper sx={{ p: 3, borderRadius: 2 }}>

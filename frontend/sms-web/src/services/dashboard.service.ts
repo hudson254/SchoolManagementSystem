@@ -79,7 +79,109 @@ export const dashboardService = {
 
   getTopStudents: (count: number = 10, semesterId?: string) =>
     api.get<StudentTop[]>('/dashboard/top-students', { params: { count, semesterId } }),
+
+  /**
+   * Dashboard payload for the currently authenticated lecturer: real course
+   * offerings taught (with units), unit allocations, and the accommodation
+   * assignment resolved server-side from persisted relationships.
+   */
+  getMyLecturerDashboard: () =>
+    api.get<MyLecturerDashboard>('/dashboard/lecturer-me'),
+
+  /**
+   * Dashboard payload for the currently authenticated student: real active
+   * course-offering enrollments (with units) and the accommodation assignment.
+   */
+  getMyStudentDashboard: () =>
+    api.get<MyStudentDashboard>('/dashboard/student-me'),
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// My Dashboard types — must mirror SMS.Application.DTOs.DashboardMyDtos.
+// The endpoints return a plain DTO object (NOT a paged envelope).
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface DashboardUnit {
+  unitId: string;
+  courseOfferingUnitId?: string | null;
+  name: string;
+  code: string;
+  credits: number;
+}
+
+export interface LecturerCourse {
+  courseOfferingId: string;
+  offeringCode: string;
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  academicYearName: string;
+  semesterName: string;
+  intake?: string | null;
+  status: string;
+  isPrimary: boolean;
+  units: DashboardUnit[];
+}
+
+export interface MyLecturerDashboard {
+  lecturerId: string;
+  fullName: string;
+  title?: string | null;
+  email: string;
+  employeeNumber: string;
+  courses: LecturerCourse[];
+  unitAllocations: DashboardUnit[];
+  accommodation: AccommodationAssignmentSummary | null;
+}
+
+export interface StudentCourse {
+  courseOfferingId: string;
+  offeringCode: string;
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  academicYearName: string;
+  semesterName: string;
+  status: string;
+  confirmationStatus: string;
+  attemptNumber: number;
+  units: DashboardUnit[];
+}
+
+export interface MyStudentDashboard {
+  studentId: string;
+  fullName: string;
+  title?: string | null;
+  email: string;
+  studentNumber: string;
+  academicStatus: string;
+  enrollments: StudentCourse[];
+  accommodation: AccommodationAssignmentSummary | null;
+}
+
+export interface AccommodationAssignmentSummary {
+  id: string;
+  studentId?: string | null;
+  lecturerId?: string | null;
+  occupantType?: number | string | null;
+  status: string;
+  houseId?: string | null;
+  houseNumber?: string | null;
+  houseName?: string | null;
+  houseCapacity?: number;
+  houseOccupiedCount?: number;
+  laneId?: string | null;
+  laneName?: string | null;
+  roomNumber?: string | null;
+  blockName?: string | null;
+  buildingName?: string | null;
+  semesterId?: string | null;
+  semesterName?: string | null;
+  assignmentDate?: string | null;
+  moveInDate?: string | null;
+  checkInDate?: string | null;
+  remarks?: string | null;
+}
 
 interface StudentTop {
   studentId: string;

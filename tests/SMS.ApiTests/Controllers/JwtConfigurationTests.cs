@@ -79,8 +79,10 @@ namespace SMS.ApiTests.Controllers
             var loginResponse = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
             loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-            // Try to refresh with the cookies automatically sent
-            var refreshResponse = await client.PostAsync("/api/v1/auth/refresh", null);
+            // Try to refresh with the cookies automatically sent. The refresh
+            // endpoint is /api/v1/auth/refresh-token (CSRF-exempt; it reads the
+            // refresh_token + access_token httpOnly cookies set by login).
+            var refreshResponse = await client.PostAsync("/api/v1/auth/refresh-token", null);
             refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         }
 

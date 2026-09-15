@@ -95,5 +95,35 @@ namespace SMS.API.Controllers.v1
             var result = await Mediator.Send(query, cancellationToken);
             return Ok(result);
         }
+
+        /// <summary>
+        /// Dashboard payload for the currently authenticated lecturer: the real
+        /// course offerings they teach (with units), unit allocations, and their
+        /// accommodation assignment. Relationships are resolved server-side.
+        /// </summary>
+        [HttpGet("lecturer-me")]
+        [Authorize(Policy = "LecturerAccess")]
+        [ProducesResponseType(typeof(MyLecturerDashboardDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetMyLecturerDashboard(CancellationToken cancellationToken)
+        {
+            var result = await Mediator.Send(new GetMyLecturerDashboardQuery(), cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Dashboard payload for the currently authenticated student: their real
+        /// active course-offering enrollments (with units) and their accommodation
+        /// assignment. Relationships are resolved server-side.
+        /// </summary>
+        [HttpGet("student-me")]
+        [Authorize(Policy = "StudentAccess")]
+        [ProducesResponseType(typeof(MyStudentDashboardDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetMyStudentDashboard(CancellationToken cancellationToken)
+        {
+            var result = await Mediator.Send(new GetMyStudentDashboardQuery(), cancellationToken);
+            return Ok(result);
+        }
     }
 }

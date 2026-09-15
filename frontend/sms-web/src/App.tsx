@@ -32,6 +32,7 @@ const CourseOfferingDetail = loadPage(() => import('./pages/CourseOfferingDetail
 const CourseOfferingFormPage = loadPage(() => import('./pages/CourseOfferingFormPage'), 'CourseOfferingFormPage');
 const Units = loadPage(() => import('./pages/Units'), 'Units');
 const AddUnitPage = loadPage(() => import('./pages/AddUnitPage'), 'AddUnitPage');
+const UnitStudyMaterialsPage = loadPage(() => import('./pages/UnitStudyMaterialsPage'), 'UnitStudyMaterialsPage');
 const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
@@ -114,6 +115,7 @@ function App() {
                         <Route path="units/new" element={<AddUnitPage />} />
                         <Route path="units/:id" element={<AddUnitPage />} />
                         <Route path="units/:id/edit" element={<AddUnitPage />} />
+                        <Route path="units/:id/materials" element={<UnitStudyMaterialsPage />} />
                         <Route path="classes" element={<Classes />} />
                         <Route path="timetable" element={<Timetable />} />
                         <Route path="accommodation" element={<Accommodation />} />

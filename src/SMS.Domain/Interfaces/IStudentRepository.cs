@@ -21,5 +21,12 @@ namespace SMS.Domain.Interfaces
         Task<int> CountStudentsAsync(CancellationToken cancellationToken = default);
         Task<IEnumerable<Student>> GetStudentsByProgrammeAsync(Guid programmeId, CancellationToken cancellationToken = default);
         Task<IEnumerable<Student>> GetStudentsBySemesterAsync(Guid semesterId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns the distinct unit ids the student is enrolled in, derived from
+        /// legacy enrollments (course → units), student-enrollment rows, and active
+        /// course-offering enrollments (offering → units).
+        /// </summary>
+        Task<IEnumerable<Guid>> GetEnrolledUnitIdsAsync(Guid studentId, CancellationToken cancellationToken = default);
     }
 }

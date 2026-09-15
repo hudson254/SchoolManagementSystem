@@ -9,17 +9,34 @@ import {
   Grid,
   LinearProgress,
   Alert,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import {
+  Description as DescriptionIcon,
+  Download as DownloadIcon,
+  Delete as DeleteIcon,
+  AttachFile as AttachFileIcon,
+} from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { assignmentService } from '../services/assignment.service';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  assignmentService,
+  ASSIGNMENT_DOCUMENT_EXTENSIONS,
+} from '../services/assignment.service';
+import { saveBlob, formatFileSize } from '../services/studyMaterial.service';
 import { useAuth } from '../hooks/useAuth';
-import { hasAnyRole, LECTURER, COORDINATOR } from '../utils/roles';
+import { hasAnyRole, LECTURER, COORDINATOR, STUDENT } from '../utils/roles';
+import { normalizeError } from '../utils/errors';
 
 export const AssignmentDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const canManageAssignments = hasAnyRole(user?.roles, LECTURER, COORDINATOR);
 
   const { data: assignment, isLoading, isError, refetch } = useQuery({
@@ -27,6 +44,32 @@ export const AssignmentDetailPage: React.FC = () => {
     queryFn: () => assignmentService.getAssignment(id!),
     enabled: !!id,
   });
+
+  // Question documents attached to this assignment. Access is enforced
+  // server-side; a 403 surfaces as an empty/denied state here.
+  const documentsQuery = useQuery({
+    queryKey: ['assignment-documents', id],
+    queryFn: () => assignmentService.getDocuments(id!),
+    enabled: !!id,
+    retry: false,
+  });
+
+  const downloadMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      const doc = (documentsQuery.data || []).find((d) => d.id === fileId);
+      const blob = await assignmentService.downloadDocument(id!, fileId);
+      saveBlob(blob, doc?.originalFileName || 'assignment-document');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (fileId: string) => assignmentService.deleteDocument(id!, fileId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assignment-documents', id] });
+    },
+  });
+
+  const documents = Array.isArray(documentsQuery.data) ? documentsQuery.data : [];
 
   if (isLoading) {
     return (
@@ -174,6 +217,97 @@ export const AssignmentDetailPage: React.FC = () => {
               </Grid>
             )}
           </Grid>
+        )}
+
+        {/* Question Documents */}
+        {a && (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="h6" fontWeight={600}>
+                Question Documents
+              </Typography>
+              {canManageAssignments && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<AttachFileIcon />}
+                  onClick={() => navigate(`/assignments/${id}/edit`)}
+                >
+                  Add Document
+                </Button>
+              )}
+            </Box>
+            {documentsQuery.isLoading ? (
+              <LinearProgress />
+            ) : documentsQuery.isError ? (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                {normalizeError(documentsQuery.error).message ||
+                  'You do not have access to the documents of this assignment.'}
+              </Alert>
+            ) : documents.length === 0 ? (
+              <Typography variant="body2" color="textSecondary" sx={{ py: 1 }}>
+                No question document has been attached to this assignment
+                {canManageAssignments ? '. Use "Add Document" to upload one.' : ' yet.'}
+              </Typography>
+            ) : (
+              <List dense>
+                {documents.map((doc) => (
+                  <ListItem
+                    key={doc.id}
+                    divider
+                    secondaryAction={
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Download">
+                          <IconButton
+                            size="small"
+                            onClick={() => downloadMutation.mutate(doc.id)}
+                            disabled={downloadMutation.isPending}
+                          >
+                            <DownloadIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {canManageAssignments && (
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => deleteMutation.mutate(doc.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    }
+                  >
+                    <Grid container sx={{ pr: 8 }}>
+                      <Grid item xs={12} sm={1}>
+                        <DescriptionIcon color="action" />
+                      </Grid>
+                      <Grid item xs={12} sm={11}>
+                        <ListItemText
+                          primary={doc.originalFileName}
+                          secondary={
+                            <Typography variant="caption" color="textSecondary">
+                              {doc.extension ? `${doc.extension.toUpperCase()} • ` : ''}
+                              {formatFileSize(doc.fileSizeBytes)} • uploaded{' '}
+                              {new Date(doc.uploadedAt).toLocaleDateString()}
+                              {doc.uploadedByUsername ? ` by ${doc.uploadedByUsername}` : ''}
+                            </Typography>
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+            <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+              Supported types: {ASSIGNMENT_DOCUMENT_EXTENSIONS.join(', ')}
+            </Typography>
+          </>
         )}
       </Paper>
     </Box>

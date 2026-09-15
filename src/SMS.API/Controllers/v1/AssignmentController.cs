@@ -191,5 +191,93 @@ namespace SMS.API.Controllers.v1
             var result = await Mediator.Send(query, cancellationToken);
             return Ok(result);
         }
+
+        /// <summary>
+        /// Upload an assignment question document (question sheet). Lecturer-only;
+        /// server-side ownership/teaching authorization is enforced in the handler.
+        /// </summary>
+        [HttpPost("{id}/documents")]
+        [Authorize(Policy = "LecturerAccess")]
+        [RequestSizeLimit(52_428_800)]
+        [ProducesResponseType(typeof(AssignmentDocumentDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UploadDocument(
+            Guid id,
+            [FromForm] IFormFile? file,
+            [FromForm] string? description,
+            CancellationToken cancellationToken)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { message = "A document file is required." });
+            }
+
+            var command = new UploadAssignmentDocumentCommand
+            {
+                AssignmentId = id,
+                FileStream = file.OpenReadStream(),
+                OriginalFileName = file.FileName,
+                Description = description
+            };
+
+            var result = await Mediator.Send(command, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// List the question documents attached to an assignment. Access is
+        /// enforced server-side (owner/unit lecturer, admin/coordinator, or
+        /// student enrolled in the assignment's unit).
+        /// </summary>
+        [HttpGet("{id}/documents")]
+        [ProducesResponseType(typeof(IEnumerable<AssignmentDocumentDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetDocuments(Guid id, CancellationToken cancellationToken)
+        {
+            var query = new GetAssignmentDocumentsQuery { AssignmentId = id };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Download an assignment question document through the authenticated
+        /// endpoint (never a raw storage path).
+        /// </summary>
+        [HttpGet("{id}/documents/{fileId}/download")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DownloadDocument(
+            Guid id, Guid fileId, CancellationToken cancellationToken)
+        {
+            var query = new DownloadAssignmentDocumentQuery { AssignmentId = id, FileId = fileId };
+            var result = await Mediator.Send(query, cancellationToken);
+            return File(result.Stream, result.ContentType, result.FileName);
+        }
+
+        /// <summary>
+        /// Delete (soft-delete) an assignment question document.
+        /// Lecturer-only; ownership authorization is enforced in the handler.
+        /// </summary>
+        [HttpDelete("{id}/documents/{fileId}")]
+        [Authorize(Policy = "LecturerAccess")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteDocument(
+            Guid id, Guid fileId, CancellationToken cancellationToken)
+        {
+            var command = new DeleteAssignmentDocumentCommand
+            {
+                AssignmentId = id,
+                FileId = fileId
+            };
+            await Mediator.Send(command, cancellationToken);
+            return NoContent();
+        }
     }
 }
+

@@ -107,6 +107,66 @@ namespace SMS.Persistence.Repositories
         {
             return await _dbSet.Where(s => s.CurrentSemesterId == semesterId && !s.IsDeleted).ToListAsync(cancellationToken);
         }
+
+        public async Task<IEnumerable<Guid>> GetEnrolledUnitIdsAsync(Guid studentId, CancellationToken cancellationToken = default)
+        {
+            var result = new HashSet<Guid>();
+
+            // 1. Legacy enrollments: Enrollment -> Course -> Units (plus direct UnitId)
+            var legacyUnitIds = await _context.Set<Enrollment>()
+                .Where(e => e.StudentId == studentId && e.IsActive && !e.IsDeleted)
+                .Select(e => e.Course.Units.Select(u => u.Id))
+                .SelectMany(ids => ids)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in legacyUnitIds)
+            {
+                result.Add(id);
+            }
+
+            var directUnitIds = await _context.Set<Enrollment>()
+                .Where(e => e.StudentId == studentId && e.IsActive && !e.IsDeleted && e.UnitId != null)
+                .Select(e => e.UnitId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in directUnitIds)
+            {
+                result.Add(id);
+            }
+
+            // 2. StudentEnrollment rows (per-unit enrollment)
+            var studentEnrollmentUnitIds = await _context.Set<StudentEnrollment>()
+                .Where(e => e.StudentId == studentId && e.Status == "Enrolled" && !e.IsDeleted)
+                .Select(e => e.UnitId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in studentEnrollmentUnitIds)
+            {
+                result.Add(id);
+            }
+
+            // 3. Active course-offering enrollments -> offering units
+            var offeringIds = await _context.Set<CourseOfferingEnrollment>()
+                .Where(e => e.StudentId == studentId && e.Status == "Active" && e.IsActive && !e.IsDeleted)
+                .Select(e => e.CourseOfferingId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (offeringIds.Count > 0)
+            {
+                var offeringUnitIds = await _context.Set<CourseOfferingUnit>()
+                    .Where(u => u.UnitId != null && offeringIds.Contains(u.CourseOfferingId) && u.IsActive && !u.IsDeleted)
+                    .Select(u => u.UnitId!.Value)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+                foreach (var id in offeringUnitIds)
+                {
+                    result.Add(id);
+                }
+            }
+
+            return result;
+        }
     }
 }
 

@@ -44,6 +44,7 @@ import {
   Group as GroupIcon,
   School as SchoolIcon,
   EventNote as EventNoteIcon,
+  MenuBook as MenuBookIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -310,6 +311,20 @@ export const CourseOfferingDetail: React.FC = () => {
                       <TableCell>{unit.credits}</TableCell>
                       <TableCell>{unit.contactHours}</TableCell>
                       <TableCell align="right">
+                        {unit.unitId && (
+                          <Tooltip title="Study Materials">
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                navigate(
+                                  `/units/${unit.unitId}/materials?name=${encodeURIComponent(unit.name || '')}&code=${encodeURIComponent(unit.code || '')}`
+                                )
+                              }
+                            >
+                              <MenuBookIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         {isAdmin && (
                           <>
                             <Tooltip title="Edit">

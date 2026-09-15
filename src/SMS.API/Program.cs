@@ -32,6 +32,7 @@ using SMS.Persistence.Repositories;
 using SMS.API.Logging;
 using SMS.API.Middleware;
 using SMS.API.Options;
+using SMS.Application.Services;
 using SMS.Notifications;
 using SMS.Notifications.Hubs;
 using SMS.Reporting;
@@ -607,6 +608,8 @@ builder.Services.AddScoped<IGradeChangeHistoryRepository, GradeChangeHistoryRepo
 builder.Services.AddScoped<IUnitResultRepository, UnitResultRepository>();
 builder.Services.AddScoped<IModerationRecordRepository, ModerationRecordRepository>();
 builder.Services.AddScoped<IAssessmentExemptionRepository, AssessmentExemptionRepository>();
+builder.Services.AddScoped<ILectureNoteRepository, LectureNoteRepository>();
+builder.Services.AddScoped<SMS.Application.Common.Interfaces.IAcademicAccessService, SMS.Application.Services.AcademicAccessService>();
 builder.Services.AddScoped<ICertificateRuleRepository, CertificateRuleRepository>();
 // Register the centralized Assessment Engine - the single authority for all
 // assessment, weighting, grading, moderation, publication, certificate

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   TextField,
@@ -16,14 +16,25 @@ import {
   Switch,
   FormControlLabel,
   Slider,
+  Input,
+  Chip,
+  LinearProgress,
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { assignmentService } from '../../services/assignment.service';
+import {
+  assignmentService,
+  ASSIGNMENT_DOCUMENT_EXTENSIONS,
+  ASSIGNMENT_DOCUMENT_MAX_SIZE_MB,
+} from '../../services/assignment.service';
 import { unitService } from '../../services/unit.service';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  AttachFile as AttachFileIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material';
 
 const assignmentSchema = z.object({
   title: z.string().min(1, 'Assignment title is required').max(200),
@@ -54,6 +65,13 @@ export const AssignmentForm: React.FC<AssignmentFormProps> = ({
 }) => {
   const isEditMode = !!assignmentId;
   const { user } = useAuth();
+
+  // Selected question document (question sheet). Validated client-side against
+  // the same rules the backend enforces (extension whitelist + 50 MB limit);
+  // the server re-validates everything (extension, MIME/magic bytes, size).
+  const [questionFile, setQuestionFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const {
     control,
@@ -96,7 +114,7 @@ export const AssignmentForm: React.FC<AssignmentFormProps> = ({
 
   // Create/Update mutation
   const mutation = useMutation({
-    mutationFn: (data: AssignmentFormData) => {
+    mutationFn: async (data: AssignmentFormData) => {
       // HTML datetime-local inputs yield 'yyyy-MM-ddTHH:mm' and an empty string
       // when left blank. The API binds DateTime fields to PostgreSQL
       // 'timestamp with time zone' columns, which require a sortable ISO-8601
@@ -114,13 +132,31 @@ export const AssignmentForm: React.FC<AssignmentFormProps> = ({
         dueDate: toUtcDateTime(data.dueDate),
         closingDate: toUtcDateTime(data.closingDate),
       };
-      if (isEditMode) {
-        return assignmentService.updateAssignment(assignmentId!, payload);
+      const saved = isEditMode
+        ? await assignmentService.updateAssignment(assignmentId!, payload)
+        : await assignmentService.createAssignment(payload);
+
+      // Upload the selected question document to the saved assignment.
+      if (questionFile) {
+        const targetId = isEditMode ? assignmentId! : (saved as any)?.id;
+        if (targetId) {
+          setUploadProgress(0);
+          await assignmentService.uploadDocument(
+            targetId,
+            questionFile,
+            data.instructions || undefined,
+            setUploadProgress
+          );
+          setUploadProgress(null);
+        }
       }
-      return assignmentService.createAssignment(payload);
+      return saved;
     },
     onSuccess: () => {
       onSuccess?.();
+    },
+    onError: () => {
+      setUploadProgress(null);
     },
   });
 
@@ -145,6 +181,35 @@ export const AssignmentForm: React.FC<AssignmentFormProps> = ({
 
   const onSubmit = (data: AssignmentFormData) => {
     mutation.mutate(data);
+  };
+
+  const handleQuestionFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setFileError(null);
+    if (!file) {
+      setQuestionFile(null);
+      return;
+    }
+    const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!ASSIGNMENT_DOCUMENT_EXTENSIONS.includes(extension)) {
+      setQuestionFile(null);
+      setFileError(
+        `Unsupported file type "${extension || 'unknown'}". Allowed: ${ASSIGNMENT_DOCUMENT_EXTENSIONS.join(', ')}`
+      );
+      return;
+    }
+    if (file.size > ASSIGNMENT_DOCUMENT_MAX_SIZE_MB * 1024 * 1024) {
+      setQuestionFile(null);
+      setFileError(`File exceeds the ${ASSIGNMENT_DOCUMENT_MAX_SIZE_MB} MB limit.`);
+      return;
+    }
+    setQuestionFile(file);
+  };
+
+  const handleRemoveQuestionFile = () => {
+    setQuestionFile(null);
+    setFileError(null);
+    setUploadProgress(null);
   };
 
   if (isLoading) {
@@ -331,6 +396,52 @@ export const AssignmentForm: React.FC<AssignmentFormProps> = ({
               />
             )}
           />
+        </Grid>
+        <Grid item xs={12}>
+          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+            Assignment Question Document (optional)
+          </Typography>
+          <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+            Attach the question sheet. Allowed types: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX —
+            max {ASSIGNMENT_DOCUMENT_MAX_SIZE_MB} MB.
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<AttachFileIcon />}
+              disabled={mutation.isPending}
+            >
+              Select Question Document
+              <Input
+                type="file"
+                onChange={handleQuestionFileSelect}
+                sx={{ display: 'none' }}
+                inputProps={{ accept: ASSIGNMENT_DOCUMENT_EXTENSIONS.join(',') }}
+              />
+            </Button>
+            {questionFile && (
+              <Chip
+                label={`${questionFile.name} (${Math.max(1, Math.round(questionFile.size / 1024))} KB)`}
+                onDelete={mutation.isPending ? undefined : handleRemoveQuestionFile}
+                deleteIcon={<CloseIcon />}
+                variant="outlined"
+              />
+            )}
+          </Box>
+          {fileError && (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {fileError}
+            </Alert>
+          )}
+          {uploadProgress !== null && mutation.isPending && (
+            <Box sx={{ mt: 1 }}>
+              <LinearProgress variant="determinate" value={uploadProgress} />
+              <Typography variant="caption" color="textSecondary">
+                Uploading question document… {uploadProgress}%
+              </Typography>
+            </Box>
+          )}
         </Grid>
         <Grid item xs={12}>
           <Controller

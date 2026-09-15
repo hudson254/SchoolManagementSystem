@@ -19,5 +19,11 @@ namespace SMS.Domain.Interfaces
         /// lecturer profile exists for that user.
         /// </summary>
         Task<Lecturer> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns the distinct unit ids this lecturer is authorized to teach,
+        /// derived from unit allocations and course-offering lecturer assignments.
+        /// </summary>
+        Task<IEnumerable<Guid>> GetTaughtUnitIdsAsync(Guid lecturerId, CancellationToken cancellationToken = default);
     }
 }

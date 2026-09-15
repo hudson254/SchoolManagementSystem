@@ -97,4 +97,65 @@ export const assignmentService = {
 
   getStudentAssignments: (studentId: string, semesterId?: string) =>
     api.get<Assignment[]>(`/assignments/student/${studentId}`, { params: { semesterId } }),
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Assignment question documents. The upload endpoint is multipart/form-data
+  // (LecturerAccess). List returns a plain array of AssignmentDocument.
+  // Downloads return the raw file stream (blob) — never a storage path.
+  // ────────────────────────────────────────────────────────────────────────
+
+  uploadDocument: (
+    assignmentId: string,
+    file: File,
+    description?: string,
+    onProgress?: (progress: number) => void
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (description) {
+      formData.append('description', description);
+    }
+    return api.post<AssignmentDocument>(`/assignments/${assignmentId}/documents`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent: any) => {
+        if (onProgress && progressEvent?.total) {
+          onProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+        }
+      },
+    });
+  },
+
+  getDocuments: (assignmentId: string) =>
+    api.get<AssignmentDocument[]>(`/assignments/${assignmentId}/documents`),
+
+  downloadDocument: (assignmentId: string, fileId: string) =>
+    api.get<Blob>(`/assignments/${assignmentId}/documents/${fileId}/download`, {
+      responseType: 'blob',
+    }),
+
+  deleteDocument: (assignmentId: string, fileId: string) =>
+    api.delete<void>(`/assignments/${assignmentId}/documents/${fileId}`),
 };
+
+export interface AssignmentDocument {
+  id: string;
+  assignmentId: string;
+  originalFileName: string;
+  extension: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedByUserId?: string | null;
+  uploadedByUsername?: string | null;
+  uploadedAt: string;
+  description?: string | null;
+  version: number;
+  status: string;
+}
+
+/** Shared list of question-document types accepted by the backend validation. */
+export const ASSIGNMENT_DOCUMENT_EXTENSIONS = [
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+];
+
+/** Backend AssignmentBrief category limit (50 MB). */
+export const ASSIGNMENT_DOCUMENT_MAX_SIZE_MB = 50;

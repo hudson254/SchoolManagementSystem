@@ -43,6 +43,44 @@ namespace SMS.Persistence.Repositories
             return await _dbSet
                 .FirstOrDefaultAsync(l => l.UserId == userId.ToString() && !l.IsDeleted, cancellationToken);
         }
+
+        public async Task<IEnumerable<Guid>> GetTaughtUnitIdsAsync(Guid lecturerId, CancellationToken cancellationToken = default)
+        {
+            var result = new HashSet<Guid>();
+
+            // 1. Direct unit allocations (active status)
+            var allocatedUnitIds = await _context.Set<UnitAllocation>()
+                .Where(u => u.LecturerId == lecturerId && u.Status == "Active" && !u.IsDeleted)
+                .Select(u => u.UnitId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            foreach (var id in allocatedUnitIds)
+            {
+                result.Add(id);
+            }
+
+            // 2. Course-offering lecturer assignments -> offering units
+            var offeringIds = await _context.Set<CourseOfferingLecturer>()
+                .Where(l => l.LecturerId == lecturerId && l.IsActive && !l.IsDeleted)
+                .Select(l => l.CourseOfferingId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (offeringIds.Count > 0)
+            {
+                var offeringUnitIds = await _context.Set<CourseOfferingUnit>()
+                    .Where(u => u.UnitId != null && offeringIds.Contains(u.CourseOfferingId) && u.IsActive && !u.IsDeleted)
+                    .Select(u => u.UnitId!.Value)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+                foreach (var id in offeringUnitIds)
+                {
+                    result.Add(id);
+                }
+            }
+
+            return result;
+        }
     }
 }
 

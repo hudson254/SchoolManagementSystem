@@ -3826,6 +3826,9 @@ namespace SMS.Persistence.Migrations
                     b.Property<DateTime>("UploadDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("UploadFileId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Version")
                         .HasColumnType("integer");
 
@@ -3834,6 +3837,8 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("LecturerId");
 
                     b.HasIndex("UnitId");
+
+                    b.HasIndex("UploadFileId");
 
                     b.ToTable("LectureNotes");
                 });
@@ -7123,9 +7128,15 @@ namespace SMS.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId");
+
                     b.Navigation("Lecturer");
 
                     b.Navigation("Unit");
+
+                    b.Navigation("UploadFile");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Lecturer", b =>

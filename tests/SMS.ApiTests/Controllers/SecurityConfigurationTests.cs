@@ -39,7 +39,8 @@ namespace SMS.ApiTests.Controllers
 
             response.Headers.Contains("X-Frame-Options").Should().BeTrue();
             var headerValue = response.Headers.GetValues("X-Frame-Options").FirstOrDefault();
-            headerValue.Should().Be("SAMEORIGIN");
+            // The API intentionally enforces the strongest framing protection.
+            headerValue.Should().Be("DENY");
         }
 
         [Fact]
