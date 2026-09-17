@@ -1,0 +1,130 @@
+# OMS (Order Management System) Integration Test Environment
+#
+# Provides a deterministic, self-contained environment for backend integration
+# tests that must run against a REAL PostgreSQL service and the REAL application
+# image (built from docker/Dockerfile.api). Nothing here depends on the
+# developer workstation's filesystem at runtime: all state lives in the named
+# volumes declared at the bottom of this file.
+#
+# Exact usage (run from the repository root):
+#   source ./oms_env.sh                                   # load defaults (optional)
+#   docker compose -f docker/docker-compose.oms.yml config       # validate
+#   docker compose -f docker/docker-compose.oms.yml up -d --build
+#   docker compose -f docker/docker-compose.oms.yml ps
+#   docker compose -f docker/docker-compose.oms.yml down
+#
+# IMPORTANT (compose interpolation): defaults MUST use the ${VAR:-default}
+# form. ${VAR:default} is NOT valid compose syntax and aborts
+# `docker compose config` with "invalid interpolation format".
+#
+# Secrets: none are embedded. Every credential below is a non-production test
+# value that can be overridden from the environment (see oms_env.sh).
+#
+# The explicit project name is REQUIRED: every compose file in this repository
+# lives in docker/, so without it Docker Compose would derive the project name
+# "docker" and share it with the production deployment. An explicit name keeps
+# `up`, `down` and `--remove-orphans` scoped to this test environment only.
+name: sms-oms-test
+
+services:
+  # PostgreSQL for OMS integration tests. Isolated from the dev/production
+  # databases: dedicated name, user and volume. Published on ${OMS_POSTGRES_PORT}
+  # (default 5434) so host-run test suites can also reach it.
+  postgres:
+    image: postgres:16-alpine
+    container_name: oms-test-postgres
+    environment:
+      POSTGRES_DB: ${OMS_DB_NAME:-oms_test}
+      POSTGRES_USER: ${OMS_DB_USER:-oms_test_user}
+      POSTGRES_PASSWORD: ${OMS_DB_PASSWORD:-testpass123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - oms_test_postgres_data:/var/lib/postgresql/data
+      # init-db.sql pulls in init-db-rls.sql via \i, and the postgres entrypoint
+      # runs init scripts with ON_ERROR_STOP=1, so BOTH files must be mounted
+      # or first-time initialisation aborts and the container restart-loops.
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./init-db-rls.sql:/docker-entrypoint-initdb.d/init-db-rls.sql:ro
+    ports:
+      - "${OMS_POSTGRES_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - oms-test-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Application under test. Reaches PostgreSQL by service name "postgres" on the
+  # oms-test-network, applies the real EF Core migrations on startup, and writes
+  # to persistent volumes (no ephemeral container-layer storage).
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    image: sms-api-oms-test:local
+    container_name: oms-test-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testing
+      ASPNETCORE_URLS: http://+:80
+      HTTP_PORTS: 80
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=${OMS_DB_NAME:-oms_test};Username=${OMS_DB_USER:-oms_test_user};Password=${OMS_DB_PASSWORD:-testpass123}"
+      JWT_SECRET: ${JWT_SECRET:-test-jwt-secret-min-64-characters-long-for-hmac-sha256-testing}
+      JWT__Issuer: OMS.Test
+      JWT__Audience: OMS.Web
+      JWT__ExpiryMinutes: 60
+      Frontend__Url: ${FRONTEND_URL:-http://localhost:3000}
+      Cors__AllowedOrigins__0: ${FRONTEND_URL:-http://localhost:3000}
+      # OMS storage contract - same keys as production, test paths/retention.
+      RoadsDb__File: ${ROADS_DB_FILE:-/app/data/roads.db}
+      WALRecovery__Target: ${WAL_RECOVERY_TARGET:-latest}
+      WALRecovery__RecoveryPath: ${WAL_RECOVERY_PATH:-/app/data/wal-recovery}
+      OrderManifestStorage__Enabled: "true"
+      OrderManifestStorage__BasePath: ${ORDER_MANIFEST_STORAGE_PATH:-/app/data/order-manifests}
+      OrderManifestStorage__FilePrefix: ${ORDER_MANIFEST_FILE_PREFIX:-order-manifest-}
+      OrderManifestStorage__FileExtension: .json
+      OrderManifestStorage__RetentionDays: ${ORDER_MANIFEST_RETENTION_DAYS:-7}
+      FileStorage__Path: /app/uploads
+      TZ: Africa/Nairobi
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - oms_test_uploads:/app/uploads
+      - oms_test_data:/app/data
+      - oms_test_logs:/app/logs
+      - oms_test_dataprotection:/app/dataprotection-keys
+    ports:
+      - "${OMS_API_PORT:-5080}:80"
+    restart: unless-stopped
+    networks:
+      - oms-test-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  oms-test-network:
+    driver: bridge
+
+volumes:
+  oms_test_postgres_data:
+  oms_test_uploads:
+  oms_test_data:
+  oms_test_logs:
+  oms_test_dataprotection:

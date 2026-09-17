@@ -39,6 +39,15 @@ RUN addgroup --system --gid 1001 appgroup && \
 # Copy published application
 COPY --from=build /app/publish .
 
+# Create the writable directories the application needs BEFORE the chown below.
+# A fresh named volume mounted on one of these paths is initialised by Docker
+# from the image directory (including its ownership). If the directory does not
+# exist in the image, the volume is created root-owned and the non-root appuser
+# (uid 1001) cannot write to it, which breaks DataProtection keys (session
+# cookies -> every request throws UnauthorizedAccessException), Serilog file
+# logging, uploads and /app/data.
+RUN mkdir -p /app/logs /app/uploads /app/data /app/dataprotection-keys
+
 # Set ownership to the non-root user
 RUN chown -R appuser:appgroup /app
 

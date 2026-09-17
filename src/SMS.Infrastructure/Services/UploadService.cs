@@ -137,10 +137,25 @@ namespace SMS.Infrastructure.Services
             var version = await _uploadRepository.GetNextVersionAsync(baseIdentifier);
             var generatedFileName = $"{baseIdentifier}_v{version}{extension}";
 
-            // Step 5: Determine storage path
-            var storagePath = BuildStoragePath(category, context, generatedFileName);
+            // Step 6: Save file to storage FIRST. FileStorageService prefixes the
+            // stored file with a GUID and returns the real container-relative
+            // path, so metadata/download/delete must use that actual path, not
+            // the pre-GUID logical path. Persist metadata only after storage
+            // succeeds so a storage failure cannot orphan a DB row.
+            string storagePath;
+            try
+            {
+                using var uploadStream = new MemoryStream(fileBytes);
+                storagePath = await _fileStorage.UploadFileAsync(uploadStream, generatedFileName, GetContainerName(category, context));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to store file: {FileName}", generatedFileName);
+                await LogUploadAuditAsync(originalFileName, userId, username, category, false, "STORAGE_FAILED");
+                throw new InvalidOperationException("The file upload failed. Please check the file and try again.");
+            }
 
-            // Step 6: Create metadata record
+            // Step 7: Create metadata record (uses the actual stored path).
             var uploadFile = new UploadFile
             {
                 OriginalFileName = originalFileName,
@@ -166,19 +181,6 @@ namespace SMS.Infrastructure.Services
                 LecturerId = context?.LecturerId,
                 Description = context?.Description
             };
-
-            // Step 7: Save file to storage
-            try
-            {
-                using var uploadStream = new MemoryStream(fileBytes);
-                await _fileStorage.UploadFileAsync(uploadStream, generatedFileName, GetContainerName(category, context));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to store file: {FileName}", generatedFileName);
-                await LogUploadAuditAsync(originalFileName, userId, username, category, false, "STORAGE_FAILED");
-                throw new InvalidOperationException("The file upload failed. Please check the file and try again.");
-            }
 
             // Step 8: Persist metadata
             await _uploadRepository.AddAsync(uploadFile);

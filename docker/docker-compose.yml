@@ -48,6 +48,17 @@ services:
       JWT__ExpiryMinutes: 60 
       FRONTEND_URL: http://192.168.110.161
       Cors__AllowedOrigins__0: http://192.168.110.161
+      # OMS (Order Management System) configuration.
+      # Compose defaults MUST use the ${VAR:-default} form; ${VAR:default} is not
+      # valid interpolation syntax and aborts `docker compose config`.
+      RoadsDb__File: ${ROADS_DB_FILE:-/app/data/roads.db}
+      WALRecovery__Target: ${WAL_RECOVERY_TARGET:-latest}
+      WALRecovery__RecoveryPath: ${WAL_RECOVERY_PATH:-/app/data/wal-recovery}
+      OrderManifestStorage__Enabled: ${ORDER_MANIFEST_STORAGE_ENABLED:-true}
+      OrderManifestStorage__BasePath: ${ORDER_MANIFEST_STORAGE_PATH:-/app/data/order-manifests}
+      OrderManifestStorage__FilePrefix: ${ORDER_MANIFEST_FILE_PREFIX:-order-manifest-}
+      OrderManifestStorage__FileExtension: .json
+      OrderManifestStorage__RetentionDays: ${ORDER_MANIFEST_RETENTION_DAYS:-30}
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,6 +66,9 @@ services:
       - api_logs:/app/logs
       - api_data:/app/data
       - api_uploads:/app/uploads
+      # NOTE: roads.db, /wal-recovery and /order-manifests all live under
+      # /app/data, which is already the api_data volume above. Do NOT add a
+      # second volume on /app/data: the later mount silently shadows the first.
     ports:
       - "5000:80"
     restart: unless-stopped

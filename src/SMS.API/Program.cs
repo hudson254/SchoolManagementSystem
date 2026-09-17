@@ -562,7 +562,17 @@ builder.Services.AddSingleton<SMS.Infrastructure.Services.IErrorRepository, SMS.
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 // NOTE: IPdfGenerator/IExcelGenerator are registered by SMS.Reporting (AddReporting)
 // which provides the real QuestPDF/EPPlus implementations. The Infrastructure
-// placeholders (PdfGenerator/ExcelGenerator) are removed to avoid duplicate registrations.
+// placeholders (PdfGenerator/ExcelGenerator) are removed to avoid duplicate
+// registrations.
+// Register the centralized upload pipeline (UploadService + UploadRepository).
+// NOTE: AddInfrastructureServices() in Extensions/ServiceExtensions.cs is NOT
+// invoked by Program.cs (services are registered manually here). Without these
+// registrations any handler injecting IUploadService/IUploadRepository (assignment
+// question documents, study materials) fails at activation with HTTP 500
+// "Unable to resolve service for type 'SMS.Domain.Interfaces.IUploadService'".
+builder.Services.Configure<UploadSettings>(builder.Configuration.GetSection(UploadSettings.SectionName));
+builder.Services.AddScoped<IUploadRepository, UploadRepository>();
+builder.Services.AddScoped<IUploadService, UploadService>();
 builder.Services.AddScoped<SMS.Multitenancy.Interfaces.ITenantResolver, TenantResolver>();
 builder.Services.AddScoped<SMS.Infrastructure.MultiTenancy.TenantContext>();
 builder.Services.AddScoped<SMS.Domain.Interfaces.ITenantContext>(sp =>
@@ -590,6 +600,9 @@ builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<ICalendarEventRepository, CalendarEventRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IReportVerificationRepository, ReportVerificationRepository>();
+// Academic access checks used by assignment documents and study materials.
+builder.Services.AddScoped<SMS.Application.Common.Interfaces.IAcademicAccessService, SMS.Application.Services.AcademicAccessService>();
+
 builder.Services.AddScoped<IUnitAllocationRepository, UnitAllocationRepository>();
 builder.Services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
 builder.Services.AddScoped<ICourseOfferingRepository, CourseOfferingRepository>();
@@ -765,6 +778,42 @@ if (!Path.IsPathRooted(fileStoragePath))
 // PhysicalFileProvider — otherwise the API fails to start when the
 // directory is absent (e.g. in the test bin directory).
 Directory.CreateDirectory(fileStoragePath);
+
+// OMS storage contract. The RoadsDb / WALRecovery / OrderManifestStorage settings
+// are provisioned by configuration (appsettings.Production.json + the Compose
+// environment variables). Resolve them to real, writable directories at startup,
+// mirroring the FileStorage handling above, so a deployment cannot end up
+// pointing at a path that does not exist inside the container. Every key is
+// optional and a failure to create a directory never prevents startup.
+void EnsureStorageDirectory(string? path, string settingName)
+{
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return;
+    }
+
+    try
+    {
+        Directory.CreateDirectory(path);
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Could not create the directory configured by {Setting}: {Path}", settingName, path);
+    }
+}
+
+var roadsDbFile = builder.Configuration.GetValue<string>("RoadsDb:File");
+if (!string.IsNullOrWhiteSpace(roadsDbFile))
+{
+    var roadsDbDirectory = Path.GetDirectoryName(Path.GetFullPath(roadsDbFile));
+    if (!string.IsNullOrWhiteSpace(roadsDbDirectory))
+    {
+        EnsureStorageDirectory(roadsDbDirectory, "RoadsDb:File");
+    }
+}
+
+EnsureStorageDirectory(builder.Configuration.GetValue<string>("WALRecovery:RecoveryPath"), "WALRecovery:RecoveryPath");
+EnsureStorageDirectory(builder.Configuration.GetValue<string>("OrderManifestStorage:BasePath"), "OrderManifestStorage:BasePath");
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(fileStoragePath),

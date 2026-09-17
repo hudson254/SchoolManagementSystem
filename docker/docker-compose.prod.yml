@@ -65,6 +65,17 @@ services:
       # Production CORS: must be set to the actual frontend URL
       Frontend__Url: ${FRONTEND_URL:?FRONTEND_URL is required in production}
       Cors__AllowedOrigins__0: ${FRONTEND_URL:?FRONTEND_URL is required in production}
+      # OMS (Order Management System) configuration.
+      # Compose defaults MUST use the ${VAR:-default} form; ${VAR:default} is not
+      # valid interpolation syntax and aborts `docker compose config`.
+      RoadsDb__File: ${ROADS_DB_FILE:-/app/data/roads.db}
+      WALRecovery__Target: ${WAL_RECOVERY_TARGET:-latest}
+      WALRecovery__RecoveryPath: ${WAL_RECOVERY_PATH:-/app/data/wal-recovery}
+      OrderManifestStorage__Enabled: ${ORDER_MANIFEST_STORAGE_ENABLED:-true}
+      OrderManifestStorage__BasePath: ${ORDER_MANIFEST_STORAGE_PATH:-/app/data/order-manifests}
+      OrderManifestStorage__FilePrefix: ${ORDER_MANIFEST_FILE_PREFIX:-order-manifest-}
+      OrderManifestStorage__FileExtension: .json
+      OrderManifestStorage__RetentionDays: ${ORDER_MANIFEST_RETENTION_DAYS:-30}
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +84,10 @@ services:
       - api_data:/app/data
       - api_uploads:/app/uploads
       - api_dataprotection:/app/dataprotection-keys
+      # NOTE: roads.db, /wal-recovery and /order-manifests all live under
+      # /app/data, which is already the api_data volume below. Do NOT add a
+      # second volume on /app/data: the later mount silently shadows the first
+      # one, which would hide the existing production data in api_data.
     # Production: API port is not exposed to the host. nginx is the only entry point.
     expose:
       - "80"

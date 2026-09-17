@@ -1,0 +1,4 @@
+# Root entry point; paths in the included file remain relative to docker/.
+include:
+  - path: ./docker/docker-compose.oms.yml
+name: sms-oms-test
