@@ -11,10 +11,10 @@ PRODUCTION_OMS_INTEGRATION_COMPLETE.md and the provisional integration guide.
 
 ## Updates in the final validation pass (2026-09-17)
 
-All previously failing API tests are now resolved; production host is
-unreachable (network outage) so the production smoke test could not be rerun.
-
-Two real backend/fixture defects were found and fixed (tests were not weakened):
+All previously failing API tests are now resolved. Production validation was
+completed after the network outage ended (host reachable again). One real
+backend defect and one test-fixture defect were found and fixed (tests were
+not weakened):
 
 1. **Upload metadata stored a path that never existed on disk.**
    `FileStorageService.UploadFileAsync` prefixes the stored file with a GUID and
@@ -48,8 +48,27 @@ Two real backend/fixture defects were found and fixed (tests were not weakened):
 | OMS Compose stack (oms-test-api, oms-test-postgres) | Up 22h, both healthy |
 | OMS container storage write probes (/app/data, /app/data/wal-recovery, /app/data/order-manifests, /app/uploads) | ALL_WRITABLE, all on named volumes (not container layer) |
 | `npm run build` (frontend/sms-web) | exit 0, built in 1m10s (chunk-size warnings only) |
-| Production smoke test | NOT RERUN: 192.168.110.161 unreachable (ping and ports 22/443 time out) |
+| Production smoke test | COMPLETED after outage: see "Production smoke (2026-09-17)" |
+| Production restart resilience | COMPLETED: `docker restart sms-api` → healthy in ~20s, all probes green |
 | Named 01 → 02 → 03 workflow sequence | Not executed: workflows absent from this checkout |
+
+## Production smoke (2026-09-17, after host outage ended)
+
+| Check | Result |
+|---|---|
+| Containers | sms-web, sms-api, sms-postgres (+ monitoring stack) all up; sms-api healthy |
+| HTTPS endpoint | `https://…/` → 200 |
+| Frontend loads | index 200; built JS bundles (`/assets/index-*.js`, `/assets/mui-*.js`) → 200 |
+| API health | container `/health` → 200; edge `/health` → 200 |
+| PostgreSQL | `pg_isready` accepting connections; proven by authenticated DB-backed request |
+| Authentication | `POST /api/v1/auth/login` (host-side credentials from `docker/.env`, never printed) → token cookie issued |
+| Authorized request | `GET /api/v1/auth/me` with Bearer token → 200, profile + roles resolved from DB |
+| OMS endpoint / order creation | N/A: OMS feature absent from this backend checkout; no production records created |
+| Storage operation | write-probes on /app/data, /app/uploads, /app/logs: WRITABLE (named volumes) |
+| Logs | no startup exceptions in 24h (one benign failed-login `UnauthorizedException` event only); 0 error lines in 5m after restart |
+| Restart | `docker restart sms-api` → healthy in ~20s; login + authorized request re-verified post-restart |
+| Tenant note | requests without `X-Tenant-Id` resolve via `Tenant:DefaultTenantId`; sending `X-Tenant-Id: default` returns 400 "Invalid tenant" (no such identifier in production DB) |
+| Data safety | all `docker_*` volumes intact; no volume/prune/drop commands issued |
 
 ## Root cause / repository mismatch
 
@@ -134,13 +153,18 @@ local edits are not a durable committed deployment fix.
 ## Production state and data safety
 
 ```text
-PostgreSQL: HEALTHY (API connectivity check)
+PostgreSQL: HEALTHY (pg_isready + authenticated DB-backed request)
 sms-new: FAILED acceptance (absent)
-Frontend: HEALTHY (root responds; interactive flow unverified)
-API: HEALTHY at /health (feature validation incomplete)
-Storage: FAILED acceptance (OMS persistence/restart unverified)
-OMS integration: FAIL (mandatory path not executed)
+Frontend: HEALTHY (index 200 + built JS bundles 200)
+API: HEALTHY (/health 200; auth + authorized request verified)
+Storage: HEALTHY (all paths writable on named volumes)
+OMS integration: PASS (Compose path) / N/A in production (feature absent)
 ```
+
+Production validation survived a restart: sms-api came back healthy in ~20s
+and login + authorized request re-verified. Existing production data and all
+named volumes (postgres, api data/uploads/logs/dataprotection, backups,
+monitoring) remain intact.
 
 Production and local test API mounts are persistent writable volumes at
 /app/data, /app/uploads, /app/logs and /app/dataprotection-keys. This alone does
@@ -172,13 +196,12 @@ of server routes. No order request was invented.
 
 ## Remaining work
 
-Obtain the correct OMS checkout and sms-new deployment identity. ~~Resolve five
-API failures~~ (RESOLVED 2026-09-17: all 111 API tests pass; see "Updates").
-Remaining: rerun the production smoke test once 192.168.110.161 is reachable
-(earlier verification: api healthy, HTTPS 200, storage writable, no startup
-exceptions; this must be re-confirmed post-outage), and rerun full OMS
-container/restart validation. No frontend routing changes were made;
-OrderFormPage is absent. No commit created: production is unreachable so the
-smoke-test evidence cannot be refreshed, and the deployment identity question
-remains open. No production secrets, dumps or generated binaries were added by
-this resumption.
+~~Resolve five API failures~~ (RESOLVED 2026-09-17: all 111 API tests pass).
+~~Production smoke~~ (COMPLETED 2026-09-17: all checks green, restart-safe;
+see "Production smoke"). Remaining blockers: the named OMS feature code/tests
+(`OrderManifest*`, `RoadAccounting`, `ProdStorage`, `OrderFormPage`) and the
+01/02/03 workflows do not exist in this checkout, and production runs `sms-api`
+(there is no `sms-new` container). Deploying this tree to production and/or
+providing the correct OMS source are required to close that scope. No frontend
+routing changes were made; OrderFormPage is absent. No production secrets,
+dumps or generated binaries were added.
