@@ -36,6 +36,11 @@ namespace SMS.Domain.Interfaces
         IModerationRecordRepository ModerationRecords { get; }
         IAssessmentExemptionRepository AssessmentExemptions { get; }
 
+        // OMS repositories (Phase 2A)
+        IOrderRepository Orders { get; }
+        IRoadAccountRepository RoadAccounts { get; }
+        IOrderImportRepository OrderImports { get; }
+
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
         Task BeginTransactionAsync(CancellationToken cancellationToken = default);
         Task CommitTransactionAsync(CancellationToken cancellationToken = default);

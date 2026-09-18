@@ -531,6 +531,24 @@ builder.Services.AddApplication();
 // owner requirement. Password resets are now admin-mediated (Phase 2).
 builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection("FileStorage"));
 
+// OMS (Order Management System) — Phase 2 configuration binding + services.
+// Binds the EXISTING OMS configuration keys (no keys renamed or removed):
+//   OrderManifestStorage:Enabled/BasePath/FilePrefix/FileExtension/RetentionDays
+//   RoadsDb:File, WALRecovery:Target/WALRecovery:RecoveryPath
+builder.Services.Configure<SMS.Infrastructure.Options.OrderManifestStorageOptions>(
+    builder.Configuration.GetSection(SMS.Infrastructure.Options.OrderManifestStorageOptions.SectionName));
+builder.Services.Configure<SMS.Infrastructure.Options.RoadsDbOptions>(
+    builder.Configuration.GetSection(SMS.Infrastructure.Options.RoadsDbOptions.SectionName));
+builder.Services.Configure<SMS.Infrastructure.Options.WalRecoveryOptions>(
+    builder.Configuration.GetSection(SMS.Infrastructure.Options.WalRecoveryOptions.SectionName));
+// OMS domain services (concurrency-safe numbering, tenant-segmented manifest
+// storage, Road Accounting boundary — the latter performs no calculations yet,
+// see Documentation/OMS/OMS_OPEN_REQUIREMENTS.md #18).
+builder.Services.AddScoped<IOrderNumberGenerator, SMS.Infrastructure.Services.OrderNumberGenerator>();
+builder.Services.AddScoped<IOrderManifestStorage, SMS.Infrastructure.Storage.OrderManifestStorage>();
+builder.Services.AddScoped<IRoadAccountingService, SMS.Infrastructure.Services.RoadAccountingService>();
+
+
 // Register services
 builder.Services.AddScoped<IUserManagerService, SMS.Infrastructure.Services.UserManagerService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();

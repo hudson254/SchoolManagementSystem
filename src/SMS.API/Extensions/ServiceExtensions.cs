@@ -75,6 +75,11 @@ namespace SMS.API.Extensions
             services.AddScoped<IModerationRecordRepository, ModerationRecordRepository>();
             services.AddScoped<IAssessmentExemptionRepository, AssessmentExemptionRepository>();
 
+            // OMS repositories (Phase 2A)
+            services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IRoadAccountRepository, RoadAccountRepository>();
+            services.AddScoped<IOrderImportRepository, OrderImportRepository>();
+
             return services;
         }
 

@@ -182,3 +182,6 @@ backups/
 *.manifest
 *.manifest.xml
 *.webmanifest
+# OMS local test/debug artifacts
+.artifacts/
+.omsart/

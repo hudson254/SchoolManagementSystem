@@ -46,6 +46,10 @@ namespace SMS.Persistence.Repositories
         private IUnitResultRepository _unitResults;
         private IModerationRecordRepository _moderationRecords;
         private IAssessmentExemptionRepository _assessmentExemptions;
+        private IOrderRepository _orders;
+        private IRoadAccountRepository _roadAccounts;
+        private IOrderImportRepository _orderImports;
+
 
         public UnitOfWork(ApplicationDbContext context, ILogger<UnitOfWork> logger, ILoggerFactory loggerFactory)
         {
@@ -140,6 +144,15 @@ namespace SMS.Persistence.Repositories
 
         public IAssessmentExemptionRepository AssessmentExemptions =>
             _assessmentExemptions ??= new AssessmentExemptionRepository(_context, _loggerFactory.CreateLogger<AssessmentExemptionRepository>());
+
+        public IOrderRepository Orders =>
+            _orders ??= new OrderRepository(_context, _loggerFactory.CreateLogger<OrderRepository>());
+
+        public IRoadAccountRepository RoadAccounts =>
+            _roadAccounts ??= new RoadAccountRepository(_context, _loggerFactory.CreateLogger<RoadAccountRepository>());
+
+        public IOrderImportRepository OrderImports =>
+            _orderImports ??= new OrderImportRepository(_context, _loggerFactory.CreateLogger<OrderImportRepository>());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

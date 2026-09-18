@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SMS.Certificates.Domain.Entities;
 using SMS.Domain.Common;
@@ -71,6 +71,20 @@ namespace SMS.Persistence.Data
         public DbSet<AssignmentIssueReport> AssignmentIssueReports { get; set; }
         public DbSet<Title> Titles { get; set; }
         public DbSet<UploadFile> UploadFiles { get; set; }
+
+        // ------------------------------------------------------------------
+        // OMS (Order Management System) â€” Phase 2 (additive only).
+        // See Documentation/OMS/OMS_ARCHITECTURE.md.
+        // ------------------------------------------------------------------
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<OrderItem> OrderItems { get; set; }
+        public DbSet<OrderStatusHistory> OrderStatusHistories { get; set; }
+        public DbSet<OrderAttachment> OrderAttachments { get; set; }
+        public DbSet<OrderManifest> OrderManifests { get; set; }
+        public DbSet<OrderImport> OrderImports { get; set; }
+        public DbSet<OrderImportRow> OrderImportRows { get; set; }
+        public DbSet<RoadAccount> RoadAccounts { get; set; }
+        public DbSet<OrderNumberSequence> OrderNumberSequences { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -768,7 +782,195 @@ namespace SMS.Persistence.Data
                 entity.HasQueryFilter(co => !co.IsDeleted);
             });
 
+            // ------------------------------------------------------------------
+            // OMS (Order Management System) entities â€” Phase 2. Additive only;
+            // no existing entity configuration is modified.
+            // Enum statuses are persisted as int (same as CourseOfferingStatus).
+            // See Documentation/OMS/OMS_ARCHITECTURE.md Â§3-Â§4.
+            // ------------------------------------------------------------------
+            modelBuilder.Entity<Order>(entity =>
+            {
+                entity.ToTable("oms_orders");
+                entity.HasKey(o => o.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(o => o.Id).ValueGeneratedNever();
+                entity.Property(o => o.OrderNumber).IsRequired().HasMaxLength(50);
+                entity.Property(o => o.Title).IsRequired().HasMaxLength(200);
+                entity.Property(o => o.Description).HasMaxLength(2000);
+                entity.Property(o => o.Status).HasConversion<int>();
+                entity.Property(o => o.TotalAmount).HasColumnType("numeric(18,2)");
+                entity.Property(o => o.Currency).IsRequired().HasMaxLength(3);
+                entity.Property(o => o.RequestedByUserId).IsRequired().HasMaxLength(100);
+                entity.Property(o => o.ApprovedByUserId).HasMaxLength(100);
+                entity.Property(o => o.ApprovalRemarks).HasMaxLength(1000);
+                entity.Property(o => o.RejectedByUserId).HasMaxLength(100);
+                entity.Property(o => o.RejectionRemarks).HasMaxLength(1000);
+                entity.Property(o => o.CancelledByUserId).HasMaxLength(100);
+                entity.Property(o => o.CancellationReason).HasMaxLength(1000);
+
+                entity.HasIndex(o => new { o.TenantId, o.OrderNumber }).IsUnique();
+                entity.HasIndex(o => new { o.TenantId, o.Status });
+                entity.HasIndex(o => new { o.TenantId, o.CreatedAt });
+                entity.HasIndex(o => new { o.TenantId, o.RequestedByUserId });
+                entity.HasIndex(o => o.RoadAccountId);
+
+                // Items belong to the order (cascade is safe: items are part of
+                // the aggregate). History/attachments/manifests are audit or
+                // content records â€” Restrict prevents accidental loss.
+                entity.HasMany(o => o.Items)
+                    .WithOne(i => i.Order)
+                    .HasForeignKey(i => i.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(o => o.StatusHistory)
+                    .WithOne(h => h.Order)
+                    .HasForeignKey(h => h.OrderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // OrderAttachment and OrderManifest relationships are configured
+                // from their own entity blocks below (they carry extra FKs).
+                entity.HasMany(o => o.Manifests)
+                    .WithOne(m => m.Order)
+                    .HasForeignKey(m => m.OrderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Order: PostgreSQL row-version concurrency token (system column
+            // xmin, excluded from DDL by the Npgsql provider) so a stale client
+            // can never silently overwrite a newer lifecycle transition. The
+            // inherited row_version token from BaseEntity is kept untouched.
+            modelBuilder.Entity<Order>().Property<uint>("xmin").IsRowVersion();
+
+            modelBuilder.Entity<OrderItem>(entity =>
+            {
+                entity.ToTable("oms_order_items");
+                entity.HasKey(i => i.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(i => i.Id).ValueGeneratedNever();
+                entity.Property(i => i.OrderId).IsRequired();
+                entity.Property(i => i.ItemCode).HasMaxLength(50);
+                entity.Property(i => i.Description).IsRequired().HasMaxLength(500);
+                entity.Property(i => i.UnitPrice).HasColumnType("numeric(18,2)");
+                entity.Property(i => i.LineTotal).HasColumnType("numeric(18,2)");
+
+                entity.HasIndex(i => new { i.TenantId, i.OrderId });
+            });
+
+            modelBuilder.Entity<OrderStatusHistory>(entity =>
+            {
+                entity.ToTable("oms_order_status_history");
+                entity.HasKey(h => h.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(h => h.Id).ValueGeneratedNever();
+                entity.Property(h => h.OrderId).IsRequired();
+                entity.Property(h => h.FromStatus).HasConversion<int>();
+                entity.Property(h => h.ToStatus).HasConversion<int>();
+                entity.Property(h => h.Action).HasConversion<int>();
+                entity.Property(h => h.PerformedByUserId).IsRequired().HasMaxLength(100);
+                entity.Property(h => h.PerformedByUsername).HasMaxLength(256);
+                entity.Property(h => h.Remarks).HasMaxLength(1000);
+
+                entity.HasIndex(h => new { h.TenantId, h.OrderId });
+                entity.HasIndex(h => new { h.TenantId, h.PerformedAtUtc });
+            });
+
+            modelBuilder.Entity<OrderAttachment>(entity =>
+            {
+                entity.ToTable("oms_order_attachments");
+                entity.HasKey(a => a.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(a => a.Id).ValueGeneratedNever();
+                entity.Property(a => a.OrderId).IsRequired();
+                entity.Property(a => a.OriginalFileName).IsRequired().HasMaxLength(500);
+                entity.Property(a => a.StoragePath).IsRequired().HasMaxLength(1000);
+                entity.Property(a => a.Sha256Hash).HasMaxLength(64);
+                entity.Property(a => a.ContentType).HasMaxLength(200);
+                entity.Property(a => a.UploadedByUserId).HasMaxLength(100);
+
+                entity.HasOne(a => a.Order)
+                    .WithMany(o => o.Attachments)
+                    .HasForeignKey(a => a.OrderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Reuse the existing central upload record â€” no parallel system.
+                entity.HasOne(a => a.UploadFile)
+                    .WithMany()
+                    .HasForeignKey(a => a.UploadFileId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(a => new { a.TenantId, a.OrderId });
+                entity.HasIndex(a => a.UploadFileId);
+            });
+
+            modelBuilder.Entity<OrderManifest>(entity =>
+            {
+                entity.ToTable("oms_order_manifests");
+                entity.HasKey(m => m.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(m => m.Id).ValueGeneratedNever();
+                entity.Property(m => m.OrderId).IsRequired();
+                entity.Property(m => m.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(m => m.StoragePath).IsRequired().HasMaxLength(1000);
+                entity.Property(m => m.GeneratedByUserId).HasMaxLength(100);
+
+                entity.HasIndex(m => new { m.TenantId, m.OrderId });
+            });
+
+            modelBuilder.Entity<OrderImport>(entity =>
+            {
+                entity.ToTable("oms_order_imports");
+                entity.HasKey(i => i.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(i => i.Id).ValueGeneratedNever();
+                entity.Property(i => i.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(i => i.Status).HasConversion<int>();
+                entity.Property(i => i.UploadedByUserId).HasMaxLength(100);
+
+                entity.HasIndex(i => new { i.TenantId, i.Status });
+            });
+
+            modelBuilder.Entity<OrderImportRow>(entity =>
+            {
+                entity.ToTable("oms_order_import_rows");
+                entity.HasKey(r => r.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(r => r.Id).ValueGeneratedNever();
+                entity.Property(r => r.ImportId).IsRequired();
+
+                entity.HasOne(r => r.Import)
+                    .WithMany(i => i.Rows)
+                    .HasForeignKey(r => r.ImportId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(r => new { r.TenantId, r.ImportId });
+            });
+
+            modelBuilder.Entity<RoadAccount>(entity =>
+            {
+                entity.ToTable("oms_road_accounts");
+                entity.HasKey(r => r.Id);
+                // Keys are generated client-side in BaseEntity (Guid.NewGuid) - see Phase 2A.
+                entity.Property(r => r.Id).ValueGeneratedNever();
+                entity.Property(r => r.Code).IsRequired().HasMaxLength(50);
+                entity.Property(r => r.Name).IsRequired().HasMaxLength(200);
+                entity.Property(r => r.AccountType).HasConversion<int>();
+                entity.Property(r => r.Balance).HasColumnType("numeric(18,2)");
+
+                entity.HasIndex(r => new { r.TenantId, r.Code }).IsUnique();
+                entity.HasIndex(r => new { r.TenantId, r.IsActive });
+            });
+
+            modelBuilder.Entity<OrderNumberSequence>(entity =>
+            {
+                entity.ToTable("oms_order_sequences");
+                entity.HasKey(s => new { s.TenantId, s.Year });
+                entity.Property(s => s.TenantId).HasColumnName("tenant_id");
+                entity.Property(s => s.Year).HasColumnName("year");
+                entity.Property(s => s.LastNumber).HasColumnName("last_number");
+            });
+
             // Apply global tenant query filters.
+
             //
             // RISK-04 FIX: The previous implementation captured a Guid constant
             // value (resolved from _tenantContext.TenantId) at model-build time.
@@ -820,6 +1022,19 @@ namespace SMS.Persistence.Data
                     modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
                 }
             }
+
+            // OMS entities use a COMBINED soft-delete + tenant query filter. This
+            // is applied AFTER the generic loop above on purpose: EF Core allows
+            // a single query filter per entity type and the last call wins, so
+            // this replaces the tenant-only filter with the combined one.
+            modelBuilder.Entity<Order>().HasQueryFilter(o => !o.IsDeleted && o.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<OrderItem>().HasQueryFilter(i => !i.IsDeleted && i.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<OrderStatusHistory>().HasQueryFilter(h => !h.IsDeleted && h.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<OrderAttachment>().HasQueryFilter(a => !a.IsDeleted && a.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<OrderManifest>().HasQueryFilter(m => !m.IsDeleted && m.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<OrderImport>().HasQueryFilter(i => !i.IsDeleted && i.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<OrderImportRow>().HasQueryFilter(r => !r.IsDeleted && r.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<RoadAccount>().HasQueryFilter(r => !r.IsDeleted && r.TenantId == CurrentTenantGuid);
         }
 
         /// <summary>
