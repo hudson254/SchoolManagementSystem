@@ -45,6 +45,17 @@ namespace SMS.Domain.Interfaces
         Task BeginTransactionAsync(CancellationToken cancellationToken = default);
         Task CommitTransactionAsync(CancellationToken cancellationToken = default);
         Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Executes the operation as one atomic unit inside a database transaction.
+        /// Compatible with retrying execution strategies (Npgsql EnableRetryOnFailure):
+        /// when retries are enabled, the whole unit is executed by the execution
+        /// strategy itself, as EF Core requires for user-initiated transactions.
+        /// </summary>
+        Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default);
+
+        /// <summary>Non-generic variant of <see cref="ExecuteInTransactionAsync{T}(Func{Task{T}}, CancellationToken)"/>.</summary>
+        Task ExecuteInTransactionAsync(Func<Task> operation, CancellationToken cancellationToken = default);
     }
 }
 

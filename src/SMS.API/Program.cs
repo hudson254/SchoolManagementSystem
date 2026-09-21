@@ -652,6 +652,12 @@ builder.Services.AddScoped<ICertificateRepository, CertificateRepository>();
 builder.Services.AddScoped<ICertificateTemplateRepository, CertificateTemplateRepository>();
 builder.Services.AddScoped<ICertificateAuditLogRepository, CertificateAuditLogRepository>();
 
+// OMS order handlers (Phase 2B/2C) inject IOrderRepository directly. The
+// AddInfrastructureServices() extension that registers it is NOT invoked by
+// Program.cs (services are registered manually here), so register it
+// explicitly alongside the other repositories.
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+
 // Register UnitOfWork
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
@@ -724,6 +730,32 @@ builder.Services.AddAuthorization(options =>
     // Lecturer profile read access = previous LecturerAccess + Receptionist.
     options.AddPolicy("LecturerProfileReadAccess", policy =>
         policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Receptionist"));
+
+    // OMS authorization policies (Phase 2C).
+    // These mirror the role-based access rules defined in
+    // SMS.Application.Common.OmsAuthorization. The controller-level [Authorize(Policy = "...")]
+    // provides coarse-grained HTTP-level gating; fine-grained authorization
+    // (creator-only cancellation, tenant isolation, ownership checks) is enforced
+    // in the Application-layer handlers.
+    // View orders: Coordinator, Lecturer (view-only).
+    options.AddPolicy("Oms.CanViewOrders", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
+    // Create / edit (own, Draft) / submit orders: Coordinator.
+    options.AddPolicy("Oms.CanCreateOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    // Edit order items (Draft only): same role set as create.
+    options.AddPolicy("Oms.CanEditOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    // Submit order: Coordinator.
+    options.AddPolicy("Oms.CanSubmitOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    // Cancel any order (Administrator only). Creator-only cancellation is enforced
+    // in the handler when CancelAny is false; this policy only permits the broader
+    // "cancel any order" path for Administrators.
+    options.AddPolicy("Oms.CanCancelAnyOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator"));
+    options.AddPolicy("Oms.CanCancelOwnOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
 });
 
 var app = builder.Build();

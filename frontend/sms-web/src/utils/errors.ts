@@ -21,6 +21,13 @@ export interface NormalizedError {
   isNetworkError: boolean;
   isTimeout: boolean;
   statusCode?: number;
+  /**
+   * Raw server-provided message when it is more specific than the canned
+   * code message (e.g. a concrete business-rule violation such as "A submitted
+   * order must contain at least one item."). Callers may prefer this for
+   * display. Optional — absent for network/offline/unknown errors.
+   */
+  serverMessage?: string;
 }
 
 // User-friendly fallback messages (matches backend ErrorMessages)
@@ -101,24 +108,27 @@ export function normalizeError(error: unknown): NormalizedError {
     };
   }
 
+  // Axios error carrying the structured API error payload (produced by
+  // ExceptionHandlingMiddleware). Prefer the payload over the Axios wrapper,
+  // whose own code/message (e.g. ERR_BAD_REQUEST / "Request failed with
+  // status code 400") would otherwise mask the server's error taxonomy.
+  // (Phase 2D minimal defect fix — the direct-payload behavior below and all
+  // existing messages are unchanged.)
+  const axiosLike = error as { response?: { data?: unknown } } | null;
+  if (axiosLike && typeof axiosLike === 'object' && axiosLike.response && typeof axiosLike.response === 'object') {
+    const payload = axiosLike.response.data;
+    if (
+      payload !== null &&
+      typeof payload === 'object' &&
+      ('success' in payload || 'code' in payload || 'statusCode' in payload)
+    ) {
+      return normalizeApiErrorShape(payload as ApiError & { message?: string; serverMessage?: string });
+    }
+  }
+
   // Axios-style error
   if (isApiErrorShape(error)) {
-    const apiError = error as ApiError & { message?: string };
-    const code = apiError.code || 'INTERNAL_ERROR';
-    const message =
-      ERROR_MESSAGES[code] ||
-      apiError.message ||
-      DEFAULT_MESSAGE;
-
-    return {
-      message,
-      code,
-      correlationId: apiError.correlationId,
-      errors: apiError.errors,
-      isNetworkError: false,
-      isTimeout: false,
-      statusCode: apiError.statusCode,
-    };
+    return normalizeApiErrorShape(error as ApiError & { message?: string; serverMessage?: string });
   }
 
   // HTTP error with status
@@ -177,6 +187,33 @@ function isApiErrorShape(error: unknown): boolean {
     typeof error === 'object' &&
     ('success' in error || 'code' in error || 'statusCode' in error)
   );
+}
+
+/**
+ * Maps a structured API error payload (ErrorResponse from
+ * ExceptionHandlingMiddleware) to a NormalizedError. Preserves the raw server
+ * message when it differs from the canned code message so callers can show
+ * the specific business-rule text (Phase 2D — additive; canned messages are
+ * unchanged for existing callers).
+ */
+function normalizeApiErrorShape(apiError: ApiError & { message?: string; serverMessage?: string }): NormalizedError {
+  const code = apiError.code || 'INTERNAL_ERROR';
+  const message = ERROR_MESSAGES[code] || apiError.message || DEFAULT_MESSAGE;
+
+  const rawServerMessage =
+    apiError.serverMessage ??
+    (apiError.message && apiError.message !== message ? apiError.message : undefined);
+
+  return {
+    message,
+    code,
+    correlationId: apiError.correlationId,
+    errors: apiError.errors,
+    isNetworkError: false,
+    isTimeout: false,
+    statusCode: apiError.statusCode,
+    serverMessage: rawServerMessage || undefined,
+  };
 }
 
 /**

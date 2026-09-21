@@ -11,6 +11,7 @@ import { theme } from './theme';
 import { ProtectedRoute } from './components/Common/ProtectedRoute';
 import { Layout } from './components/Layout/Layout';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
+import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES } from './utils/roles';
 
 // Lazy load pages (pages use named exports, so map them to default for React.lazy)
 const loadPage = (importFn: () => Promise<any>, componentName?: string) =>
@@ -36,6 +37,10 @@ const UnitStudyMaterialsPage = loadPage(() => import('./pages/UnitStudyMaterials
 const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
+const OmsDashboard = loadPage(() => import('./pages/oms/OmsDashboard'), 'OmsDashboard');
+const OmsOrders = loadPage(() => import('./pages/oms/OmsOrders'), 'OmsOrders');
+const OmsOrderCreate = loadPage(() => import('./pages/oms/OmsOrderCreate'), 'OmsOrderCreate');
+const OmsOrderDetail = loadPage(() => import('./pages/oms/OmsOrderDetail'), 'OmsOrderDetail');
 const Assignments = loadPage(() => import('./pages/Assignments'), 'Assignments');
 const AssignmentFormPage = loadPage(() => import('./pages/AssignmentFormPage'), 'AssignmentFormPage');
 const AssignmentDetailPage = loadPage(() => import('./pages/AssignmentDetailPage'), 'AssignmentDetailPage');
@@ -119,6 +124,11 @@ function App() {
                         <Route path="classes" element={<Classes />} />
                         <Route path="timetable" element={<Timetable />} />
                         <Route path="accommodation" element={<Accommodation />} />
+                        {/* OMS (Phase 2D) — routes mirror the Oms.* backend policies. */}
+                        <Route path="oms" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsDashboard /></ProtectedRoute>} />
+                        <Route path="oms/orders" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsOrders /></ProtectedRoute>} />
+                        <Route path="oms/orders/new" element={<ProtectedRoute roles={OMS_MANAGE_ROLES}><OmsOrderCreate /></ProtectedRoute>} />
+                        <Route path="oms/orders/:id" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsOrderDetail /></ProtectedRoute>} />
                         <Route path="assignments" element={<Assignments />} />
                         <Route path="assignments/new" element={<AssignmentFormPage />} />
                         <Route path="assignments/:id" element={<AssignmentDetailPage />} />

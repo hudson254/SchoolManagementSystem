@@ -18,13 +18,13 @@ namespace SMS.UnitTests.OMS
         /// OmsOrderNumber uses a YYYY-NNNNNN canonical format for development use.
         /// </summary>
         [Theory]
-        [InlineData(2024, 1, "2024-000001")]
-        [InlineData(2026, 42, "2026-000042")]
-        [InlineData(2026, 123456, "2026-123456")]
+        [InlineData(2024, 1, "ORD-2024-000001")]
+        [InlineData(2026, 42, "ORD-2026-000042")]
+        [InlineData(2026, 123456, "ORD-2026-123456")]
         public void FormatProducesCanonicalSequence(int year, int sequence, string expected)
         {
             var gt = new StubGenerator(year);
-            var number = gt.Generate();
+            var number = gt.Generate(sequence);
             number.Should().Be(expected);
         }
 
@@ -32,27 +32,32 @@ namespace SMS.UnitTests.OMS
         public void SameYear_SequencesAreMonotonic()
         {
             var gt = new StubGenerator(2026);
-            var first = gt.Generate();
-            var second = gt.Generate();
-            second.Should().Be("2026-000002");
+            var first = gt.Generate(1);
+            var second = gt.Generate(2);
+            first.Should().Be("ORD-2026-000001");
+            second.Should().Be("ORD-2026-000002");
         }
     }
 
     /// <summary>
     /// Stub that mirrors OrderNumberGenerator.GetNextSequenceNumber behavior for
-    /// unit tests without I/O.
+    /// unit tests without I/O. Delegates formatting to the canonical
+    /// OmsOrderNumber.Format so tests and production stay consistent.
     /// </summary>
     internal class StubGenerator
     {
         private readonly int _year;
-        private int _seq;
 
-        public StubGenerator(int year) { _year = year; _seq = 0; }
+        public StubGenerator(int year) { _year = year; }
 
-        public string Generate()
+        public string Generate(int sequence)
         {
-            _seq += 1;
-            return $"{_year:D4}-{_seq:D6}";
+            if (sequence <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(sequence), "Sequence must be greater than zero.");
+            }
+
+            return OmsOrderNumber.Format(_year, sequence);
         }
     }
 }

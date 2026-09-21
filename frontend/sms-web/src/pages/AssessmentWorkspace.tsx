@@ -6,6 +6,7 @@ import { assessmentService } from '../services/assessment.service';
 import type { Assessment, StudentResult, AuditLogEntry } from '../types/assessment.types';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/api';
+import { asList } from '../utils/listShape';
 
 export const AssessmentWorkspace: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
@@ -27,6 +28,14 @@ export const AssessmentWorkspace: React.FC = () => {
   const { data: summary } = useQuery({ queryKey: ['assessment-summary', selectedUnitId], queryFn: () => assessmentService.getAssessmentSummary(selectedUnitId), enabled: !!selectedUnitId });
   const { data: pendingModeration } = useQuery({ queryKey: ['pending-moderation'], queryFn: () => assessmentService.getPendingModeration(), enabled: canAdmin });
   const { data: auditLog } = useQuery({ queryKey: ['assessment-audit-log'], queryFn: () => assessmentService.getAssessmentAuditLog(), enabled: canAdmin });
+
+  // The `/units` endpoint returns a paginated envelope ({ items, ... }) while
+  // `/assessment/types` returns a bare array. Normalize every list payload so
+  // `.map()` always receives an array — a non-array here previously crashed the
+  // whole render inside the ErrorBoundary ("Something went wrong" for canEdit roles).
+  const unitList = asList<{ id: string; code?: string; name?: string }>(units);
+  const typeList = asList<{ id: string; name?: string }>(types);
+  const assessmentRows = asList<Assessment>(assessments);
 
   const createAssess = useMutation({
     mutationFn: (vars: any) => assessmentService.createAssessment(vars),
@@ -59,7 +68,7 @@ export const AssessmentWorkspace: React.FC = () => {
               <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel>Unit</InputLabel>
                 <Select value={selectedUnitId} label="Unit" onChange={(e) => setSelectedUnitId(e.target.value)}>
-                  {(units || []).map((u: any) => (<MenuItem key={u.id} value={u.id}>{u.code} - {u.name}</MenuItem>))}
+                  {(unitList).map((u: any) => (<MenuItem key={u.id} value={u.id}>{u.code} - {u.name}</MenuItem>))}
                 </Select>
               </FormControl>
               <Divider sx={{ my: 2 }} />
@@ -68,7 +77,7 @@ export const AssessmentWorkspace: React.FC = () => {
               <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel>Type</InputLabel>
                 <Select label="Type" fullWidth defaultValue="">
-                  {(types || []).map((t: any) => (<MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>))}
+                  {(typeList).map((t: any) => (<MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>))}
                 </Select>
               </FormControl>
               <Grid container spacing={2}>
@@ -89,13 +98,13 @@ export const AssessmentWorkspace: React.FC = () => {
                 <Table size="small">
                   <TableHead><TableRow><TableCell>Name</TableCell><TableCell>Max</TableCell><TableCell>Weight</TableCell><TableCell>Lock</TableCell></TableRow></TableHead>
                   <TableBody>
-                    {(assessments || []).map((a: Assessment) => (
+                    {(assessmentRows).map((a: Assessment) => (
                       <TableRow key={a.id} hover>
                         <TableCell>{a.name}</TableCell><TableCell>{a.maxScore}</TableCell><TableCell>{a.weight}%</TableCell>
                         <TableCell><Chip label={a.isWeightLocked ? 'Locked' : 'Configurable'} size="small" color={a.isWeightLocked ? 'warning' : 'success'} /></TableCell>
                       </TableRow>
                     ))}
-                    {!assessments?.length && (<TableRow><TableCell colSpan={4} align="center">No assessments configured for this unit yet.</TableCell></TableRow>)}
+                    {!assessmentRows.length && (<TableRow><TableCell colSpan={4} align="center">No assessments configured for this unit yet.</TableCell></TableRow>)}
                   </TableBody>
                 </Table>
               </TableContainer>

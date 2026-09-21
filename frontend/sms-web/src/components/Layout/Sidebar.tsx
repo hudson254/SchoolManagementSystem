@@ -38,8 +38,13 @@ import {
   WorkspacePremium,
   VerifiedUser,
   Description,
+  ShoppingCart,
+  ListAlt,
+  AddCircleOutline,
+  Insights,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
+import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES } from '../../utils/roles';
 
 interface SidebarProps {
   onClose?: () => void;
@@ -113,6 +118,16 @@ const menuItems: MenuItem[] = [
     icon: <Bed />,
     path: '/accommodation',
     roles: ['SystemAdministrator', 'Administrator', 'Coordinator', 'Receptionist'],
+  },
+  {
+    text: 'Order Management',
+    icon: <ShoppingCart />,
+    roles: OMS_VIEW_ROLES,
+    children: [
+      { text: 'OMS Dashboard', icon: <Insights />, path: '/oms', roles: OMS_VIEW_ROLES },
+      { text: 'Orders', icon: <ListAlt />, path: '/oms/orders', roles: OMS_VIEW_ROLES },
+      { text: 'New Order', icon: <AddCircleOutline />, path: '/oms/orders/new', roles: OMS_MANAGE_ROLES },
+    ],
   },
   {
     text: 'Calendar',

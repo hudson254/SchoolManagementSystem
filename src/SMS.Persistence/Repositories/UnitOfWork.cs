@@ -184,6 +184,50 @@ namespace SMS.Persistence.Repositories
             }
         }
 
+        /// <inheritdoc />
+        public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            if (!strategy.RetriesOnFailure)
+            {
+                return await ExecuteInTransactionCoreAsync(operation, cancellationToken);
+            }
+
+            // Retrying execution strategies (Npgsql EnableRetryOnFailure) forbid
+            // user-initiated transactions unless the execution strategy itself
+            // executes the whole unit (EF Core requirement).
+            return await strategy.ExecuteAsync(
+                () => ExecuteInTransactionCoreAsync(operation, cancellationToken));
+        }
+
+        /// <inheritdoc />
+        public async Task ExecuteInTransactionAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+        {
+            await ExecuteInTransactionAsync<bool>(
+                async () =>
+                {
+                    await operation();
+                    return true;
+                },
+                cancellationToken);
+        }
+
+        private async Task<T> ExecuteInTransactionCoreAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var result = await operation();
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
         public void Dispose()
         {
             _transaction?.Dispose();
