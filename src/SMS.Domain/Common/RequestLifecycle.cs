@@ -17,7 +17,13 @@ namespace SMS.Domain.Common
                 [RequestStatus.Draft] = new[] { RequestStatus.Submitted, RequestStatus.Cancelled },
                 [RequestStatus.Submitted] = new[] { RequestStatus.PendingReview, RequestStatus.Assigned, RequestStatus.Rejected, RequestStatus.Cancelled, RequestStatus.OnHold },
                 [RequestStatus.PendingReview] = new[] { RequestStatus.Assigned, RequestStatus.Returned, RequestStatus.Rejected, RequestStatus.Cancelled },
-                [RequestStatus.Assigned] = new[] { RequestStatus.PendingApproval, RequestStatus.InProgress, RequestStatus.Returned, RequestStatus.Rejected, RequestStatus.Cancelled, RequestStatus.OnHold, RequestStatus.Escalated },
+                // Assigned -> Approved is reachable on purpose: ApproveRequestCommand
+                // explicitly accepts an Assigned request, so the transition table must
+                // agree. Without it the domain rejected a transition the handler
+                // advertised, the approve/complete path became unreachable through the
+                // API, and the failure surfaced as an unmapped
+                // InvalidOperationException (HTTP 500) rather than a business error.
+                [RequestStatus.Assigned] = new[] { RequestStatus.PendingApproval, RequestStatus.InProgress, RequestStatus.Approved, RequestStatus.Returned, RequestStatus.Rejected, RequestStatus.Cancelled, RequestStatus.OnHold, RequestStatus.Escalated },
                 [RequestStatus.PendingApproval] = new[] { RequestStatus.Approved, RequestStatus.Rejected, RequestStatus.Returned, RequestStatus.Cancelled },
                 [RequestStatus.Approved] = new[] { RequestStatus.InProgress, RequestStatus.Completed, RequestStatus.Cancelled },
                 [RequestStatus.InProgress] = new[] { RequestStatus.Completed, RequestStatus.OnHold, RequestStatus.Escalated, RequestStatus.Cancelled },
