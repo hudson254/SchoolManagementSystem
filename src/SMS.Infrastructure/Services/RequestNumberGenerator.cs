@@ -46,11 +46,15 @@ namespace SMS.Infrastructure.Services
 
                 await using var command = connection.CreateCommand();
                 command.CommandText =
-                    @"INSERT INTO sms_request_number_sequences (tenant_id, year, last_number)
+                    // "Year" and "LastNumber" are PascalCase in the database because
+                    // AddSmsRequests created them with those exact names. Unquoted they
+                    // fold to year/last_number, which do not exist, so the insert failed
+                    // with 42703. Quote them to match the migrated schema.
+                    @"INSERT INTO sms_request_number_sequences (tenant_id, ""Year"", ""LastNumber"")
                       VALUES (@tenant_id, @year, 1)
-                      ON CONFLICT (tenant_id, year)
-                      DO UPDATE SET last_number = sms_request_number_sequences.last_number + 1
-                      RETURNING last_number;";
+                      ON CONFLICT (tenant_id, ""Year"")
+                      DO UPDATE SET ""LastNumber"" = sms_request_number_sequences.""LastNumber"" + 1
+                      RETURNING ""LastNumber"";";
 
                 var tenantParam = command.CreateParameter();
                 tenantParam.ParameterName = "@tenant_id";
