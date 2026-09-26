@@ -2,15 +2,53 @@
 
 ## 1. Executive Summary
 
-This report documents the complete technical investigation and remediation of Row Level Security (RLS) 
-implementation for the School Management System (SMS). The system uses a shared-database multi-tenancy 
-model where all tenants share the same PostgreSQL database and are isolated via TenantId columns, 
-EF Core global query filters, and now PostgreSQL Row Level Security (RLS).
+This report documents the complete technical investigation and remediation of Row Level Security (RLS)
+implementation for the School Management System (SMS). The system uses a shared-database multi-tenancy
+model where all tenants share the same PostgreSQL database and are isolated via TenantId columns,
+EF Core global query filters, and PostgreSQL Row Level Security (RLS).
 
-Status: RLS implementation completed with PostgreSQL-level tenant isolation enforced across 53 
-tenant-scoped tables. The application role (sms_app_role) does NOT have BYPASSRLS. All RLS policies 
-are explicitly created for SELECT, INSERT, UPDATE, and DELETE operations. The tenant context is 
-propagated via PostgreSQL session variable app.tenant_id set by a custom DbConnectionInterceptor.
+> ## CURRENT STATUS (corrected - read this first)
+>
+> This document originally stated that RLS was "enforced across 53 tenant-scoped tables" in
+> production. **That was inaccurate.** The historical sections below are preserved as the record of
+> the original investigation and design work, but the current truth is:
+>
+> | Item | Status |
+> |---|---|
+> | RLS policy implementation | Prepared, present and validated in the repository |
+> | RLS policies installed in production | Yes - installed by migration `20260926150343_AddTenantRowLevelSecurityPolicies` |
+> | RLS **enforcement** in production | **NOT ENABLED** |
+> | Production RLS-enabled tables | **0** |
+> | Application database role | `sms_user` |
+> | `rolsuper` | `true` |
+> | `rolbypassrls` | `true` |
+>
+> **Reason RLS is not enforced.** The application connects to PostgreSQL as `sms_user`, which is a
+> superuser with `BYPASSRLS` and owns every table. PostgreSQL bypasses row level security
+> unconditionally for superuser and BYPASSRLS roles, and `FORCE ROW LEVEL SECURITY` does not
+> override that. Enabling RLS under the current role would therefore provide **no actual tenant
+> isolation** while introducing a substantial risk of an outage. The migration deliberately creates
+> the policies without enabling RLS for this reason.
+>
+> **Current effective tenant isolation** is provided by EF Core global query filters plus
+> application-level authorization (role, object-level and ownership checks).
+>
+> **RLS security workstream: PENDING.** It requires migrating the production application role to a
+> `NOBYPASSRLS` role, followed by controlled RLS enforcement and verification. That work is tracked
+> separately and must be validated against a production database clone first.
+>
+> The "RLS Applied" column in the inventory below describes the intended coverage of the
+> implementation, **not** live enforcement in production.
+
+### Original executive summary (historical)
+
+> Status: RLS implementation completed with PostgreSQL-level tenant isolation enforced across 53
+> tenant-scoped tables. The application role (sms_app_role) does NOT have BYPASSRLS. All RLS policies
+> are explicitly created for SELECT, INSERT, UPDATE, and DELETE operations. The tenant context is
+> propagated via PostgreSQL session variable app.tenant_id set by a custom DbConnectionInterceptor.
+
+This remains an accurate description of the *design*, but it does not describe production, where the
+`sms_app_role` described here was never provisioned and the application instead uses `sms_user`.
 
 ## 2. Original Findings
 
