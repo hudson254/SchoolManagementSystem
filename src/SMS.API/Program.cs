@@ -389,16 +389,42 @@ builder.Services.AddHealthChecks()
 // The Testing environment also uses PostgreSQL (via the Docker test database) so that
 // API tests exercise the same database provider as production. This eliminates the
 // InMemory-vs-PostgreSQL behavioral differences that caused test failures.
-builder.Services.AddDbContext<ApplicationDbContext>(
-    options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
         npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(3);
             npgsqlOptions.CommandTimeout(60);
         })
-        .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)),
+        .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+
+    // RLS tenant context (least-privilege workstream).
+    //
+    // This registration previously omitted TenantContextDbInterceptor, so
+    // app.tenant_id was never written to the PostgreSQL session and the tenant
+    // RLS policies added by migration 20260926150343_AddTenantRowLevelSecurityPolicies
+    // had no tenant to evaluate. That was invisible while the application
+    // connected as a SUPERUSER/BYPASSRLS role, which ignores RLS entirely; once
+    // the application runs as the NOBYPASSRLS role sms_app it becomes fatal:
+    // app.current_tenant_id() falls back to the all-zero sentinel and every
+    // tenant-scoped query - including the ASP.NET Identity login lookup -
+    // returns zero rows, so authentication fails with HTTP 401.
+    //
+    // This is the repository's existing interceptor (TenantContextInterceptor),
+    // already wired for the CLI/migration paths by
+    // ServiceExtensions.AddPersistenceServices. Adding it here aligns the real
+    // runtime DI root with those paths. It introduces no new mechanism and
+    // changes no application or OMS behaviour: when RLS is disabled the
+    // set_config call is inert.
+    options.AddInterceptors(sp.GetRequiredService<TenantContextDbInterceptor>());
+},
     contextLifetime: ServiceLifetime.Scoped,
     optionsLifetime: ServiceLifetime.Scoped);
+
+// The RLS tenant-context interceptor consumed above. It is scoped because it
+// depends on the scoped ITenantContext.
+builder.Services.AddScoped<TenantContextDbInterceptor>();
 
 // Configure Identity
 builder.Services.AddIdentity<User, Role>(options =>
