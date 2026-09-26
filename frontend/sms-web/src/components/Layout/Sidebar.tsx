@@ -44,7 +44,14 @@ import {
   Insights,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES } from '../../utils/roles';
+import {
+  OMS_VIEW_ROLES,
+  OMS_MANAGE_ROLES,
+  OMS_REQUEST_VIEW_OWN_ROLES,
+  OMS_REQUEST_SELF_ROLES,
+  OMS_REQUEST_VIEW_ROLES,
+  OMS_REQUEST_VIEW_ALL_ROLES,
+} from '../../utils/roles';
 
 interface SidebarProps {
   onClose?: () => void;
@@ -127,6 +134,18 @@ const menuItems: MenuItem[] = [
       { text: 'OMS Dashboard', icon: <Insights />, path: '/oms', roles: OMS_VIEW_ROLES },
       { text: 'Orders', icon: <ListAlt />, path: '/oms/orders', roles: OMS_VIEW_ROLES },
       { text: 'New Order', icon: <AddCircleOutline />, path: '/oms/orders/new', roles: OMS_MANAGE_ROLES },
+    ],
+  },
+  {
+    text: 'Requests',
+    icon: <Assignment />,
+    roles: OMS_REQUEST_VIEW_OWN_ROLES,
+    children: [
+      { text: 'Request Workspace', icon: <Dashboard />, path: '/oms/requests', roles: OMS_REQUEST_VIEW_OWN_ROLES },
+      { text: 'My Requests', icon: <ListAlt />, path: '/oms/requests/mine', roles: OMS_REQUEST_VIEW_OWN_ROLES },
+      { text: 'Assigned to Me', icon: <VerifiedUser />, path: '/oms/requests/assigned', roles: OMS_REQUEST_VIEW_ROLES },
+      { text: 'Available Queue', icon: <Insights />, path: '/oms/requests/list?scope=all', roles: OMS_REQUEST_VIEW_ALL_ROLES },
+      { text: 'New Request', icon: <AddCircleOutline />, path: '/oms/requests/new', roles: OMS_REQUEST_SELF_ROLES },
     ],
   },
   {

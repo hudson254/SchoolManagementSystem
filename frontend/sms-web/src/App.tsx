@@ -11,7 +11,7 @@ import { theme } from './theme';
 import { ProtectedRoute } from './components/Common/ProtectedRoute';
 import { Layout } from './components/Layout/Layout';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
-import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES } from './utils/roles';
+import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES, OMS_REQUEST_VIEW_OWN_ROLES, OMS_REQUEST_SELF_ROLES, OMS_REQUEST_VIEW_ROLES } from './utils/roles';
 
 // Lazy load pages (pages use named exports, so map them to default for React.lazy)
 const loadPage = (importFn: () => Promise<any>, componentName?: string) =>
@@ -41,6 +41,11 @@ const OmsDashboard = loadPage(() => import('./pages/oms/OmsDashboard'), 'OmsDash
 const OmsOrders = loadPage(() => import('./pages/oms/OmsOrders'), 'OmsOrders');
 const OmsOrderCreate = loadPage(() => import('./pages/oms/OmsOrderCreate'), 'OmsOrderCreate');
 const OmsOrderDetail = loadPage(() => import('./pages/oms/OmsOrderDetail'), 'OmsOrderDetail');
+// OMS Request Workspace (Phase 4) — one workflow engine, one set of routes.
+const RequestsDashboard = loadPage(() => import('./pages/oms/RequestsDashboard'), 'RequestsDashboard');
+const RequestsList = loadPage(() => import('./pages/oms/RequestsList'), 'RequestsList');
+const CreateRequestPage = loadPage(() => import('./pages/oms/CreateRequestPage'), 'CreateRequestPage');
+const OmsRequestDetailPage = loadPage(() => import('./pages/oms/RequestDetailPage'), 'RequestDetailPage');
 const Assignments = loadPage(() => import('./pages/Assignments'), 'Assignments');
 const AssignmentFormPage = loadPage(() => import('./pages/AssignmentFormPage'), 'AssignmentFormPage');
 const AssignmentDetailPage = loadPage(() => import('./pages/AssignmentDetailPage'), 'AssignmentDetailPage');
@@ -129,6 +134,16 @@ function App() {
                         <Route path="oms/orders" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsOrders /></ProtectedRoute>} />
                         <Route path="oms/orders/new" element={<ProtectedRoute roles={OMS_MANAGE_ROLES}><OmsOrderCreate /></ProtectedRoute>} />
                         <Route path="oms/orders/:id" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsOrderDetail /></ProtectedRoute>} />
+                        {/* OMS Request Workspace — routes mirror the Oms.* request policies.
+                            "list" is a scope-aware list; /mine and /assigned are the same
+                            component with the scope forced server-side. Order matters:
+                            "new" and "list" are declared before the :id catch-all. */}
+                        <Route path="oms/requests" element={<ProtectedRoute roles={OMS_REQUEST_VIEW_OWN_ROLES}><RequestsDashboard /></ProtectedRoute>} />
+                        <Route path="oms/requests/new" element={<ProtectedRoute roles={OMS_REQUEST_SELF_ROLES}><CreateRequestPage /></ProtectedRoute>} />
+                        <Route path="oms/requests/list" element={<ProtectedRoute roles={OMS_REQUEST_VIEW_OWN_ROLES}><RequestsList /></ProtectedRoute>} />
+                        <Route path="oms/requests/mine" element={<ProtectedRoute roles={OMS_REQUEST_VIEW_OWN_ROLES}><RequestsList /></ProtectedRoute>} />
+                        <Route path="oms/requests/assigned" element={<ProtectedRoute roles={OMS_REQUEST_VIEW_ROLES}><RequestsList /></ProtectedRoute>} />
+                        <Route path="oms/requests/:id" element={<ProtectedRoute roles={OMS_REQUEST_VIEW_OWN_ROLES}><OmsRequestDetailPage /></ProtectedRoute>} />
                         <Route path="assignments" element={<Assignments />} />
                         <Route path="assignments/new" element={<AssignmentFormPage />} />
                         <Route path="assignments/:id" element={<AssignmentDetailPage />} />

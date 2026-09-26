@@ -81,3 +81,90 @@ export const canCancelOwnOmsOrder = (roles: string[] | undefined | null): boolea
 /** Oms.CanCancelAnyOrder — the broader Administrator-only cancellation. */
 export const canCancelAnyOmsOrder = (roles: string[] | undefined | null): boolean =>
   hasAnyRole(roles, ...OMS_ADMIN_ROLES);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OMS Request permissions — mirrors
+// SMS.Application.Common.OmsAuthorization role mappings and the Oms.* request
+// policies wired in Program.cs.
+//
+// These helpers are PRESENTATION ONLY. They decide which affordances are worth
+// rendering so a user is not shown buttons that the API will certainly reject.
+// They are never a security control: every one of these actions is independently
+// re-checked server-side by role AND by object-level ownership
+// (OmsRequestAccess.CanView / CanAttach / CanDeleteAttachment).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Oms.CanViewRequests — Admin, Coordinator, Lecturer. */
+export const OMS_REQUEST_VIEW_ROLES: string[] = [
+  SYSTEM_ADMINISTRATOR,
+  ADMINISTRATOR,
+  COORDINATOR,
+  LECTURER,
+];
+
+/** Oms.ViewAllRequests — Admin, Coordinator (the privileged "all" queue). */
+export const OMS_REQUEST_VIEW_ALL_ROLES: string[] = [
+  SYSTEM_ADMINISTRATOR,
+  ADMINISTRATOR,
+  COORDINATOR,
+];
+
+/**
+ * Oms.CreateRequest / Oms.SubmitRequest / Oms.CancelOwnRequest — the roles that
+ * may raise and progress their own requests. Mirrors CreateRequestRoles.
+ */
+export const OMS_REQUEST_SELF_ROLES: string[] = [
+  SYSTEM_ADMINISTRATOR,
+  ADMINISTRATOR,
+  COORDINATOR,
+  LECTURER,
+  STUDENT,
+];
+
+/** Oms.ViewOwnRequests — includes Receptionist, which cannot create requests. */
+export const OMS_REQUEST_VIEW_OWN_ROLES: string[] = [
+  SYSTEM_ADMINISTRATOR,
+  ADMINISTRATOR,
+  COORDINATOR,
+  LECTURER,
+  STUDENT,
+  RECEPTIONIST,
+];
+
+/** Oms.AssignRequest / Oms.ReassignRequest / Oms.ApproveRequest / Oms.CompleteRequest. */
+export const OMS_REQUEST_DECISION_ROLES: string[] = [
+  SYSTEM_ADMINISTRATOR,
+  ADMINISTRATOR,
+  COORDINATOR,
+];
+
+/** Oms.ManageRequestTypes — Administrator tier. */
+export const OMS_REQUEST_ADMIN_ROLES: string[] = [SYSTEM_ADMINISTRATOR, ADMINISTRATOR];
+
+/** Any role that may read the request queue at all. */
+export const canViewOmsRequests = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_VIEW_OWN_ROLES);
+
+/** The privileged full-tenant queue. Drives visibility of the "all" scope. */
+export const canViewAllOmsRequests = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_VIEW_ALL_ROLES);
+
+/** May raise a request (Oms.CreateRequest). */
+export const canCreateOmsRequest = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_SELF_ROLES);
+
+/** Oms.AssignRequest / Oms.ReassignRequest. */
+export const canAssignOmsRequests = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_DECISION_ROLES);
+
+/** Oms.ApproveRequest / Oms.RejectRequest. */
+export const canDecideOmsRequests = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_DECISION_ROLES);
+
+/** Oms.CompleteRequest / Oms.EscalateRequest. */
+export const canCompleteOmsRequests = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_DECISION_ROLES);
+
+/** Oms.ManageRequestTypes. */
+export const canManageOmsRequestTypes = (roles: string[] | undefined | null): boolean =>
+  hasAnyRole(roles, ...OMS_REQUEST_ADMIN_ROLES);
