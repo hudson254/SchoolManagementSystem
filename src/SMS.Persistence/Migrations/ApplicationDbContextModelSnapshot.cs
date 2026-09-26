@@ -5639,6 +5639,102 @@ namespace SMS.Persistence.Migrations
                     b.ToTable("sms_requests", (string)null);
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.RequestAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<DateTime?>("DeletedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_date");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_date");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UploadedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("UploadedByUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId");
+
+                    b.HasIndex("TenantId", "RequestId");
+
+                    b.HasIndex("TenantId", "UploadedByUserId");
+
+                    b.ToTable("sms_request_attachments", (string)null);
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.RequestComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8735,6 +8831,17 @@ namespace SMS.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("GeneratedByUser");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.RequestAttachment", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Request", "Request")
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Request");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.RequestComment", b =>
