@@ -7,6 +7,8 @@ export interface EnrollmentSubmissionResult {
   unitsEnrolled: number;
   status: string;
   message: string;
+  courseOfferingId?: string | null;
+  courseOfferingEnrollmentCreated?: boolean;
 }
 
 export interface StudentEnrollmentStatus {
@@ -29,6 +31,20 @@ export interface CourseOption {
   id: string;
   name: string;
   code: string;
+  description?: string | null;
+  credits?: number;
+  duration?: number;
+}
+
+/**
+ * A unit of a course the student is choosing from. Mirrors
+ * StudentSelectableUnitDto in SMS.Application.
+ */
+export interface SelectableUnit {
+  id: string;
+  code: string;
+  name: string;
+  credits: number;
 }
 
 export interface ReturningEnrollmentResult {
@@ -70,6 +86,21 @@ export const enrollmentService = {
 
   getMyStatus: () =>
     apiClient.get<StudentEnrollmentStatus>(`${ENROLLMENT_BASE}/my-status`),
+
+  /**
+   * Courses a logged-in student may choose from. Uses the dedicated
+   * student-authorized endpoint under /enrollment, NOT /courses, which is
+   * restricted to moderators and returns 403 for a Student token.
+   */
+  getAvailableCourses: () =>
+    apiClient.get<CourseOption[]>(`${ENROLLMENT_BASE}/available-courses`),
+
+  /**
+   * Active units of a selectable course (wizard step 2). Student-authorized
+   * counterpart of the moderator-only GET /courses/{id}/units.
+   */
+  getAvailableCourseUnits: (courseId: string) =>
+    apiClient.get<SelectableUnit[]>(`${ENROLLMENT_BASE}/available-courses/${courseId}/units`),
 
   submitReturningEnrollment: (courseId: string, semesterId: string) =>
     apiClient.post<ReturningEnrollmentResult>(`${RETURNING_BASE}/enroll`, {

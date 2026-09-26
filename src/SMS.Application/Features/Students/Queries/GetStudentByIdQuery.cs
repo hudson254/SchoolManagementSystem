@@ -48,6 +48,10 @@ namespace SMS.Application.Features.Students.Queries
                 Address = student.Address,
                 ProgrammeId = student.ProgrammeId,
                 ProgrammeName = student.Programme?.Name,
+                // The course chosen at registration (persisted Student.SelectedCourseId).
+                SelectedCourseId = student.SelectedCourseId,
+                SelectedCourseName = student.SelectedCourse?.Name,
+                SelectedCourseCode = student.SelectedCourse?.Code,
                 CurrentSemesterId = student.CurrentSemesterId,
                 CurrentSemesterName = student.CurrentSemester?.Name,
                 IsActive = student.IsActive,

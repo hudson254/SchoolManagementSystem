@@ -247,6 +247,16 @@ base.OnModelCreating(modelBuilder);
                     .HasForeignKey(s => s.CurrentSemesterId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                // Selected course: optional (nullable) reference to the course the
+                // student chose. Restrict on delete so a course is never silently
+                // removed out from under a student who already registered for it.
+                entity.HasOne(s => s.SelectedCourse)
+                    .WithMany()
+                    .HasForeignKey(s => s.SelectedCourseId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(s => s.SelectedCourseId);
+
                 entity.HasMany(s => s.Enrollments)
                     .WithOne(e => e.Student)
                     .HasForeignKey(e => e.StudentId)

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.Dashboard.Queries
@@ -173,6 +174,7 @@ namespace SMS.Application.Features.Dashboard.Queries
         private readonly ICourseOfferingEnrollmentRepository _courseOfferingEnrollments;
         private readonly ICourseOfferingRepository _courseOfferings;
         private readonly ICourseOfferingUnitRepository _courseOfferingUnits;
+        private readonly ICourseRepository _courses;
         private readonly IAccommodationRepository _accommodations;
         private readonly ILogger<GetMyStudentDashboardQueryHandler> _logger;
 
@@ -181,6 +183,7 @@ namespace SMS.Application.Features.Dashboard.Queries
             ICourseOfferingEnrollmentRepository courseOfferingEnrollments,
             ICourseOfferingRepository courseOfferings,
             ICourseOfferingUnitRepository courseOfferingUnits,
+            ICourseRepository courses,
             IAccommodationRepository accommodations,
             ILogger<GetMyStudentDashboardQueryHandler> logger)
         {
@@ -188,6 +191,7 @@ namespace SMS.Application.Features.Dashboard.Queries
             _courseOfferingEnrollments = courseOfferingEnrollments;
             _courseOfferings = courseOfferings;
             _courseOfferingUnits = courseOfferingUnits;
+            _courses = courses;
             _accommodations = accommodations;
             _logger = logger;
         }
@@ -250,9 +254,49 @@ namespace SMS.Application.Features.Dashboard.Queries
             var accommodationAssignment = await _accommodations.GetAssignmentByStudentAsync(
                 student.Id, cancellationToken);
 
+            // The student may have a persisted course choice (Student.SelectedCourseId,
+            // written at registration) without any active course-offering enrollment
+            // yet. Surface it as a clearly-distinguished pending card so the
+            // dashboard is not empty for a student who is still pending approval.
+            // This never replaces or duplicates the offering-backed cards above:
+            // once the student has an active enrollment for the same course, the
+            // pending card is suppressed.
+            StudentPendingCourseDto? pendingCourse = null;
+            if (student.SelectedCourseId.HasValue)
+            {
+                var alreadyEnrolledInSelectedCourse = enrolledCourses
+                    .Any(c => c.CourseId == student.SelectedCourseId.Value);
+
+                if (!alreadyEnrolledInSelectedCourse)
+                {
+                    // Resolved from the repository rather than the navigation
+                    // property so this works with any StudentRepository
+                    // implementation and stays tenant-scoped by the global filter.
+                    var selectedCourse = await _courses.GetByIdAsync(
+                        student.SelectedCourseId.Value, cancellationToken);
+
+                    if (selectedCourse != null && !selectedCourse.IsDeleted)
+                    {
+                        var isPendingSelection =
+                            student.RegistrationStatus == RegistrationStatus.PendingCourseSelection;
+
+                        pendingCourse = new StudentPendingCourseDto
+                        {
+                            CourseId = selectedCourse.Id,
+                            CourseName = selectedCourse.Name,
+                            CourseCode = selectedCourse.Code,
+                            Description = selectedCourse.Description,
+                            RegistrationStatus = student.RegistrationStatus.ToString(),
+                            Status = isPendingSelection ? "PendingSelection" : "PendingApproval",
+                            RequiresSubmission = isPendingSelection
+                        };
+                    }
+                }
+            }
+
             _logger.LogInformation(
-                "Student dashboard loaded for {StudentId}: {CourseCount} enrolled courses",
-                student.Id, enrolledCourses.Count);
+                "Student dashboard loaded for {StudentId}: {CourseCount} enrolled courses, pending course: {PendingCourseCode}",
+                student.Id, enrolledCourses.Count, pendingCourse?.CourseCode ?? "(none)");
 
             return new MyStudentDashboardDto
             {
@@ -264,7 +308,9 @@ namespace SMS.Application.Features.Dashboard.Queries
                 Email = student.Email,
                 StudentNumber = student.StudentNumber,
                 AcademicStatus = student.AcademicStatus,
+                RegistrationStatus = student.RegistrationStatus.ToString(),
                 Enrollments = enrolledCourses,
+                PendingCourse = pendingCourse,
                 Accommodation = accommodationAssignment != null
                     ? AccommodationDtoMappings.ToAssignmentDto(accommodationAssignment)
                     : null

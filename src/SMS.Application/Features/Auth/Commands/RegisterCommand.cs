@@ -285,7 +285,20 @@ namespace SMS.Application.Features.Auth.Commands
                 NationalIdPassport = request.NationalIdPassport,
                 StudentNumber = $"STU{DateTime.UtcNow:yyyyMMdd}{new Random().Next(1000, 9999)}",
                 UserId = user.Id,
-                ProgrammeId = course.ProgrammeId,
+                // Persist the course the student actually chose. Without this the
+                // choice was validated and then discarded, so the student record,
+                // the enrollment status endpoint and the dashboard all showed
+                // "no course" (the reported production bug).
+                SelectedCourseId = course.Id,
+                // Course.ProgrammeId is nullable and is null in a fresh database
+                // where courses are not linked to a programme, so fall back to
+                // the course's programme collection before giving up.
+                // NOTE: the cast to Guid? matters. FirstOrDefault() over a
+                // non-nullable Guid sequence returns Guid.Empty, which is NOT
+                // null and would violate the Students -> Programmes foreign key
+                // (a 500 at registration) instead of leaving the FK unset.
+                ProgrammeId = course.ProgrammeId
+                    ?? course.Programmes.Select(p => (Guid?)p.Id).FirstOrDefault(),
                 IsActive = true,
                 IsEnrolled = false,  // Not enrolled until course selection + approval
                 EnrollmentDate = DateTime.UtcNow,
@@ -296,7 +309,11 @@ namespace SMS.Application.Features.Auth.Commands
             await _studentRepository.AddAsync(student, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            await _auditService.LogAsync("Register", student.Id.ToString(), $"Student account created (pending course selection for course {course.Code})");
+            await _auditService.LogAsync("Register", student.Id.ToString(),
+                $"Student account created with selected course {course.Code} (pending course selection approval)");
+            _logger.LogInformation(
+                "Student {StudentId} registered with selected course {CourseId} ({CourseCode})",
+                student.Id, course.Id, course.Code);
         }
 
         private async Task CreateLecturerRecord(RegisterCommand request, User user, NameParseResult parsed, string? title, CancellationToken cancellationToken)

@@ -273,6 +273,43 @@ export const Dashboard: React.FC = () => {
     </Card>
   );
 
+  // Student course card for a persisted selection that is not yet backed by an
+  // active course offering. Distinct from renderStudentCourseCard so an
+  // approved, offering-backed enrollment keeps its own presentation.
+  const renderStudentPendingCourseCard = () => {
+    const pending = studentMe?.pendingCourse;
+    if (!pending) return null;
+
+    const needsSubmission = pending.requiresSubmission;
+    return (
+      <Card key={`pending-${pending.courseId}`} sx={{ mb: 1.5 }}>
+        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {pending.courseName}
+              {pending.courseCode ? ` (${pending.courseCode})` : ''}
+            </Typography>
+            <Chip
+              label={pending.status}
+              size="small"
+              color={needsSubmission ? 'info' : 'warning'}
+            />
+          </Box>
+          <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+            {needsSubmission
+              ? 'Selected at registration — submit this selection for approval'
+              : 'Submitted — awaiting approval'}
+          </Typography>
+          {pending.description && (
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              {pending.description}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   // Accommodation card (lecturer or student) from the accommodation module.
   const myAccommodation = isLecturer ? lecturerMe?.accommodation : studentMe?.accommodation;
   const renderAccommodationCard = () => {
@@ -512,13 +549,15 @@ export const Dashboard: React.FC = () => {
               </Box>
               {studentMeLoading ? (
                 <LinearProgress />
-              ) : (studentMe?.enrollments || []).length === 0 ? (
-                <Typography variant="body2" color="textSecondary">
-                  You have no active course enrollments. Browse available courses to enroll.
-                </Typography>
               ) : (
                 <Box>
                   {studentMe!.enrollments.map(renderStudentCourseCard)}
+                  {renderStudentPendingCourseCard()}
+                  {studentMe!.enrollments.length === 0 && !studentMe!.pendingCourse && (
+                    <Typography variant="body2" color="textSecondary">
+                      You have no active course enrollments. Browse available courses to enroll.
+                    </Typography>
+                  )}
                 </Box>
               )}
             </Paper>

@@ -47,6 +47,19 @@ namespace SMS.Application.DTOs
         /// </summary>
         public string RegistrationStatus { get; set; } = "PendingCourseSelection";
 
+        /// <summary>
+        /// The course the student selected, persisted at registration so the
+        /// choice is readable before any course-offering enrollment exists.
+        /// Null when the student has not chosen a course.
+        /// </summary>
+        public Guid? SelectedCourseId { get; set; }
+
+        /// <summary>Name of <see cref="SelectedCourseId"/>, when resolved.</summary>
+        public string? SelectedCourseName { get; set; }
+
+        /// <summary>Code of <see cref="SelectedCourseId"/>, when resolved.</summary>
+        public string? SelectedCourseCode { get; set; }
+
         private string BuildDisplayName()
         {
             var parts = new List<string>();

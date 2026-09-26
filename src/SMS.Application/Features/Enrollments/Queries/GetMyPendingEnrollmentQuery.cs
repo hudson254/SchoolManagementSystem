@@ -75,12 +75,30 @@ namespace SMS.Application.Features.Enrollments.Queries
             var isPendingApproval = status == RegistrationStatus.PendingApproval;
             var isApproved = status == RegistrationStatus.Approved;
 
-            var courseName = student.Enrollments?.FirstOrDefault()?.Course?.Name;
+            // The course the student chose is persisted on the student record
+            // (Student.SelectedCourseId) at registration and again when the
+            // selection wizard is submitted. Reading it from
+            // student.Enrollments — as this handler used to — returned nothing,
+            // because registration creates no Enrollment rows, so
+            // hasSelectedCourse was hard-wired to false.
+            // The Enrollments fallback is retained for records that predate the
+            // SelectedCourseId column and were never backfilled.
+            var persistedCourseId = student.SelectedCourseId
+                ?? student.Enrollments?.FirstOrDefault()?.CourseId;
+            var courseName = student.SelectedCourse?.Name
+                ?? student.Enrollments?.FirstOrDefault()?.Course?.Name;
             var unitsCount = student.Enrollments?.Count ?? 0;
+
+            // Never report a selection that does not exist, and never report "no
+            // selection" when one was persisted. needsCourseSelection stays
+            // driven by RegistrationStatus so the two fields cannot disagree.
+            var hasSelectedCourse = persistedCourseId.HasValue;
 
             string? message = status switch
             {
-                RegistrationStatus.PendingCourseSelection => "Please select a course to complete your enrollment.",
+                RegistrationStatus.PendingCourseSelection => hasSelectedCourse
+                    ? $"You selected {courseName ?? "a course"} at registration. Review your selection and submit it for approval."
+                    : "Please select a course to complete your enrollment.",
                 RegistrationStatus.PendingApproval => "Your enrollment has been submitted and is awaiting approval.",
                 RegistrationStatus.Approved => "Your enrollment has been approved.",
                 RegistrationStatus.Rejected => "Your enrollment was rejected. Please contact administration.",
@@ -94,11 +112,11 @@ namespace SMS.Application.Features.Enrollments.Queries
                 FullName = $"{student.FirstName} {student.LastName}".Trim(),
                 Email = student.Email,
                 RegistrationStatus = status.ToString(),
-                HasSelectedCourse = !needsCourseSelection,
-                SelectedCourseId = student.Enrollments?.FirstOrDefault()?.CourseId,
+                HasSelectedCourse = hasSelectedCourse,
+                SelectedCourseId = persistedCourseId,
                 SelectedCourseName = courseName,
                 UnitsCount = unitsCount,
-                NeedsCourseSelection = needsCourseSelection,
+                NeedsCourseSelection = needsCourseSelection && !hasSelectedCourse,
                 IsPendingApproval = isPendingApproval,
                 IsApproved = isApproved,
                 Message = message

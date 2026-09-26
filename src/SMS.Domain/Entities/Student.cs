@@ -32,6 +32,17 @@ namespace SMS.Domain.Entities
         public DateTime? GraduationDate { get; set; }
         public Guid? ProgrammeId { get; set; }
         public Guid? CurrentSemesterId { get; set; }
+
+        /// <summary>
+        /// The course the student selected at registration (or during the course
+        /// selection wizard). This is the durable record of the *choice* — it is
+        /// persisted before any course-offering enrollment exists, so it remains
+        /// readable before the student is approved or enrolled in an offering.
+        /// Null for students who have not chosen a course (and for pre-fix
+        /// registrations, which the migration backfill leaves null on purpose).
+        /// </summary>
+        public Guid? SelectedCourseId { get; set; }
+
         public string AcademicStatus { get; set; } = "Active";
         public bool IsActive { get; set; } = true;
         public bool IsEnrolled { get; set; } = true;
@@ -54,6 +65,7 @@ namespace SMS.Domain.Entities
         public virtual User User { get; set; }
         public virtual Programme Programme { get; set; }
         public virtual Semester CurrentSemester { get; set; }
+        public virtual Course? SelectedCourse { get; set; }
         public virtual ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
         public virtual ICollection<Grade> Grades { get; set; } = new List<Grade>();
         public virtual ICollection<Attendance> Attendances { get; set; } = new List<Attendance>();

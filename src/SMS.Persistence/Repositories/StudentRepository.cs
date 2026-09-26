@@ -20,7 +20,12 @@ namespace SMS.Persistence.Repositories
 
         public async Task<Student> GetStudentByEmailAsync(string email)
         {
-            return await _dbSet.FirstOrDefaultAsync(s => s.Email == email && !s.IsDeleted);
+            // SelectedCourse is included so callers (enrollment status, dashboard,
+            // course selection) can surface the course the student chose at
+            // registration without issuing a second round trip.
+            return await _dbSet
+                .Include(s => s.SelectedCourse)
+                .FirstOrDefaultAsync(s => s.Email == email && !s.IsDeleted);
         }
 
         public async Task<Student> GetStudentByStudentNumberAsync(string studentNumber)
@@ -75,6 +80,7 @@ namespace SMS.Persistence.Repositories
                 .Include(s => s.User)
                 .Include(s => s.Programme)
                 .Include(s => s.CurrentSemester)
+                .Include(s => s.SelectedCourse)
                 .Include(s => s.Enrollments)
                     .ThenInclude(e => e.Unit)
                 .Include(s => s.Enrollments)

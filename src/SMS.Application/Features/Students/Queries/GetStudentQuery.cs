@@ -67,6 +67,11 @@ namespace SMS.Application.Features.Students.Queries
                 EnrollmentDate = student.EnrollmentDate,
                 ProgrammeId = student.ProgrammeId,
                 ProgrammeName = student.Programme?.Name,
+                // The course chosen at registration, surfaced for both the student
+                // viewing their own record and staff viewing the student record.
+                SelectedCourseId = student.SelectedCourseId,
+                SelectedCourseName = student.SelectedCourse?.Name,
+                SelectedCourseCode = student.SelectedCourse?.Code,
                 AcademicStatus = student.AcademicStatus,
                 IsEnrolled = student.IsEnrolled,
                 CumulativeGPA = student.CumulativeGPA,

@@ -6599,6 +6599,9 @@ namespace SMS.Persistence.Migrations
                         .HasColumnType("bytea")
                         .HasColumnName("row_version");
 
+                    b.Property<Guid?>("SelectedCourseId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("StaffIdEstNo")
                         .HasColumnType("text");
 
@@ -6633,6 +6636,8 @@ namespace SMS.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ProgrammeId");
+
+                    b.HasIndex("SelectedCourseId");
 
                     b.HasIndex("StudentNumber")
                         .IsUnique();
@@ -8909,6 +8914,11 @@ namespace SMS.Persistence.Migrations
                         .HasForeignKey("ProgrammeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("SMS.Domain.Entities.Course", "SelectedCourse")
+                        .WithMany()
+                        .HasForeignKey("SelectedCourseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SMS.Domain.Entities.Tenant", null)
                         .WithMany("Students")
                         .HasForeignKey("TenantId")
@@ -8923,6 +8933,8 @@ namespace SMS.Persistence.Migrations
                     b.Navigation("CurrentSemester");
 
                     b.Navigation("Programme");
+
+                    b.Navigation("SelectedCourse");
 
                     b.Navigation("User");
                 });

@@ -90,7 +90,9 @@ export const dashboardService = {
 
   /**
    * Dashboard payload for the currently authenticated student: real active
-   * course-offering enrollments (with units) and the accommodation assignment.
+   * course-offering enrollments (with units), the pending/selected course when
+   * the student is not yet enrolled in an offering, and the accommodation
+   * assignment.
    */
   getMyStudentDashboard: () =>
     api.get<MyStudentDashboard>('/dashboard/student-me'),
@@ -148,6 +150,16 @@ export interface StudentCourse {
   units: DashboardUnit[];
 }
 
+export interface StudentPendingCourse {
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  description?: string | null;
+  registrationStatus: string;
+  status: string;
+  requiresSubmission: boolean;
+}
+
 export interface MyStudentDashboard {
   studentId: string;
   fullName: string;
@@ -155,7 +167,9 @@ export interface MyStudentDashboard {
   email: string;
   studentNumber: string;
   academicStatus: string;
+  registrationStatus: string;
   enrollments: StudentCourse[];
+  pendingCourse: StudentPendingCourse | null;
   accommodation: AccommodationAssignmentSummary | null;
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Paper,
@@ -26,26 +26,17 @@ import {
 } from '@mui/material';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { enrollmentService, StudentEnrollmentStatus, CourseOption } from '../services/enrollment.service';
-import { courseService } from '../services/course.service';
+import { enrollmentService, StudentEnrollmentStatus, CourseOption, SelectableUnit } from '../services/enrollment.service';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import { useSnackbar } from 'notistack';
 
 const STEPS = ['Select Course', 'Confirm Units', 'Submit'];
 
-interface Course {
-  id: string;
-  name: string;
-  code: string;
-  description?: string;
-}
+interface Unit extends SelectableUnit {}
 
-interface Unit {
-  id: string;
-  code: string;
-  name: string;
-  credits: number;
+interface CoursesResponse {
+  items?: CourseOption[];
 }
 
 export const CourseSelectionPage: React.FC = () => {
@@ -55,6 +46,9 @@ export const CourseSelectionPage: React.FC = () => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
+  // Tracks whether the student has manually picked a course, so the
+  // registration pre-selection is not fought with by the status query.
+  const [courseChosenByUser, setCourseChosenByUser] = useState(false);
 
   // Fetch student's enrollment status
   const { data: status, isLoading: statusLoading } = useQuery<StudentEnrollmentStatus>({
@@ -62,20 +56,48 @@ export const CourseSelectionPage: React.FC = () => {
     queryFn: () => enrollmentService.getMyStatus(),
   });
 
-  // Fetch available courses
-  const { data: coursesResponse, isLoading: coursesLoading } = useQuery({
-    queryKey: ['active-courses'],
-    queryFn: () => courseService.getCourses({ isActive: true, pageSize: 100 }),
+  // Fetch available courses from the STUDENT-AUTHORIZED endpoint.
+  // GET /courses is restricted to ModeratorAccess and returned 403 for a
+  // Student token, which made this step render "No courses available".
+  const {
+    data: coursesData,
+    isLoading: coursesLoading,
+    isError: coursesError,
+    error: coursesErrorDetail,
+  } = useQuery<CoursesResponse>({
+    queryKey: ['enrollment-available-courses'],
+    queryFn: async () => {
+      const result = await enrollmentService.getAvailableCourses();
+      return { items: Array.isArray(result) ? result : [] };
+    },
     enabled: activeStep === 0,
   });
-  const courses = coursesResponse?.items;
+  const courses = coursesData?.items ?? [];
 
-  // Fetch course units
-  const { data: units, isLoading: unitsLoading } = useQuery<Unit[]>({
-    queryKey: ['course-units', selectedCourse],
-    queryFn: () => courseService.getUnits(selectedCourse) as Promise<any>,
+  // Fetch course units from the student-authorized endpoint (was
+  // GET /courses/{id}/units, also ModeratorAccess).
+  const {
+    data: units,
+    isLoading: unitsLoading,
+    isError: unitsError,
+  } = useQuery<Unit[]>({
+    queryKey: ['enrollment-available-course-units', selectedCourse],
+    queryFn: async () => {
+      const result = await enrollmentService.getAvailableCourseUnits(selectedCourse);
+      return Array.isArray(result) ? result : [];
+    },
     enabled: activeStep === 1 && !!selectedCourse,
   });
+
+  // Pre-select the course chosen at registration so the student confirms it
+  // rather than re-choosing. Runs only while the student has not picked one.
+  useEffect(() => {
+    if (courseChosenByUser || !status?.selectedCourseId) return;
+    setSelectedCourse(status.selectedCourseId);
+  }, [status?.selectedCourseId, courseChosenByUser]);
+
+  const selectedCourseName =
+    courses.find((c) => c.id === selectedCourse)?.name ?? status?.selectedCourseName;
 
   const submitMutation = useMutation({
     mutationFn: (courseId: string) => enrollmentService.submitEnrollment(courseId),
@@ -106,6 +128,13 @@ export const CourseSelectionPage: React.FC = () => {
 
   const handleBack = () => {
     setActiveStep((prev) => prev - 1);
+  };
+
+  const handleSelectCourse = (courseId: string) => {
+    setCourseChosenByUser(true);
+    setSelectedCourse(courseId);
+    // Units are course-specific; clear any previous choice.
+    setSelectedUnits([]);
   };
 
   const toggleUnit = (unitId: string) => {
@@ -169,9 +198,21 @@ export const CourseSelectionPage: React.FC = () => {
             </Typography>
             {coursesLoading ? (
               <CircularProgress />
+            ) : coursesError ? (
+              // A failed request must not look like "no courses available".
+              <Alert severity="error">
+                Could not load available courses:{' '}
+                {(coursesErrorDetail as { message?: string })?.message ??
+                  'please check your connection and try again.'}
+              </Alert>
+            ) : courses.length === 0 ? (
+              <Alert severity="warning">
+                No courses are currently available for selection. Please contact the
+                administration office.
+              </Alert>
             ) : (
               <Grid container spacing={2}>
-                {courses?.map((course) => (
+                {courses.map((course) => (
                   <Grid item xs={12} sm={6} md={4} key={course.id}>
                     <Card
                       variant={selectedCourse === course.id ? 'elevation' : 'outlined'}
@@ -180,7 +221,7 @@ export const CourseSelectionPage: React.FC = () => {
                         borderColor: selectedCourse === course.id ? 'primary.main' : undefined,
                         borderWidth: selectedCourse === course.id ? 2 : 1,
                       }}
-                      onClick={() => setSelectedCourse(course.id)}
+                      onClick={() => handleSelectCourse(course.id)}
                     >
                       <CardContent>
                         <Typography variant="h6">{course.name}</Typography>
@@ -192,11 +233,21 @@ export const CourseSelectionPage: React.FC = () => {
                         )}
                       </CardContent>
                       <CardActions>
-                        <Chip
-                          label={selectedCourse === course.id ? 'Selected' : 'Select'}
-                          color={selectedCourse === course.id ? 'primary' : 'default'}
-                          size="small"
-                        />
+                        {selectedCourse === course.id ? (
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            <Chip label="Selected" color="primary" size="small" />
+                            {status?.selectedCourseId === course.id && (
+                              <Chip
+                                label="Selected at registration"
+                                color="success"
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+                        ) : (
+                          <Chip label="Select" color="default" size="small" />
+                        )}
                       </CardActions>
                     </Card>
                   </Grid>
@@ -209,13 +260,22 @@ export const CourseSelectionPage: React.FC = () => {
         {activeStep === 1 && (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Select Units for {courses?.find((c) => c.id === selectedCourse)?.name}
+              Select Units for {selectedCourseName}
             </Typography>
             {unitsLoading ? (
               <CircularProgress />
+            ) : unitsError ? (
+              <Alert severity="error">
+                Could not load the units for this course. Please go back and try
+                selecting the course again.
+              </Alert>
+            ) : !units || units.length === 0 ? (
+              <Alert severity="warning">
+                This course has no active units available for selection.
+              </Alert>
             ) : (
               <List>
-                {units?.map((unit) => (
+                {units.map((unit) => (
                   <ListItem key={unit.id} dense>
                     <ListItemText
                       primary={unit.name}
@@ -243,14 +303,14 @@ export const CourseSelectionPage: React.FC = () => {
               Please review your selections before submitting
             </Alert>
             <Typography variant="subtitle1">
-              Course: {courses?.find((c) => c.id === selectedCourse)?.name}
+              Course: {selectedCourseName}
             </Typography>
             <Typography variant="subtitle2" sx={{ mt: 1 }}>
               Selected Units ({selectedUnits.length}):
             </Typography>
             <List dense>
-              {units
-                ?.filter((u) => selectedUnits.includes(u.id))
+              {(units ?? [])
+                .filter((u) => selectedUnits.includes(u.id))
                 .map((unit) => (
                   <ListItem key={unit.id}>
                     <ListItemText primary={unit.name} secondary={`${unit.code} - ${unit.credits} Credits`} />
