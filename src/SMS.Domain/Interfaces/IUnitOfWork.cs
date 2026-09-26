@@ -40,6 +40,11 @@ namespace SMS.Domain.Interfaces
         IOrderRepository Orders { get; }
         IRoadAccountRepository RoadAccounts { get; }
         IOrderImportRepository OrderImports { get; }
+        
+        // OMS Request repositories (Phase 2C)
+        IRequestRepository Requests { get; }
+        IRequestTypeRepository RequestTypes { get; }
+        IRequestCommentRepository RequestComments { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
         Task BeginTransactionAsync(CancellationToken cancellationToken = default);

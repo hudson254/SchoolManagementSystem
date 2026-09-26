@@ -545,6 +545,7 @@ builder.Services.Configure<SMS.Infrastructure.Options.WalRecoveryOptions>(
 // storage, Road Accounting boundary — the latter performs no calculations yet,
 // see Documentation/OMS/OMS_OPEN_REQUIREMENTS.md #18).
 builder.Services.AddScoped<IOrderNumberGenerator, SMS.Infrastructure.Services.OrderNumberGenerator>();
+builder.Services.AddScoped<IRequestNumberGenerator, SMS.Infrastructure.Services.RequestNumberGenerator>();
 builder.Services.AddScoped<IOrderManifestStorage, SMS.Infrastructure.Storage.OrderManifestStorage>();
 builder.Services.AddScoped<IRoadAccountingService, SMS.Infrastructure.Services.RoadAccountingService>();
 
@@ -749,6 +750,13 @@ builder.Services.AddAuthorization(options =>
     // Submit order: Coordinator.
     options.AddPolicy("Oms.CanSubmitOrder", policy =>
         policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    // Approve order: Administrator only (SystemAdministrator, Administrator).
+    // Creator self-approval is blocked by the domain model and the handler.
+    options.AddPolicy("Oms.CanApproveOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator"));
+    // Reject order: Administrator only (SystemAdministrator, Administrator).
+    options.AddPolicy("Oms.CanRejectOrder", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator"));
     // Cancel any order (Administrator only). Creator-only cancellation is enforced
     // in the handler when CancelAny is false; this policy only permits the broader
     // "cancel any order" path for Administrators.
@@ -756,6 +764,40 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("SystemAdministrator", "Administrator"));
     options.AddPolicy("Oms.CanCancelOwnOrder", policy =>
         policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+
+    // --- OMS Request policies (Phase 2C): mirror OmsAuthorization Request role mappings ---
+    options.AddPolicy("Oms.CanViewRequests", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
+    options.AddPolicy("Oms.CanCreateRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student"));
+    options.AddPolicy("Oms.CanUpdateRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student"));
+    options.AddPolicy("Oms.CanSubmitRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student"));
+    options.AddPolicy("Oms.CanAssignRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    options.AddPolicy("Oms.CanReassignRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    options.AddPolicy("Oms.CanReviewRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
+    options.AddPolicy("Oms.CanApproveRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    options.AddPolicy("Oms.CanRejectRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    options.AddPolicy("Oms.CanReturnRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
+    options.AddPolicy("Oms.CanCancelOwnRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student"));
+    options.AddPolicy("Oms.CanCancelAnyRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator"));
+    options.AddPolicy("Oms.CanCompleteRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    options.AddPolicy("Oms.CanEscalateRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator"));
+    options.AddPolicy("Oms.CanCommentOnRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
+    options.AddPolicy("Oms.CanManageRequestTypes", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator"));
 });
 
 var app = builder.Build();

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SMS.Certificates.Domain.Entities;
 using SMS.Domain.Common;
@@ -72,6 +72,14 @@ namespace SMS.Persistence.Data
         public DbSet<Title> Titles { get; set; }
         public DbSet<UploadFile> UploadFiles { get; set; }
 
+        // OMS Request entities - Phase 2C
+        public DbSet<Request> Requests { get; set; }
+        public DbSet<RequestAttachment> RequestAttachments { get; set; }
+        public DbSet<RequestStatusHistory> RequestStatusHistories { get; set; }
+        public DbSet<RequestComment> RequestComments { get; set; }
+        public DbSet<RequestType> RequestTypes { get; set; }
+        public DbSet<RequestNumberSequence> RequestNumberSequences { get; set; }
+
         // ------------------------------------------------------------------
         // OMS (Order Management System) â€” Phase 2 (additive only).
         // See Documentation/OMS/OMS_ARCHITECTURE.md.
@@ -88,7 +96,28 @@ namespace SMS.Persistence.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
+            
+            modelBuilder.Entity<RequestAttachment>(entity =>
+            {
+                entity.ToTable("sms_request_attachments");
+                entity.HasKey(a => a.Id);
+                entity.Property(a => a.Id).ValueGeneratedNever();
+                entity.Property(a => a.RequestId).IsRequired();
+                entity.Property(a => a.FileName).IsRequired().HasMaxLength(260);
+                entity.Property(a => a.ContentType).HasMaxLength(200);
+                entity.Property(a => a.StorageKey).IsRequired().HasMaxLength(1000);
+                entity.Property(a => a.UploadedByUserId).IsRequired().HasMaxLength(100);
+                entity.Property(a => a.UploadedByUserName).HasMaxLength(256);
+
+                entity.HasOne(a => a.Request)
+                    .WithMany()
+                    .HasForeignKey(a => a.RequestId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(a => new { a.TenantId, a.RequestId });
+                entity.HasIndex(a => new { a.TenantId, a.UploadedByUserId });
+            });
+base.OnModelCreating(modelBuilder);
 
             // Configure Title entity
             modelBuilder.Entity<Title>(entity =>
@@ -841,6 +870,104 @@ namespace SMS.Persistence.Data
             // inherited row_version token from BaseEntity is kept untouched.
             modelBuilder.Entity<Order>().Property<uint>("xmin").IsRowVersion();
 
+            // SMS Request entities - Phase 2C
+            modelBuilder.Entity<Request>(entity =>
+            {
+                entity.ToTable("sms_requests");
+                entity.HasKey(r => r.Id);
+                entity.Property(r => r.Id).ValueGeneratedNever();
+                entity.Property(r => r.RequestNumber).IsRequired().HasMaxLength(50);
+                entity.Property(r => r.RequestType).IsRequired().HasMaxLength(100);
+                entity.Property(r => r.TypeDisplayName).IsRequired().HasMaxLength(200);
+                entity.Property(r => r.Title).IsRequired().HasMaxLength(200);
+                entity.Property(r => r.Description).HasMaxLength(2000);
+                entity.Property(r => r.Priority).HasConversion<int>();
+                entity.Property(r => r.Status).HasConversion<int>();
+                entity.Property(r => r.RequesterUserId).IsRequired().HasMaxLength(100);
+                entity.Property(r => r.AssignedUserId).HasMaxLength(100);
+                entity.Property(r => r.ApprovedByUserId).HasMaxLength(100);
+                entity.Property(r => r.RejectedByUserId).HasMaxLength(100);
+                entity.Property(r => r.CancelledByUserId).HasMaxLength(100);
+
+                entity.HasIndex(r => new { r.TenantId, r.RequestNumber }).IsUnique();
+                entity.HasIndex(r => new { r.TenantId, r.Status });
+                entity.HasIndex(r => new { r.TenantId, r.RequestType });
+                entity.HasIndex(r => new { r.TenantId, r.RequesterUserId });
+                entity.HasIndex(r => new { r.TenantId, r.AssignedUserId });
+
+                entity.HasMany(r => r.StatusHistory)
+                    .WithOne(h => h.Request)
+                    .HasForeignKey(h => h.RequestId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(r => r.Comments)
+                    .WithOne(c => c.Request)
+                    .HasForeignKey(c => c.RequestId)
+                                        .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Request>().Property<uint>("xmin").IsRowVersion();
+
+            modelBuilder.Entity<RequestStatusHistory>(entity =>
+            {
+                entity.ToTable("sms_request_status_history");
+                entity.HasKey(h => h.Id);
+                entity.Property(h => h.Id).ValueGeneratedNever();
+                entity.Property(h => h.RequestId).IsRequired();
+                entity.Property(h => h.FromStatus).HasConversion<int>();
+                entity.Property(h => h.ToStatus).HasConversion<int>();
+                entity.Property(h => h.Action).HasConversion<int>();
+                entity.Property(h => h.PerformedByUserId).IsRequired().HasMaxLength(100);
+
+                entity.HasIndex(h => new { h.TenantId, h.RequestId });
+                entity.HasIndex(h => new { h.TenantId, h.PerformedAtUtc });
+
+                entity.HasOne(h => h.Request)
+                    .WithMany(r => r.StatusHistory)
+                    .HasForeignKey(h => h.RequestId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<RequestComment>(entity =>
+            {
+                entity.ToTable("sms_request_comments");
+                entity.HasKey(c => c.Id);
+                entity.Property(c => c.Id).ValueGeneratedNever();
+                entity.Property(c => c.RequestId).IsRequired();
+                entity.Property(c => c.AuthorUserId).IsRequired().HasMaxLength(100);
+                entity.Property(c => c.Message).IsRequired().HasMaxLength(2000);
+                entity.Property(c => c.CreatedAt).IsRequired();
+                entity.Property(c => c.EditedAtUtc);
+
+                entity.HasIndex(c => new { c.TenantId, c.RequestId });
+                entity.HasIndex(c => new { c.TenantId, c.CreatedAt });
+
+                entity.HasOne(c => c.Request)
+                    .WithMany(r => r.Comments)
+                    .HasForeignKey(c => c.RequestId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<RequestType>(entity =>
+            {
+                entity.ToTable("sms_request_types");
+                entity.HasKey(rt => rt.Id);
+                entity.Property(rt => rt.Id).ValueGeneratedNever();
+                entity.Property(rt => rt.Code).IsRequired().HasMaxLength(100);
+                entity.Property(rt => rt.DisplayName).IsRequired().HasMaxLength(200);
+                entity.Property(rt => rt.Description).HasMaxLength(1000);
+                entity.Property(rt => rt.IsActive).IsRequired().HasDefaultValue(true);
+
+                entity.HasIndex(rt => new { rt.TenantId, rt.Code }).IsUnique();
+                entity.HasIndex(rt => new { rt.TenantId, rt.IsActive });
+            });
+
+            modelBuilder.Entity<RequestNumberSequence>(entity =>
+            {
+                entity.ToTable("sms_request_number_sequences");
+                entity.HasKey(s => new { s.TenantId, s.Year });
+            });
+
             modelBuilder.Entity<OrderItem>(entity =>
             {
                 entity.ToTable("oms_order_items");
@@ -1035,6 +1162,12 @@ namespace SMS.Persistence.Data
             modelBuilder.Entity<OrderImport>().HasQueryFilter(i => !i.IsDeleted && i.TenantId == CurrentTenantGuid);
             modelBuilder.Entity<OrderImportRow>().HasQueryFilter(r => !r.IsDeleted && r.TenantId == CurrentTenantGuid);
             modelBuilder.Entity<RoadAccount>().HasQueryFilter(r => !r.IsDeleted && r.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<Request>().HasQueryFilter(r => !r.IsDeleted && r.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<RequestStatusHistory>().HasQueryFilter(h => !h.IsDeleted && h.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<RequestComment>().HasQueryFilter(c => !c.IsDeleted && c.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<RequestAttachment>().HasQueryFilter(a => !a.IsDeleted && a.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<RequestType>().HasQueryFilter(t => !t.IsDeleted && t.TenantId == CurrentTenantGuid);
+            modelBuilder.Entity<RequestNumberSequence>().HasQueryFilter(s => s.TenantId == CurrentTenantGuid);
         }
 
         /// <summary>

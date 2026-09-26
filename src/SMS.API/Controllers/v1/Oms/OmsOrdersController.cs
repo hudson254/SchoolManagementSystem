@@ -104,8 +104,7 @@ public class OmsOrdersController : BaseApiController
     {
         var result = await Mediator.Send(new CancelOrderCommand
         {
-            OrderId = orderId,
-            Reason = request.Reason,
+            OrderId = orderId, Reason = request.Reason,
             CancelAny = false
         }, cancellationToken);
         return Ok(result);
@@ -129,9 +128,59 @@ public class OmsOrdersController : BaseApiController
     {
         var result = await Mediator.Send(new CancelOrderCommand
         {
-            OrderId = orderId,
-            Reason = request.Reason,
+            OrderId = orderId, Reason = request.Reason,
             CancelAny = true
+        }, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Approves a Submitted or PendingApproval order.
+    /// Creator self-approval is blocked by the domain model; the handler also
+    /// enforces tenant isolation and authorization as defense in depth.
+    /// </summary>
+    [HttpPost("{orderId:guid}/approve")]
+    [Authorize(Policy = OmsPolicy.CanApproveOrder)]
+    [SwaggerOperation(Summary = "Approve an OMS order")]
+    [SwaggerResponse(StatusCodes.Status200OK, "The updated order", Type = typeof(OrderDto))]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ApproveOrder(
+        Guid orderId,
+        [FromBody] ApproveOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await Mediator.Send(new ApproveOrderCommand
+        {
+            OrderId = orderId,
+            Remarks = request.Remarks
+        }, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Rejects a Submitted or PendingApproval order.
+    /// A rejection reason is required by the domain model. The handler also
+    /// enforces tenant isolation and authorization as defense in depth.
+    /// </summary>
+    [HttpPost("{orderId:guid}/reject")]
+    [Authorize(Policy = OmsPolicy.CanRejectOrder)]
+    [SwaggerOperation(Summary = "Reject an OMS order")]
+    [SwaggerResponse(StatusCodes.Status200OK, "The updated order", Type = typeof(OrderDto))]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RejectOrder(
+        Guid orderId,
+        [FromBody] RejectOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await Mediator.Send(new RejectOrderCommand
+        {
+            OrderId = orderId, Remarks = request.Reason
         }, cancellationToken);
         return Ok(result);
     }
@@ -193,4 +242,17 @@ public class AddOrderItemRequest
     public string Description { get; set; } = string.Empty;
     public int Quantity { get; set; } = 1;
     public decimal UnitPrice { get; set; }
+}
+
+
+/// <summary>Request body for approving a Submitted/PendingApproval order.</summary>
+public class ApproveOrderRequest
+{
+    public string? Remarks { get; set; }
+}
+
+/// <summary>Request body for rejecting a Submitted/PendingApproval order.</summary>
+public class RejectOrderRequest
+{
+    public string Reason { get; set; } = string.Empty;
 }

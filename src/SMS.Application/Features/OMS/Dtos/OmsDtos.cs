@@ -1,4 +1,4 @@
-using SMS.Domain.Entities;
+﻿using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using System;
 using System.Collections.Generic;
@@ -33,7 +33,7 @@ namespace SMS.Application.Features.OMS.Dtos
         };
     }
 
-    /// <summary>Read model for a road account (no accounting math — open requirement #18).</summary>
+    /// <summary>Read model for a road account (no accounting math â€” open requirement #18).</summary>
     public class RoadAccountDto
     {
         public Guid Id { get; set; }
@@ -71,4 +71,28 @@ namespace SMS.Application.Features.OMS.Dtos
         public IReadOnlyDictionary<string, decimal> TotalsByCurrency { get; set; } =
             new Dictionary<string, decimal>();
     }
+
+    /// <summary>Read model for a request type.</summary>
+    public class RequestTypeDto
+    {
+        public Guid Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool IsActive { get; set; }
+        public RequestPriority DefaultPriority { get; set; }
+        public DateTime CreatedAt { get; set; }
+
+        public static RequestTypeDto FromEntity(RequestType t) => new()
+        {
+            Id = t.Id,
+            Code = t.Code,
+            DisplayName = t.DisplayName,
+            Description = t.Description,
+            IsActive = t.IsActive,
+            DefaultPriority = t.DefaultPriority,
+            CreatedAt = t.CreatedAt
+        };
+    }
 }
+

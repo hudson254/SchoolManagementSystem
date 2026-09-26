@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -154,6 +154,20 @@ namespace SMS.Persistence.Repositories
         public IOrderImportRepository OrderImports =>
             _orderImports ??= new OrderImportRepository(_context, _loggerFactory.CreateLogger<OrderImportRepository>());
 
+        // OMS Request repositories (Phase 2C)
+        private IRequestRepository _requests;
+        private IRequestTypeRepository _requestTypes;
+        private IRequestCommentRepository _requestComments;
+
+        public IRequestRepository Requests =>
+            _requests ??= new RequestRepository(_context, _loggerFactory.CreateLogger<RequestRepository>());
+
+        public IRequestTypeRepository RequestTypes =>
+            _requestTypes ??= new RequestTypeRepository(_context, _loggerFactory.CreateLogger<RequestTypeRepository>());
+
+        public IRequestCommentRepository RequestComments =>
+            _requestComments ??= new RequestCommentRepository(_context, _loggerFactory.CreateLogger<RequestCommentRepository>());
+
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             return await _context.SaveChangesAsync(cancellationToken);
@@ -235,3 +249,4 @@ namespace SMS.Persistence.Repositories
         }
     }
 }
+

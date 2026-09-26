@@ -7,41 +7,31 @@ namespace SMS.API.Controllers.v1.Oms;
 /// </summary>
 public static class OmsPolicy
 {
-    /// <summary>
-    /// View orders: Coordinator, Lecturer (view-only).
-    /// Matches OmsAuthorization.ViewOrdersRoles.
-    /// </summary>
+    // --- Legacy Order policies (Phase 2A) ---
     public const string CanViewOrders = "Oms.CanViewOrders";
-
-    /// <summary>
-    /// Create order: Coordinator.
-    /// Matches OmsAuthorization.CreateOrderRoles.
-    /// </summary>
     public const string CanCreateOrder = "Oms.CanCreateOrder";
-
-    /// <summary>
-    /// Edit order (add/remove items on Draft orders): Coordinator.
-    /// Matches OmsAuthorization.CreateOrderRoles.
-    /// </summary>
     public const string CanEditOrder = "Oms.CanEditOrder";
-
-    /// <summary>
-    /// Submit order: Coordinator.
-    /// Matches OmsAuthorization.CreateOrderRoles.
-    /// </summary>
     public const string CanSubmitOrder = "Oms.CanSubmitOrder";
-
-    /// <summary>
-    /// Cancel any order: Administrator only.
-    /// Matches OmsAuthorization.CancelAnyOrderRoles.
-    /// Broader cancellation permission - delegates creator-only checks to the handler.
-    /// </summary>
     public const string CanCancelAnyOrder = "Oms.CanCancelAnyOrder";
-
-    /// <summary>
-    /// Cancel own order: Administrator and Coordinator.
-    /// Matches OmsAuthorization.CancelOwnOrderRoles.
-    /// Creator-only cancellation - the handler enforces ownership.
-    /// </summary>
     public const string CanCancelOwnOrder = "Oms.CanCancelOwnOrder";
+    public const string CanApproveOrder = "Oms.CanApproveOrder";
+    public const string CanRejectOrder = "Oms.CanRejectOrder";
+
+    // --- OMS Request policies (Phase 2C) ---
+    public const string CanViewRequests = "Oms.CanViewRequests";
+    public const string CanCreateRequest = "Oms.CanCreateRequest";
+    public const string CanUpdateRequest = "Oms.CanUpdateRequest";
+    public const string CanSubmitRequest = "Oms.CanSubmitRequest";
+    public const string CanAssignRequest = "Oms.CanAssignRequest";
+    public const string CanReassignRequest = "Oms.CanReassignRequest";
+    public const string CanReviewRequest = "Oms.CanReviewRequest";
+    public const string CanApproveRequest = "Oms.CanApproveRequest";
+    public const string CanRejectRequest = "Oms.CanRejectRequest";
+    public const string CanReturnRequest = "Oms.CanReturnRequest";
+    public const string CanCancelOwnRequest = "Oms.CanCancelOwnRequest";
+    public const string CanCancelAnyRequest = "Oms.CanCancelAnyRequest";
+    public const string CanCompleteRequest = "Oms.CanCompleteRequest";
+    public const string CanEscalateRequest = "Oms.CanEscalateRequest";
+    public const string CanCommentOnRequest = "Oms.CanCommentOnRequest";
+    public const string CanManageRequestTypes = "Oms.CanManageRequestTypes";
 }
