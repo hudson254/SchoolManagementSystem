@@ -51,8 +51,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { studentService } from '../services/student.service';
 import { useAuth } from '../hooks/useAuth';
-import { canManageAcademic, canAdministrate } from '../utils/roles';
+import { canManageAcademic, canAdministrate, canCreateOmsRequest } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
+import { ModuleRequestDialog } from '../components/omsRequests/ModuleRequestDialog';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -87,6 +89,34 @@ export const StudentDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [tabValue, setTabValue] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // ── OMS Request entry point (Enrollment adapter) ──────────────────────────
+  // The Enrollment module remains authoritative. This only RAISES a request;
+  // it never mutates enrollment state. The adapter requires the Enrollment
+  // entity id, which is exactly what StudentDetails.enrollments[].id carries.
+  const canRaiseEnrollmentRequest = canCreateOmsRequest(user?.roles);
+  const [enrollmentRequest, setEnrollmentRequest] = useState<{
+    open: boolean;
+    enrollmentId: string;
+    label: string;
+  }>({ open: false, enrollmentId: '', label: '' });
+
+  const openEnrollmentRequest = (enrollment: { id: string; unitName?: string; unitCode?: string }) => {
+    setEnrollmentRequest({
+      open: true,
+      enrollmentId: enrollment.id,
+      label: [enrollment.unitCode, enrollment.unitName].filter(Boolean).join(' — '),
+    });
+  };
+
+  const closeEnrollmentRequest = () =>
+    setEnrollmentRequest((prev) => ({ ...prev, open: false }));
+
+  const handleRequestCreated = (requestId: string) => {
+    setEnrollmentRequest((prev) => ({ ...prev, open: false }));
+    queryClient.invalidateQueries({ queryKey: ['oms-requests'] });
+    navigate(`/oms/requests/${requestId}`);
+  };
 
   const { data: student, isLoading, isError, refetch } = useQuery({
     queryKey: ['student', id],
@@ -473,6 +503,7 @@ export const StudentDetail: React.FC = () => {
                   <TableCell>Semester</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Date</TableCell>
+                  <TableCell align="right">Request</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -492,6 +523,15 @@ export const StudentDetail: React.FC = () => {
                     <TableCell>
                       {new Date(enrollment.enrollmentDate).toLocaleDateString()}
                     </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        startIcon={<AssignmentIcon />}
+                        onClick={() => openEnrollmentRequest(enrollment)}
+                      >
+                        Raise Request
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -499,6 +539,21 @@ export const StudentDetail: React.FC = () => {
           </TableContainer>
         ) : (
           <Alert severity="info">No unit enrollments found for this student.</Alert>
+        )}
+
+        {canRaiseEnrollmentRequest && (
+          <ModuleRequestDialog
+            open={enrollmentRequest.open}
+            module="enrollment"
+            moduleRecordId={enrollmentRequest.enrollmentId}
+            recordLabel={
+              enrollmentRequest.label
+                ? `Enrollment: ${enrollmentRequest.label}`
+                : 'Enrollment'
+            }
+            onClose={closeEnrollmentRequest}
+            onCreated={handleRequestCreated}
+          />
         )}
       </TabPanel>
 

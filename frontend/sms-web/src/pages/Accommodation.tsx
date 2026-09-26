@@ -39,17 +39,48 @@ import {
   Bed as BedIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { accommodationService } from '../services/accommodation.service';
 import { studentService } from '../services/student.service';
 import { lecturerService } from '../services/lecturer.service';
 import { useAuth } from '../hooks/useAuth';
+import { canCreateOmsRequest } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
+import { ModuleRequestDialog } from '../components/omsRequests/ModuleRequestDialog';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 const STAFF_ROLES = ['Receptionist', 'Coordinator', 'Administrator', 'SystemAdministrator'];
 
 export const Accommodation: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  // ── OMS Request entry point (Accommodation adapter) ───────────────────────
+  // Raising a request NEVER moves an occupant and never mutates house, lane or
+  // occupancy data. The existing Transfer/Assign/Vacate commands below remain
+  // the only things that do, and they are untouched.
+  const canRaiseAccommodationRequest = canCreateOmsRequest(user?.roles);
+  const [accommodationRequest, setAccommodationRequest] = useState<{
+    open: boolean;
+    assignmentId: string;
+    label: string;
+  }>({ open: false, assignmentId: '', label: '' });
+
+  const handleOpenAccommodationRequest = (a: any) => {
+    const occupant = a.occupantType === 'Student' ? a.studentName : a.lecturerName;
+    setAccommodationRequest({
+      open: true,
+      assignmentId: a.id,
+      label: [
+        occupant,
+        a.houseNumber ? `House ${a.houseNumber}` : null,
+        a.laneName,
+      ]
+        .filter(Boolean)
+        .join(' — '),
+    });
+  };
 
   const isAdmin =
     user?.roles?.includes('SystemAdministrator') || user?.roles?.includes('Administrator');
@@ -751,7 +782,16 @@ return (
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {canRaiseAccommodationRequest && (
+                        <Button
+                          size="small"
+                          startIcon={<AssignmentIcon />}
+                          onClick={() => handleOpenAccommodationRequest(a)}
+                        >
+                          Request
+                        </Button>
+                      )}
                       {!a.isCheckedIn && !a.isCheckedOut && (
                         <IconButton size="small" title="Check in" color="success" disabled={checkInMutation.isPending} onClick={() => handleCheckIn(a.id)}>
                           <CheckInIcon fontSize="small" />
@@ -775,6 +815,24 @@ return (
           </Table>
         )}
       </Paper>
+
+      {/* OMS Request entry point (Accommodation adapter). The Accommodation module
+          remains authoritative: raising a request never moves an occupant, and
+          never mutates house, lane or occupancy data. */}
+      {canRaiseAccommodationRequest && accommodationRequest.assignmentId && (
+        <ModuleRequestDialog
+          open={accommodationRequest.open}
+          module="accommodation"
+          moduleRecordId={accommodationRequest.assignmentId}
+          recordLabel={accommodationRequest.label}
+          onClose={() => setAccommodationRequest((prev) => ({ ...prev, open: false }))}
+          onCreated={(requestId) => {
+            setAccommodationRequest((prev) => ({ ...prev, open: false }));
+            queryClient.invalidateQueries({ queryKey: ['oms-requests'] });
+            navigate(`/oms/requests/${requestId}`);
+          }}
+        />
+      )}
 {/* Lane Add/Edit Dialog */}
       <Dialog open={laneDialogOpen} onClose={handleCloseLaneDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingLaneId ? 'Edit Lane' : 'Add Lane'}</DialogTitle>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -29,8 +29,10 @@ import {
 } from '../services/assignment.service';
 import { saveBlob, formatFileSize } from '../services/studyMaterial.service';
 import { useAuth } from '../hooks/useAuth';
-import { hasAnyRole, LECTURER, COORDINATOR, STUDENT } from '../utils/roles';
+import { hasAnyRole, LECTURER, COORDINATOR, STUDENT, canCreateOmsRequest } from '../utils/roles';
 import { normalizeError } from '../utils/errors';
+import { ModuleRequestDialog } from '../components/omsRequests/ModuleRequestDialog';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 export const AssignmentDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -38,6 +40,14 @@ export const AssignmentDetailPage: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const canManageAssignments = hasAnyRole(user?.roles, LECTURER, COORDINATOR);
+
+  // ── OMS Request entry point (Assignment adapter) ──────────────────────────
+  // Ordinary assignment creation, submission and publication stay entirely
+  // inside the Assignment module. This button only RAISES an exception request
+  // (extension / reopen / correction / exception); it never touches a deadline
+  // or a submission.
+  const canRaiseAssignmentRequest = canCreateOmsRequest(user?.roles);
+  const [assignmentRequestOpen, setAssignmentRequestOpen] = useState(false);
 
   const { data: assignment, isLoading, isError, refetch } = useQuery({
     queryKey: ['assignment', id],
@@ -105,6 +115,15 @@ export const AssignmentDetailPage: React.FC = () => {
             <Button variant="outlined" onClick={() => navigate('/assignments')}>
               Back to Assignments
             </Button>
+            {canRaiseAssignmentRequest && (
+              <Button
+                variant="outlined"
+                startIcon={<AssignmentIcon />}
+                onClick={() => setAssignmentRequestOpen(true)}
+              >
+                Raise Request
+              </Button>
+            )}
             {canManageAssignments && (
               <Button
                 variant="contained"
@@ -310,6 +329,25 @@ export const AssignmentDetailPage: React.FC = () => {
           </>
         )}
       </Paper>
+
+      {canRaiseAssignmentRequest && (
+        <ModuleRequestDialog
+          open={assignmentRequestOpen}
+          module="assignment"
+          moduleRecordId={id ?? ''}
+          recordLabel={
+            a
+              ? `Assignment: ${a.title}${a.unitCode ? ` (${a.unitCode})` : ''}`
+              : 'Assignment'
+          }
+          onClose={() => setAssignmentRequestOpen(false)}
+          onCreated={(requestId) => {
+            setAssignmentRequestOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['oms-requests'] });
+            navigate(`/oms/requests/${requestId}`);
+          }}
+        />
+      )}
     </Box>
   );
 };
