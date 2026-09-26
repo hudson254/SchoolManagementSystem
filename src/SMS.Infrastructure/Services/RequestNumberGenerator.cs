@@ -46,12 +46,21 @@ namespace SMS.Infrastructure.Services
 
                 await using var command = connection.CreateCommand();
                 command.CommandText =
-                    // "Year" and "LastNumber" are PascalCase in the database because
-                    // AddSmsRequests created them with those exact names. Unquoted they
-                    // fold to year/last_number, which do not exist, so the insert failed
-                    // with 42703. Quote them to match the migrated schema.
-                    @"INSERT INTO sms_request_number_sequences (tenant_id, ""Year"", ""LastNumber"")
-                      VALUES (@tenant_id, @year, 1)
+                    // This statement bypasses EF, so it must satisfy the table exactly.
+                    // sms_request_number_sequences has seven NOT NULL columns with no
+                    // database default, because BaseEntity normally populates them:
+                    //
+                    //   id, tenant_id, "Year", "LastNumber", created_at, updated_at, is_deleted
+                    //
+                    // Omitting the quoted PascalCase names fails with 42703; omitting id,
+                    // created_at, updated_at or is_deleted fails with 23502. The statement
+                    // is verified against the real schema in
+                    // RequestNumberSequenceSchemaTests.
+                    @"INSERT INTO sms_request_number_sequences
+                        (id, tenant_id, ""Year"", ""LastNumber"",
+                         created_at, updated_at, created_date, is_deleted)
+                      VALUES (gen_random_uuid(), @tenant_id, @year, 1,
+                              now(), now(), now(), false)
                       ON CONFLICT (tenant_id, ""Year"")
                       DO UPDATE SET ""LastNumber"" = sms_request_number_sequences.""LastNumber"" + 1
                       RETURNING ""LastNumber"";";

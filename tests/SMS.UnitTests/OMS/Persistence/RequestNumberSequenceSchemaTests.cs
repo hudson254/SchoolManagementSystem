@@ -32,6 +32,10 @@ namespace SMS.UnitTests.OMS.Persistence
         private static ApplicationDbContext CreateDesignTimeContext()
             => new ApplicationDbContextFactory().CreateDbContext(Array.Empty<string>());
 
+        /// <summary>Collapses all whitespace so assertions survive SQL reformatting.</summary>
+        private static string Normalise(string source) =>
+            System.Text.RegularExpressions.Regex.Replace(source, @"\s+", " ");
+
         /// <summary>The migrated table really does use PascalCase for these columns.</summary>
         [Fact]
         public void NumberSequenceTable_UsesPascalCaseYearAndLastNumber()
@@ -50,14 +54,33 @@ namespace SMS.UnitTests.OMS.Persistence
         /// <summary>
         /// The generator's SQL must quote those identifiers. InMemory cannot parse raw
         /// SQL, so the statement is asserted textually against the real column names.
+        /// Whitespace is normalised first so reformatting the statement cannot silently
+        /// invalidate the guard.
         /// </summary>
         [Fact]
         public void NumberGenerator_QuotesYearAndLastNumberInItsSql()
         {
-            var source = File.ReadAllText(LocateGeneratorSource());
+            var source = Normalise(File.ReadAllText(LocateGeneratorSource()));
 
             source.Should().Contain(@"""Year""", "the sequence SQL must quote the Year column");
             source.Should().Contain(@"""LastNumber""", "the sequence SQL must quote the LastNumber column");
+
+            // The id column is NOT NULL with no database default. EF normally supplies
+            // it client-side, but this statement bypasses EF, so it must set it.
+            source.Should().Contain(
+                "sms_request_number_sequences (id, tenant_id,",
+                "the raw INSERT must supply id explicitly, because the column is NOT NULL " +
+                "and has no database default; omitting it fails with 23502.");
+            source.Should().Contain("gen_random_uuid()");
+
+            // The remaining BaseEntity audit columns are NOT NULL with no default either.
+            foreach (var auditColumn in new[] { "created_at", "updated_at", "is_deleted" })
+            {
+                source.Should().Contain(
+                    auditColumn,
+                    "{0} is NOT NULL with no database default, so the raw INSERT must set it",
+                    auditColumn);
+            }
 
             source.Should().NotContain(
                 "sms_request_number_sequences (tenant_id, year, last_number)",
