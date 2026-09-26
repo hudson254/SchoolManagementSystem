@@ -15,7 +15,6 @@ using SMS.Infrastructure.Options;
 using SMS.Domain.Interfaces;
 using SMS.Application.Common;
 using SMS.Application.Common.Interfaces;
-using SMS.Application.Features.OMS.Services;
 
 namespace SMS.API.Extensions
 {
@@ -80,25 +79,6 @@ namespace SMS.API.Extensions
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IRoadAccountRepository, RoadAccountRepository>();
             services.AddScoped<IOrderImportRepository, OrderImportRepository>();
-
-            // OMS Request repositories (Phase 2C).
-            //
-            // These MUST be registered here. The Request MediatR handlers inject
-            // IRequestRepository / IRequestTypeRepository directly (they do not go
-            // through IUnitOfWork), so an unregistered interface only surfaces at
-            // runtime as an InvalidOperationException from the DI container, which
-            // surfaces to the client as HTTP 500 on every Request endpoint. Unit
-            // tests do not catch this because they construct handlers with mocks.
-            services.AddScoped<IRequestRepository, RequestRepository>();
-            services.AddScoped<IRequestTypeRepository, RequestTypeRepository>();
-            services.AddScoped<IRequestCommentRepository, RequestCommentRepository>();
-
-            // Request number sequence allocation (REQ-yyyy-nnnnnn). Registered here
-            // because it is consumed by CreateRequestCommandHandler.
-            services.AddScoped<IRequestNumberGenerator, RequestNumberGenerator>();
-
-            // In-app Request notifications, wired to the existing notification pipeline.
-            services.AddScoped<IOmsRequestNotifier, OmsRequestNotifier>();
 
             return services;
         }

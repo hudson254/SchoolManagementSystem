@@ -33,6 +33,12 @@ using SMS.API.Logging;
 using SMS.API.Middleware;
 using SMS.API.Options;
 using SMS.Application.Services;
+using SMS.Application.Features.OMS.Services;
+
+// Aliased rather than importing SMS.Application.Common.Interfaces wholesale:
+// that namespace also declares ICurrentUserService, which would become an
+// ambiguous reference against SMS.Domain.Interfaces.ICurrentUserService.
+using IOmsRequestNotifier = SMS.Application.Common.Interfaces.IOmsRequestNotifier;
 using SMS.Notifications;
 using SMS.Notifications.Hubs;
 using SMS.Reporting;
@@ -658,6 +664,21 @@ builder.Services.AddScoped<ICertificateAuditLogRepository, CertificateAuditLogRe
 // Program.cs (services are registered manually here), so register it
 // explicitly alongside the other repositories.
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+
+// OMS Request services (Phase 2C).
+//
+// Same hazard as IOrderRepository above: AddPersistenceServices() in
+// Extensions/ServiceExtensions.cs is NOT invoked by Program.cs, so services
+// must be registered manually here. The Request MediatR handlers inject
+// IRequestRepository and IRequestTypeRepository directly rather than through
+// IUnitOfWork, so a missing registration compiles cleanly, passes the unit
+// suite (which builds handlers with mocks) and only fails at runtime as an
+// HTTP 500 from the DI container.
+builder.Services.AddScoped<IRequestRepository, RequestRepository>();
+builder.Services.AddScoped<IRequestTypeRepository, RequestTypeRepository>();
+builder.Services.AddScoped<IRequestCommentRepository, RequestCommentRepository>();
+builder.Services.AddScoped<IRequestNumberGenerator, RequestNumberGenerator>();
+builder.Services.AddScoped<IOmsRequestNotifier, OmsRequestNotifier>();
 
 // Register UnitOfWork
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

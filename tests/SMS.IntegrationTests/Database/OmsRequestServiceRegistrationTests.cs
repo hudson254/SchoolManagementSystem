@@ -1,80 +1,81 @@
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using SMS.API.Extensions;
-using SMS.Application.Common.Interfaces;
 using SMS.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Xunit;
 
 namespace SMS.IntegrationTests.Database
 {
     /// <summary>
-    /// Guards the OMS Request dependency-injection registrations.
+    /// Guards the OMS Request dependency-injection registrations in the real
+    /// composition root.
     ///
     /// <para>
-    /// Production deployment found that <c>AddPersistenceServices</c> registered the
-    /// OMS Order repositories but never the Phase 2C Request repositories. Because the
-    /// Request MediatR handlers inject <c>IRequestRepository</c> and
-    /// <c>IRequestTypeRepository</c> directly rather than through <c>IUnitOfWork</c>,
-    /// nothing failed at build time and nothing failed in the unit suite, because those
-    /// tests construct handlers with mocks. The gap only surfaced in production as
-    /// <c>InvalidOperationException: Unable to resolve service for type
-    /// 'SMS.Domain.Interfaces.IRequestRepository'</c>, returned to the client as
-    /// HTTP 500 on every Request endpoint.
+    /// Production deployment returned HTTP 500 on every Request endpoint:
+    /// <c>Unable to resolve service for type 'SMS.Domain.Interfaces.IRequestRepository'</c>.
+    /// <c>AddPersistenceServices</c> in <c>Extensions/ServiceExtensions.cs</c> does
+    /// register the Request repositories, but <c>Program.cs</c> never calls that
+    /// extension - it wires services inline. Registering them in the unused extension
+    /// therefore changed nothing, which is exactly how this gap survived review.
     /// </para>
     ///
     /// <para>
-    /// This asserts the registrations exist so the same omission cannot be committed
-    /// again. It inspects the <see cref="IServiceCollection"/> descriptors and therefore
-    /// needs no live database.
+    /// Unit tests cannot catch it: handlers are constructed with mocks, and nothing
+    /// resolves them from a container.
+    /// </para>
+    ///
+    /// <para>
+    /// This asserts the registrations are present in <c>src/SMS.API/Program.cs</c>,
+    /// which is the code that actually builds the container.
     /// </para>
     /// </summary>
     public class OmsRequestServiceRegistrationTests
     {
-        private static IServiceCollection BuildServices()
+        /// <summary>Locates the API composition root by walking up to the repository root.</summary>
+        private static string LocateProgramCs()
         {
-            var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new[]
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var candidate = Path.Combine(dir.FullName, "src", "SMS.API", "Program.cs");
+                if (File.Exists(candidate))
                 {
-                    new KeyValuePair<string, string?>(
-                        "ConnectionStrings:DefaultConnection",
-                        "Host=localhost;Database=unused;Username=u;Password=p")
-                })
-                .Build();
+                    return candidate;
+                }
 
-            var services = new ServiceCollection();
-            services.AddPersistenceServices(configuration);
-            return services;
+                dir = dir.Parent;
+            }
+
+            throw new FileNotFoundException(
+                "Could not locate src/SMS.API/Program.cs from " + AppContext.BaseDirectory);
         }
 
-        [Theory]
-        [InlineData(typeof(IRequestRepository))]
-        [InlineData(typeof(IRequestTypeRepository))]
-        [InlineData(typeof(IRequestCommentRepository))]
-        [InlineData(typeof(IRequestNumberGenerator))]
-        [InlineData(typeof(IOmsRequestNotifier))]
-        public void AddPersistenceServices_RegistersEachOmsRequestService(Type serviceType)
-        {
-            var services = BuildServices();
+        private static string ReadProgramCs() => File.ReadAllText(LocateProgramCs());
 
-            services.Should().Contain(
-                d => d.ServiceType == serviceType,
-                "{0} must be registered, or every OMS Request endpoint returns HTTP 500",
-                serviceType.Name);
+        [Theory]
+        [InlineData("IRequestRepository")]
+        [InlineData("IRequestTypeRepository")]
+        [InlineData("IRequestCommentRepository")]
+        [InlineData("IRequestNumberGenerator")]
+        [InlineData("IOmsRequestNotifier")]
+        public void Program_RegistersOmsRequestService(string serviceType)
+        {
+            var source = ReadProgramCs();
+
+            source.Should().Contain(
+                $"AddScoped<{serviceType}",
+                "{0} must be registered in Program.cs, or every OMS Request endpoint " +
+                "returns HTTP 500. Note that AddPersistenceServices() is not invoked " +
+                "by Program.cs, so registering it there has no effect.",
+                serviceType);
         }
 
         [Fact]
-        public void AddPersistenceServices_StillRegistersTheOmsOrderRepositories()
+        public void Program_StillRegistersTheOmsOrderRepository()
         {
-            // Guards the pre-existing Phase 2A registrations against regression when
-            // the Request registrations were added next to them.
-            var services = BuildServices();
-
-            services.Should().Contain(d => d.ServiceType == typeof(IOrderRepository));
-            services.Should().Contain(d => d.ServiceType == typeof(IRoadAccountRepository));
-            services.Should().Contain(d => d.ServiceType == typeof(IOrderImportRepository));
+            // Guards the pre-existing Phase 2A registration against regression.
+            ReadProgramCs().Should().Contain("AddScoped<IOrderRepository,");
         }
     }
 }
