@@ -131,7 +131,15 @@ namespace SMS.Application.Features.ReturningUser.Commands
                     Status = "Active",
                     IsActive = true
                 };
-                student.Enrollments.Add(enrollment);
+                // Persist through the repository, NOT student.Enrollments.Add(...).
+                //
+                // BaseEntity pre-assigns Id = Guid.NewGuid(), so attaching a brand
+                // new Enrollment through the navigation collection makes the EF
+                // change tracker classify it as Modified instead of Added. EF then
+                // issues an UPDATE for a row that does not exist, which affects
+                // 0 rows and raises DbUpdateConcurrencyException (HTTP 500).
+                // The repository Add path marks the entity Added and INSERTs it.
+                await _enrollmentRepository.AddAsync(enrollment, cancellationToken);
             }
 
             student.CurrentSemesterId = request.SemesterId;
