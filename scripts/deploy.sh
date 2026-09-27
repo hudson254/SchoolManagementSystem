@@ -146,6 +146,29 @@ echo "  Images built successfully."
 # ---------------------------------------------------------------------------
 echo -e "${YELLOW}[6/8] Starting services...${NC}"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" -p "$COMPOSE_PROJECT_NAME" up -d
+
+# Reload nginx after the containers have been recreated.
+#
+# nginx.conf declares `upstream api_backend { server api:80; }` and
+# `upstream web_frontend { server frontend:80; }`. nginx resolves those names
+# to IP addresses ONCE, when the configuration is loaded. Recreating the
+# api/frontend containers gives them new IPs, so a still-running nginx keeps
+# proxying to addresses that no longer exist and returns 502 until it is
+# reloaded. A reload forces the names to be resolved again.
+#
+# This is an operational fix only; it changes no application behaviour.
+if docker ps --format '{{.Names}}' | grep -qx "sms-nginx"; then
+    if docker exec sms-nginx nginx -t; then
+        docker exec sms-nginx nginx -s reload
+        echo "  nginx configuration tested and reloaded."
+    else
+        echo -e "  ${RED}ERROR: nginx configuration test failed; not reloading.${NC}"
+        exit 1
+    fi
+else
+    echo -e "  ${YELLOW}nginx container not found; skipping reload.${NC}"
+fi
+
 echo "  Services started."
 
 # ---------------------------------------------------------------------------
