@@ -10,7 +10,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+// Named barrel import — see the note in RequestsDashboard.tsx for why deep
+// default imports of MUI icons break the production bundle.
+import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {

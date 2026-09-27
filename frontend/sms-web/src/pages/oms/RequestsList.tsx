@@ -16,8 +16,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import SearchIcon from '@mui/icons-material/Search';
+// Named barrel import — see the note in RequestsDashboard.tsx for why deep
+// default imports of MUI icons break the production bundle.
+import { Refresh as RefreshIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {

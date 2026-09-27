@@ -11,8 +11,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
-import SendIcon from '@mui/icons-material/Send';
+// Named barrel import — see the note in RequestsDashboard.tsx for why deep
+// default imports of MUI icons break the production bundle.
+import {
+  ChatBubbleOutline as ChatBubbleOutlineIcon,
+  Send as SendIcon,
+} from '@mui/icons-material';
 import type { OmsRequestComment } from '../../services/requests.service';
 import { normalizeError } from '../../utils/errors';
 

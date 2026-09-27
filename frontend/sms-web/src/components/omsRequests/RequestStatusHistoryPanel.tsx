@@ -1,6 +1,8 @@
 import React from 'react';
 import { Box, Paper, Typography, Divider, Stack, Alert, Skeleton, Tooltip } from '@mui/material';
-import HistoryIcon from '@mui/icons-material/History';
+// Named barrel import — see the note in RequestsDashboard.tsx for why deep
+// default imports of MUI icons break the production bundle.
+import { History as HistoryIcon } from '@mui/icons-material';
 import type { OmsRequestStatusHistoryEntry } from '../../services/requests.service';
 import { omsRequestStatusLabel, omsRequestActionLabel } from '../../utils/omsRequestLifecycle';
 import { OmsRequestStatusChip } from './RequestChips';

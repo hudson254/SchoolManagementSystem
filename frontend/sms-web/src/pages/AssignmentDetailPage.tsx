@@ -20,6 +20,7 @@ import {
   Download as DownloadIcon,
   Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -32,7 +33,6 @@ import { useAuth } from '../hooks/useAuth';
 import { hasAnyRole, LECTURER, COORDINATOR, STUDENT, canCreateOmsRequest } from '../utils/roles';
 import { normalizeError } from '../utils/errors';
 import { ModuleRequestDialog } from '../components/omsRequests/ModuleRequestDialog';
-import AssignmentIcon from '@mui/icons-material/Assignment';
 
 export const AssignmentDetailPage: React.FC = () => {
   const navigate = useNavigate();

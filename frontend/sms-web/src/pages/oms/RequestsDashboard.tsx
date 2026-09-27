@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   Alert,
   Box,
@@ -10,11 +10,20 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
-import InboxIcon from '@mui/icons-material/Inbox';
-import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import InsightsIcon from '@mui/icons-material/Insights';
+// Named imports from the @mui/icons-material barrel. Deep default imports
+// (import X from '@mui/icons-material/X') resolve to the CommonJS module
+// namespace under this build, so the value bound to X is an object rather than
+// a component. React then throws "Element type is invalid ... got: object"
+// (error #130) at render time and the ErrorBoundary shows the generic
+// "Something went wrong" page. The barrel re-exports real components, and the
+// local aliases keep every usage below unchanged.
+import {
+  AddCircleOutline as AddCircleOutlineIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
+  Inbox as InboxIcon,
+  Insights as InsightsIcon,
+  WorkHistory as WorkHistoryIcon,
+} from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { omsRequestsService, OmsRequestStatus } from '../../services/requests.service';

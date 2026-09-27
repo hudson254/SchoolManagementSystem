@@ -37,6 +37,7 @@ import {
   Logout as CheckOutIcon,
   SwapHoriz as TransferIcon,
   Bed as BedIcon,
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -47,7 +48,6 @@ import { useAuth } from '../hooks/useAuth';
 import { canCreateOmsRequest } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { ModuleRequestDialog } from '../components/omsRequests/ModuleRequestDialog';
-import AssignmentIcon from '@mui/icons-material/Assignment';
 
 const STAFF_ROLES = ['Receptionist', 'Coordinator', 'Administrator', 'SystemAdministrator'];
 

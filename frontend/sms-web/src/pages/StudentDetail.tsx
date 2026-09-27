@@ -46,6 +46,7 @@ import {
   Bed as BedIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -54,7 +55,6 @@ import { useAuth } from '../hooks/useAuth';
 import { canManageAcademic, canAdministrate, canCreateOmsRequest } from '../utils/roles';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { ModuleRequestDialog } from '../components/omsRequests/ModuleRequestDialog';
-import AssignmentIcon from '@mui/icons-material/Assignment';
 
 interface TabPanelProps {
   children?: React.ReactNode;

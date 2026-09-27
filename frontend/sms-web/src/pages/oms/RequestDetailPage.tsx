@@ -9,9 +9,13 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import LinkIcon from '@mui/icons-material/Link';
-import RefreshIcon from '@mui/icons-material/Refresh';
+// Named barrel import — see the note in RequestsDashboard.tsx for why deep
+// default imports of MUI icons break the production bundle.
+import {
+  ArrowBack as ArrowBackIcon,
+  Link as LinkIcon,
+  Refresh as RefreshIcon,
+} from '@mui/icons-material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {

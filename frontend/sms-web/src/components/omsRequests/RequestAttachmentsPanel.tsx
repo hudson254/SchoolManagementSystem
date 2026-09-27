@@ -13,10 +13,14 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import DownloadIcon from '@mui/icons-material/Download';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
+// Named barrel import — see the note in RequestsDashboard.tsx for why deep
+// default imports of MUI icons break the production bundle.
+import {
+  AttachFile as AttachFileIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  Download as DownloadIcon,
+  UploadFile as UploadFileIcon,
+} from '@mui/icons-material';
 import type { OmsRequestAttachment } from '../../services/requests.service';
 import {
   OMS_REQUEST_ATTACHMENT_EXTENSIONS,
