@@ -253,6 +253,29 @@ namespace SMS.API.Controllers.v1
             return Ok(result);
         }
 
+        /// <summary>
+        /// Active units of a course, for the registration wizard's course/unit
+        /// verification step.
+        ///
+        /// Anonymous by design: a registrant has no account yet, so neither the
+        /// ModeratorAccess course-units endpoint nor the StudentAccess enrollment
+        /// endpoint can serve this page. Tenant scoping and the
+        /// active/not-deleted filter are applied server-side by the handler, so
+        /// this only ever returns the same units that will be persisted.
+        /// </summary>
+        [HttpGet("active-courses/{courseId:guid}/units")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(IEnumerable<RegistrationUnitDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetCourseUnitsForRegistration(
+            Guid courseId,
+            CancellationToken cancellationToken)
+        {
+            var query = new GetCourseUnitsForRegistrationQuery { CourseId = courseId };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
         [HttpGet("username-availability")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(UsernameAvailabilityDto), StatusCodes.Status200OK)]

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Container,
@@ -18,6 +18,9 @@ import {
   Autocomplete,
   CircularProgress,
   Skeleton,
+  Checkbox,
+  FormControlLabel,
+  Divider,
 } from "@mui/material";
 import {
   Email,
@@ -35,6 +38,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "../hooks/useAuth";
 import { apiClient } from "../services/api";
+import { registrationService } from "../services/registration.service";
+import { RegistrationUnit } from "../types/user.types";
 import { passwordSchema, emailSchema, nameSchema, phoneSchema } from "../utils/validators";
 import { getPasswordStrength, PasswordContext } from "../utils/passwordStrength";
 import { PasswordField } from "../components/PasswordField/PasswordField";
@@ -225,6 +230,22 @@ export const Register: React.FC = () => {
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+
+  // ─── Course unit state (verification step) ─────────────────────────────────
+  //
+  // The units of the selected course are loaded from the anonymous registration
+  // endpoint and cached per course id. They drive BOTH the lecturer's unit
+  // picker and the verification/preview step, so the preview can never disagree
+  // with what the backend will persist.
+  const [courseUnits, setCourseUnits] = useState<RegistrationUnit[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitsError, setUnitsError] = useState<string | null>(null);
+  // Cache keyed by course id so navigating Back and forward does not refetch
+  // and does not lose the previously loaded unit list.
+  const [unitsCache, setUnitsCache] = useState<Record<string, RegistrationUnit[]>>({});
+  // Lecturer-only: the units the lecturer chose to teach.
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+
   const [usernameMessage, setUsernameMessage] = useState<string | null>(null);
   const [candidateUsernames, setCandidateUsernames] = useState<string[]>([]);
   const [passwordStrength, setPasswordStrength] = useState(getPasswordStrength(""));
@@ -281,20 +302,108 @@ export const Register: React.FC = () => {
   };
 
   // ─── Load courses ─────────────────────────────────────────────────────────
+  const [coursesError, setCoursesError] = useState<string | null>(null);
+
   useEffect(() => {
+    let cancelled = false;
+
     const loadCourses = async () => {
       setCoursesLoading(true);
+      setCoursesError(null);
       try {
-        const data = await apiClient.get<CourseOption[]>("/auth/active-courses");
-        setCourses(data || []);
-      } catch {
+        const data = await registrationService.getActiveCourses();
+        if (cancelled) return;
+        setCourses(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (cancelled) return;
+        // A failed request must not look like "no courses available".
         setCourses([]);
+        setCoursesError(
+          (err as { message?: string })?.message ??
+            "Could not load courses. Please check your connection and try again."
+        );
       } finally {
-        setCoursesLoading(false);
+        if (!cancelled) setCoursesLoading(false);
       }
     };
+
     loadCourses();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // ─── Load units for the selected course ───────────────────────────────────
+  //
+  // Runs whenever the selected course changes, for BOTH roles. This is the
+  // step that was missing entirely: without it the review step had no units to
+  // render. Results are cached per course id so going Back and returning is
+  // instant and never loses the loaded list.
+  const activeCourseId = role === "Student" ? studentValues.courseId : lecturerValues.courseId;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!activeCourseId) {
+      setCourseUnits([]);
+      setUnitsError(null);
+      setUnitsLoading(false);
+      return;
+    }
+
+    const cached = unitsCache[activeCourseId];
+    if (cached) {
+      setCourseUnits(cached);
+      setUnitsError(null);
+      setUnitsLoading(false);
+      return;
+    }
+
+    const loadUnits = async () => {
+      setUnitsLoading(true);
+      setUnitsError(null);
+      try {
+        const units = await registrationService.getCourseUnits(activeCourseId);
+        if (cancelled) return;
+
+        setCourseUnits(units);
+        setUnitsCache((prev) => ({ ...prev, [activeCourseId]: units }));
+
+        // Students are enrolled in every unit of the course, so pre-select them
+        // all. This mirrors the backend rule and makes the preview exact.
+        // Lecturers start with nothing selected; they opt in explicitly.
+        if (role === "Student") {
+          setSelectedUnitIds(units.map((u) => u.id));
+        } else {
+          setSelectedUnitIds((prev) => prev.filter((id) => units.some((u) => u.id === id)));
+        }
+
+        if (units.length === 0) {
+          setUnitsError(
+            "This course currently has no active units. Please choose a different course or contact the administration office."
+          );
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setCourseUnits([]);
+        setSelectedUnitIds([]);
+        setUnitsError(
+          (err as { message?: string })?.message ??
+            "Could not load the units for this course. Please try again."
+        );
+      } finally {
+        if (!cancelled) setUnitsLoading(false);
+      }
+    };
+
+    loadUnits();
+    return () => {
+      cancelled = true;
+    };
+    // unitsCache is intentionally excluded: it is a cache, not an input. Reading
+    // it here would refetch-loop whenever the cache is written.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCourseId, role]);
 
   // ─── Username generation & checking ──────────────────────────────────────
   const checkUsername = useCallback(async (username: string) => {
@@ -381,6 +490,35 @@ export const Register: React.FC = () => {
     setStep(selectedRole === "Student" ? "student" : "lecturer");
   };
 
+  // ─── Derived course / unit selection state ───────────────────────────────
+  const selectedCourse: CourseOption | undefined = useMemo(
+    () => courses.find((c) => c.id === activeCourseId),
+    [courses, activeCourseId]
+  );
+
+  // Units that will actually be persisted, in the order shown on the preview.
+  // For a student this is every unit of the course (the business rule); for a
+  // lecturer it is only the units explicitly ticked.
+  const verifiedUnits: RegistrationUnit[] = useMemo(
+    () => courseUnits.filter((u) => selectedUnitIds.includes(u.id)),
+    [courseUnits, selectedUnitIds]
+  );
+
+  const allUnitsSelected =
+    courseUnits.length > 0 && courseUnits.every((u) => selectedUnitIds.includes(u.id));
+
+  const toggleUnit = (unitId: string) => {
+    setSelectedUnitIds((prev) =>
+      prev.includes(unitId) ? prev.filter((id) => id !== unitId) : [...prev, unitId]
+    );
+  };
+
+  const toggleSelectAllUnits = () => {
+    setSelectedUnitIds((prev) =>
+      prev.length === courseUnits.length ? [] : courseUnits.map((u) => u.id)
+    );
+  };
+
   // ─── Navigation ──────────────────────────────────────────────────────────
   const handleNext = () => {
     const steps = role === "Student" ? STUDENT_STEPS : LECTURER_STEPS;
@@ -405,6 +543,10 @@ export const Register: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
+      // Students are enrolled in every active unit of the selected course. The
+      // full verified set is sent so the backend can detect a disagreement
+      // between what was reviewed and what it would persist; it never narrows
+      // the enrollment.
       await registerUser({
         title: data.title,
         firstName: data.firstName,
@@ -417,9 +559,10 @@ export const Register: React.FC = () => {
         role: "Student",
         username: data.username,
         courseId: data.courseId,
+        unitIds: courseUnits.map((u) => u.id),
       });
       setSuccessMessage(
-        "Registration successful! You have been enrolled in your selected course and its active units."
+        `Registration successful! You have been enrolled in ${selectedCourse?.name ?? "your selected course"} and its ${courseUnits.length} active unit${courseUnits.length === 1 ? "" : "s"}.`
       );
       setStep("success");
     } catch (err: any) {
@@ -435,6 +578,7 @@ export const Register: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
+      // Persist exactly the units shown as selected on the verification page.
       await registerUser({
         title: data.title,
         firstName: data.firstName,
@@ -447,10 +591,11 @@ export const Register: React.FC = () => {
         role: "Lecturer",
         username: data.username,
         courseId: data.courseId,
+        unitIds: selectedUnitIds,
         specialization: data.specialization,
       });
       setSuccessMessage(
-        "Registration successful! You have been assigned to teach the selected course and its active units."
+        `Registration successful! You have been assigned to teach ${selectedUnitIds.length} unit${selectedUnitIds.length === 1 ? "" : "s"} of ${selectedCourse?.name ?? "your selected course"}.`
       );
       setStep("success");
     } catch (err: any) {
@@ -506,6 +651,21 @@ export const Register: React.FC = () => {
       const strength = getPasswordStrength(pwd, passwordContext);
       if (strength.level !== "Strong" && strength.level !== "Very Strong") return false;
       if (pwd !== String(values.confirmPassword || "")) return false;
+    }
+
+    // The course step must not be completed until the units are actually known.
+    // Without this the user reaches the review step with no units to verify (or
+    // with a silently empty list), which is the reported defect.
+    const isCourseStep =
+      (role === "Student" && activeStep === 3) || (role === "Lecturer" && activeStep === 4);
+    if (isCourseStep) {
+      if (!String(values.courseId || "")) return false;
+      if (unitsLoading) return false;
+      if (unitsError) return false;
+      if (courseUnits.length === 0) return false;
+
+      // A lecturer must actually choose the units they will teach.
+      if (role === "Lecturer" && selectedUnitIds.length === 0) return false;
     }
 
     return true;
@@ -1034,14 +1194,45 @@ export const Register: React.FC = () => {
                       </li>
                     )}
                     noOptionsText={
-                      courses.length === 0 && !coursesLoading
+                      coursesError ??
+                      (courses.length === 0 && !coursesLoading
                         ? "No courses available for registration"
-                        : "No matching courses"
+                        : "No matching courses")
                     }
                   />
                 )}
               />
             )}
+
+            {/* Unit status for the selected course. Shown on the selection step
+                too, so a failed or empty unit load is visible immediately
+                instead of leaving the user on a dead "Skip to Review" button. */}
+            {studentValues.courseId ? (
+              <Box sx={{ mt: 2 }}>
+                {unitsLoading ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1 }}>
+                    <CircularProgress size={18} />
+                    <Typography variant="body2" color="text.secondary">
+                      Loading course units...
+                    </Typography>
+                  </Box>
+                ) : unitsError ? (
+                  <Alert severity="error">{unitsError}</Alert>
+                ) : courseUnits.length === 0 ? (
+                  <Alert severity="warning">
+                    This course currently has no active units. Please choose a
+                    different course.
+                  </Alert>
+                ) : (
+                  <Alert severity="info">
+                    This course has {courseUnits.length} active unit
+                    {courseUnits.length === 1 ? "" : "s"}. You will be enrolled in
+                    all of them, and you will be able to review them on the next
+                    step.
+                  </Alert>
+                )}
+              </Box>
+            ) : null}
           </Box>
         );
 
@@ -1093,21 +1284,56 @@ export const Register: React.FC = () => {
               </Box>
               <Box>
                 <Typography variant="subtitle2" color={PRIMARY_COLOR} gutterBottom>
-                  Course Selection
+                  Course
                 </Typography>
                 <Typography variant="body2" fontWeight={500}>
-                  {courses.find((c) => c.id === studentValues.courseId)?.name ||
-                    "Selected course"}
+                  {selectedCourse?.name || "Selected course"}
                 </Typography>
-                {(() => {
-                  const course = courses.find((c) => c.id === studentValues.courseId);
-                  return course ? (
+                {selectedCourse && (
+                  <Typography variant="body2" color="text.secondary">
+                    Course Code: {selectedCourse.code} &middot; {selectedCourse.duration} months
+                    &middot; {selectedCourse.credits} credits
+                  </Typography>
+                )}
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Course units - the core of the verification step. These are the
+                  exact units the backend persists, because they come from the
+                  same authoritative endpoint and filter the enrollment command
+                  uses. */}
+              <Box>
+                <Typography variant="subtitle2" color={PRIMARY_COLOR} gutterBottom>
+                  Units to be Enrolled ({verifiedUnits.length})
+                </Typography>
+
+                {unitsLoading ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1 }}>
+                    <CircularProgress size={18} />
                     <Typography variant="body2" color="text.secondary">
-                      {course.code} &middot; {course.duration} months &middot;{" "}
-                      {course.credits} credits
+                      Loading course units…
                     </Typography>
-                  ) : null;
-                })()}
+                  </Box>
+                ) : unitsError ? (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    {unitsError}
+                  </Alert>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      You will be enrolled in all {courseUnits.length} active unit
+                      {courseUnits.length === 1 ? "" : "s"} of this course.
+                    </Typography>
+                    <Box component="ol" sx={{ pl: 3, m: 0 }}>
+                      {verifiedUnits.map((unit) => (
+                        <Typography component="li" variant="body2" key={unit.id} sx={{ mb: 0.5 }}>
+                          <strong>{unit.code}</strong> &mdash; {unit.name}
+                        </Typography>
+                      ))}
+                    </Box>
+                  </>
+                )}
               </Box>
             </Box>
           </Box>
@@ -1548,14 +1774,86 @@ export const Register: React.FC = () => {
                       </li>
                     )}
                     noOptionsText={
-                      courses.length === 0 && !coursesLoading
+                      coursesError ??
+                      (courses.length === 0 && !coursesLoading
                         ? "No courses available for registration"
-                        : "No matching courses"
+                        : "No matching courses")
                     }
                   />
                 )}
               />
             )}
+            {/* Unit selection. A lecturer may take the whole course or only
+                specific units, so both are offered explicitly. The list comes
+                from the same authoritative endpoint the verification step
+                renders, which is what guarantees the two agree. */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Select Units to Teach
+              </Typography>
+
+              {!lecturerValues.courseId ? (
+                <Alert severity="info">
+                  Select a course above to see the units you can teach.
+                </Alert>
+              ) : unitsLoading ? (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading course units...
+                  </Typography>
+                </Box>
+              ) : unitsError ? (
+                <Alert severity="error">{unitsError}</Alert>
+              ) : (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={allUnitsSelected}
+                        onChange={toggleSelectAllUnits}
+                        inputProps={{ "aria-label": "Select all units" }}
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" fontWeight={600}>
+                        Select All Units ({courseUnits.length})
+                      </Typography>
+                    }
+                  />
+                  <Divider sx={{ my: 1 }} />
+                  {courseUnits.map((unit) => (
+                    <FormControlLabel
+                      key={unit.id}
+                      control={
+                        <Checkbox
+                          checked={selectedUnitIds.includes(unit.id)}
+                          onChange={() => toggleUnit(unit.id)}
+                          inputProps={{ "aria-label": `Select unit ${unit.code}` }}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">
+                            <strong>{unit.code}</strong> &mdash; {unit.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {unit.credits} credits
+                            {unit.semester ? ` - Semester ${unit.semester}` : ""}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ display: "flex", alignItems: "flex-start", ml: 3 }}
+                    />
+                  ))}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                    {selectedUnitIds.length} of {courseUnits.length} unit
+                    {courseUnits.length === 1 ? "" : "s"} selected. You must select at
+                    least one unit.
+                  </Typography>
+                </>
+              )}
+            </Box>
           </Box>
         );
 
@@ -1615,21 +1913,60 @@ export const Register: React.FC = () => {
               </Box>
               <Box>
                 <Typography variant="subtitle2" color={PRIMARY_COLOR} gutterBottom>
-                  Course Assignment
+                  Course
                 </Typography>
                 <Typography variant="body2" fontWeight={500}>
-                  {courses.find((c) => c.id === lecturerValues.courseId)?.name ||
-                    "Selected course"}
+                  {selectedCourse?.name || "Selected course"}
                 </Typography>
-                {(() => {
-                  const course = courses.find((c) => c.id === lecturerValues.courseId);
-                  return course ? (
+                {selectedCourse && (
+                  <Typography variant="body2" color="text.secondary">
+                    Course Code: {selectedCourse.code} &middot; {selectedCourse.duration} months
+                    &middot; {selectedCourse.credits} credits
+                  </Typography>
+                )}
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Only the units marked as selected on the previous step are
+                  listed, and exactly these ids are submitted. */}
+              <Box>
+                <Typography variant="subtitle2" color={PRIMARY_COLOR} gutterBottom>
+                  Units to be Assigned ({verifiedUnits.length})
+                </Typography>
+
+                {unitsLoading ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1 }}>
+                    <CircularProgress size={18} />
                     <Typography variant="body2" color="text.secondary">
-                      {course.code} &middot; {course.duration} months &middot;{" "}
-                      {course.credits} credits
+                      Loading course units...
                     </Typography>
-                  ) : null;
-                })()}
+                  </Box>
+                ) : unitsError ? (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    {unitsError}
+                  </Alert>
+                ) : verifiedUnits.length === 0 ? (
+                  <Alert severity="warning" sx={{ mt: 1 }}>
+                    No units selected. Go back and select at least one unit to
+                    teach before continuing.
+                  </Alert>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      You will be assigned to teach {verifiedUnits.length} of{" "}
+                      {courseUnits.length} available unit
+                      {courseUnits.length === 1 ? "" : "s"}.
+                    </Typography>
+                    <Box component="ol" sx={{ pl: 3, m: 0 }}>
+                      {verifiedUnits.map((unit) => (
+                        <Typography component="li" variant="body2" key={unit.id} sx={{ mb: 0.5 }}>
+                          <strong>{unit.code}</strong> &mdash; {unit.name}
+                        </Typography>
+                      ))}
+                    </Box>
+                  </>
+                )}
               </Box>
             </Box>
           </Box>
@@ -1820,7 +2157,9 @@ export const Register: React.FC = () => {
                   <Button
                     type="submit"
                     variant="contained"
-                    disabled={loading}
+                    // Never submit from the review step with incomplete or
+                    // still-loading unit data.
+                    disabled={loading || unitsLoading || !!unitsError || verifiedUnits.length === 0}
                     sx={{
                       bgcolor: PRIMARY_COLOR,
                       "&:hover": { bgcolor: "#4a5a1f" },

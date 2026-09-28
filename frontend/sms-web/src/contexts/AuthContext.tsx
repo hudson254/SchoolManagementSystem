@@ -44,6 +44,12 @@ interface RegisterData {
   role: 'Student' | 'Lecturer';
   username?: string;
   courseId?: string;
+  /**
+   * Units selected on the registration wizard.
+   * Students: optional (the server enrolls all units of the course).
+   * Lecturers: required, and persisted exactly as verified.
+   */
+  unitIds?: string[];
   specialization?: string;
 }
 

@@ -80,6 +80,7 @@ namespace SMS.UnitTests.Enrollments
                 courseRepo.Object,
                 unitRepo.Object,
                 unitAllocationRepo.Object,
+                new Mock<ISemesterRepository>().Object,
                 tenantContext.Object,
                 unitOfWork.Object,
                 new PasswordPolicyService());

@@ -29,6 +29,7 @@ namespace SMS.UnitTests.Auth
         private readonly Mock<ICourseRepository> _courseRepositoryMock;
         private readonly Mock<IUnitRepository> _unitRepositoryMock;
         private readonly Mock<IUnitAllocationRepository> _unitAllocationRepositoryMock;
+        private readonly Mock<ISemesterRepository> _semesterRepositoryMock;
         private readonly Mock<SMS.Multitenancy.Interfaces.ITenantContext> _tenantContextMock;
         private readonly Mock<IUnitOfWork> _unitOfWorkMock;
         private readonly Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler> _logger;
@@ -46,6 +47,7 @@ namespace SMS.UnitTests.Auth
             _courseRepositoryMock = new Mock<ICourseRepository>();
             _unitRepositoryMock = new Mock<IUnitRepository>();
             _unitAllocationRepositoryMock = new Mock<IUnitAllocationRepository>();
+            _semesterRepositoryMock = new Mock<ISemesterRepository>();
             _tenantContextMock = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
             _unitOfWorkMock = new Mock<IUnitOfWork>();
             _logger = Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>();
@@ -67,6 +69,7 @@ namespace SMS.UnitTests.Auth
                 _courseRepositoryMock.Object,
                 _unitRepositoryMock.Object,
                 _unitAllocationRepositoryMock.Object,
+                _semesterRepositoryMock.Object,
                 _tenantContextMock.Object,
                 _unitOfWorkMock.Object,
                 new PasswordPolicyService());
@@ -110,13 +113,114 @@ namespace SMS.UnitTests.Auth
                 Role = "Lecturer",
                 Organization = "Test University",
                 PhoneNumber = "+254711111111",
-                Specialization = "Computer Science"
+                Specialization = "Computer Science",
+                // A lecturer must choose the units they will teach. Registering
+                // with an empty unit set is what produced lecturers with no
+                // teaching assignment, so it is now rejected by the validator.
+                CourseId = Guid.NewGuid(),
+                UnitIds = new List<Guid> { Guid.NewGuid() }
             };
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
+            result.ShouldNotHaveAnyValidationErrors();
+        }
+
+        [Fact]
+        public void LecturerCommand_WithoutUnits_ShouldFailValidation()
+        {
+            // Regression guard for the reported bug: a lecturer registration
+            // with no unit selection used to be accepted, which silently created
+            // a lecturer account with no course and no teaching assignment.
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Lecturer",
+                Organization = "Test University",
+                PhoneNumber = "+254711111111",
+                Specialization = "Computer Science"
+            };
+
+            var result = _validator.TestValidate(command);
+
+            result.ShouldHaveValidationErrorFor(x => x.UnitIds);
+        }
+
+        [Fact]
+        public void LecturerCommand_WithUnitsButNoCourse_ShouldFailValidation()
+        {
+            // Units cannot be validated against a course that was not chosen.
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Lecturer",
+                Organization = "Test University",
+                PhoneNumber = "+254711111111",
+                Specialization = "Computer Science",
+                UnitIds = new List<Guid> { Guid.NewGuid() }
+            };
+
+            var result = _validator.TestValidate(command);
+
+            result.ShouldHaveValidationErrorFor(x => x.CourseId);
+        }
+
+        [Fact]
+        public void LecturerCommand_WithDuplicateUnits_ShouldFailValidation()
+        {
+            // Duplicate ids would otherwise create duplicate UnitAllocation rows.
+            var unitId = Guid.NewGuid();
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Lecturer",
+                Organization = "Test University",
+                PhoneNumber = "+254711111111",
+                Specialization = "Computer Science",
+                CourseId = Guid.NewGuid(),
+                UnitIds = new List<Guid> { unitId, unitId }
+            };
+
+            var result = _validator.TestValidate(command);
+
+            result.ShouldHaveValidationErrorFor(x => x.UnitIds);
+        }
+
+        [Fact]
+        public void StudentCommand_WithoutUnitIds_ShouldNotHaveValidationErrors()
+        {
+            // Students are enrolled in ALL units of the course by the existing
+            // business rule, so the client does not need to send unit ids. This
+            // must stay valid - the course is the only required selection.
+            var command = new RegisterCommand
+            {
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Student",
+                Organization = "Test University",
+                PhoneNumber = "+254700000000",
+                CourseId = Guid.NewGuid()
+            };
+
+            var result = _validator.TestValidate(command);
+
             result.ShouldNotHaveAnyValidationErrors();
         }
 
@@ -465,6 +569,8 @@ namespace SMS.UnitTests.Auth
         {
             // Arrange
             var userId = Guid.NewGuid().ToString();
+            var courseId = Guid.NewGuid();
+            var unitId = Guid.NewGuid();
             var command = new RegisterCommand
             {
                 FirstName = "Jane",
@@ -475,8 +581,35 @@ namespace SMS.UnitTests.Auth
                 Role = "Lecturer",
                 Organization = "Test University",
                 PhoneNumber = "+254711111111",
-                Specialization = "Computer Science"
+                Specialization = "Computer Science",
+                CourseId = courseId,
+                UnitIds = new List<Guid> { unitId }
             };
+
+            // The course and its units must resolve, otherwise the handler
+            // rejects the registration before creating the lecturer.
+            _courseRepositoryMock
+                .Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Course
+                {
+                    Id = courseId,
+                    Code = "CS101",
+                    Name = "Computer Science",
+                    IsActive = true
+                });
+
+            _unitRepositoryMock
+                .Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Unit>
+                {
+                    new Unit { Id = unitId, Code = "CS101.1", Name = "Intro to CS", CourseId = courseId, IsActive = true }
+                });
+
+            // UnitAllocation.SemesterId is a non-nullable FK, so the tenant must
+            // have a resolvable academic period.
+            _semesterRepositoryMock
+                .Setup(x => x.GetCurrentOrDefaultAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Semester { Id = Guid.NewGuid(), Name = "Semester 1", IsActive = true, IsCurrent = true });
 
             _userManagerMock
                 .Setup(x => x.FindByEmailAsync(command.Email))
@@ -533,6 +666,77 @@ namespace SMS.UnitTests.Auth
 
             _userManagerMock.Verify(x => x.CreateUserAsync("jane.smith", command.Email, command.Password, "Lecturer"), Times.Once);
             _auditServiceMock.Verify(x => x.LogAsync("Register", It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
+
+            // The teaching assignment must actually be persisted. Before the
+            // repair the lecturer's course/unit selection was discarded here and
+            // no UnitAllocation row was ever created.
+            _unitAllocationRepositoryMock.Verify(
+                x => x.AddAsync(It.Is<UnitAllocation>(a =>
+                    a.UnitId == unitId && a.Status == "PendingApproval"),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Fact]
+        public async Task Handle_LecturerWithUnitFromAnotherCourse_ShouldThrowValidation()
+        {
+            // A tampered payload must not be able to attach a unit that does not
+            // belong to the selected course.
+            var userId = Guid.NewGuid().ToString();
+            var courseId = Guid.NewGuid();
+            var ownUnitId = Guid.NewGuid();
+            var foreignUnitId = Guid.NewGuid();
+
+            var command = new RegisterCommand
+            {
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@example.com",
+                Password = "Test123!@#abcd",
+                ConfirmPassword = "Test123!@#abcd",
+                Role = "Lecturer",
+                Organization = "Test University",
+                PhoneNumber = "+254711111111",
+                Specialization = "Computer Science",
+                CourseId = courseId,
+                UnitIds = new List<Guid> { ownUnitId, foreignUnitId }
+            };
+
+            _userManagerMock.Setup(x => x.FindByEmailAsync(command.Email)).ReturnsAsync((User?)null);
+            _nameParserMock.Setup(x => x.ParseName(It.IsAny<string>()))
+                .Returns(new NameParseResult { FirstName = "Jane", LastName = "Smith", IsValid = true });
+            _usernameGeneratorMock.Setup(x => x.GenerateUsernameAsync("Jane", "Smith")).ReturnsAsync("jane.smith");
+            _userManagerMock
+                .Setup(x => x.CreateUserAsync("jane.smith", command.Email, command.Password, "Lecturer"))
+                .ReturnsAsync((string username, string email, string password, string role) => new User
+                {
+                    Id = userId,
+                    Email = email,
+                    UserName = username,
+                    IsActive = true
+                });
+
+            _courseRepositoryMock
+                .Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Course { Id = courseId, Code = "CS101", Name = "Computer Science", IsActive = true });
+
+            // The course owns only ownUnitId; foreignUnitId belongs elsewhere.
+            _unitRepositoryMock
+                .Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Unit>
+                {
+                    new Unit { Id = ownUnitId, Code = "CS101.1", Name = "Intro", CourseId = courseId, IsActive = true }
+                });
+
+            var handler = CreateHandler();
+
+            await Assert.ThrowsAsync<SMS.Application.Exceptions.ValidationException>(
+                () => handler.Handle(command, CancellationToken.None));
+
+            // Nothing may be persisted for a rejected registration.
+            _unitAllocationRepositoryMock.Verify(
+                x => x.AddAsync(It.IsAny<UnitAllocation>(), It.IsAny<CancellationToken>()),
+                Times.Never);
         }
     }
 }
