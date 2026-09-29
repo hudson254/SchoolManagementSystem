@@ -176,6 +176,12 @@ base.OnModelCreating(modelBuilder);
                     .HasForeignKey(h => h.SemesterId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                // Report access pattern: every accommodation report query is
+                // tenant filtered (query filter + RLS) and commonly partitioned
+                // by house status (occupied / vacant / maintenance lists).
+                entity.HasIndex(h => new { h.TenantId, h.Status })
+                    .HasDatabaseName("IX_Houses_TenantId_Status");
+
                 entity.HasQueryFilter(h => !h.IsDeleted);
             });
 
@@ -328,6 +334,25 @@ base.OnModelCreating(modelBuilder);
                 entity.HasIndex(aa => aa.LecturerId)
                     .IsUnique()
                     .HasFilter("\"LecturerId\" IS NOT NULL AND \"Status\" = 'Active'");
+
+                // ===== Accommodation report indexes =====
+                // Tenant + active-status + allocation date: current occupancy
+                // scans and date-range overlap (history) queries within a tenant.
+                entity.HasIndex(aa => new { aa.TenantId, aa.Status, aa.AssignmentDate })
+                    .HasDatabaseName("IX_AccommodationAssignments_TenantId_Status_AssignmentDate");
+
+                // House history and per-house active occupant lookups.
+                entity.HasIndex(aa => new { aa.HouseId, aa.Status })
+                    .HasDatabaseName("IX_AccommodationAssignments_HouseId_Status");
+
+                // Full occupant accommodation history. The filtered unique
+                // indexes above only cover Status = 'Active' lookups, so plain
+                // per-occupant indexes are required for history queries across
+                // all statuses (PostgreSQL cannot use a partial index for them).
+                // Named explicitly: the default "IX_AccommodationAssignments_StudentId"
+                // name is already taken by the filtered unique index above.
+                entity.HasIndex(aa => aa.StudentId, "IX_AccommodationAssignments_StudentId_History");
+                entity.HasIndex(aa => aa.LecturerId, "IX_AccommodationAssignments_LecturerId_History");
 
                 // FIX: Both Student and Lecturer relationships are already configured
                 // from the Student and Lecturer side to avoid ambiguous FK mapping.

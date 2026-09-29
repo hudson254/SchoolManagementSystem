@@ -798,8 +798,6 @@ namespace SMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HouseId");
-
                     b.HasIndex("LaneId");
 
                     b.HasIndex("LecturerId")
@@ -813,6 +811,16 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("StudentId")
                         .IsUnique()
                         .HasFilter("\"StudentId\" IS NOT NULL AND \"Status\" = 'Active'");
+
+                    b.HasIndex("HouseId", "Status")
+                        .HasDatabaseName("IX_AccommodationAssignments_HouseId_Status");
+
+                    b.HasIndex("TenantId", "Status", "AssignmentDate")
+                        .HasDatabaseName("IX_AccommodationAssignments_TenantId_Status_AssignmentDate");
+
+                    b.HasIndex(new[] { "LecturerId" }, "IX_AccommodationAssignments_LecturerId_History");
+
+                    b.HasIndex(new[] { "StudentId" }, "IX_AccommodationAssignments_StudentId_History");
 
                     b.ToTable("AccommodationAssignments");
                 });
@@ -3642,6 +3650,9 @@ namespace SMS.Persistence.Migrations
 
                     b.HasIndex("LaneId", "HouseNumber")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "Status")
+                        .HasDatabaseName("IX_Houses_TenantId_Status");
 
                     b.ToTable("Houses");
                 });

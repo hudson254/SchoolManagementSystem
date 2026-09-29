@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using SMS.Application.Common;
 using SMS.Application.Features.Accommodation.Commands;
 using SMS.Application.Features.Accommodation.Queries;
+using SMS.Application.Features.Accommodation.Queries.Reports;
 using SMS.Application.Features.Reports.Queries;
 using SMS.Application.DTOs;
+using SMS.Domain.Enums;
 
 namespace SMS.API.Controllers.v1
 {
@@ -382,6 +384,294 @@ namespace SMS.API.Controllers.v1
             var query = new GetOccupancyStatisticsQuery();
             var result = await Mediator.Send(query, cancellationToken);
             return Ok(result);
+        }
+
+        // ===== Accommodation Reports (occupancy, history, utilization) =====
+
+        /// <summary>Current occupancy of every house (paged) plus occupancy totals.</summary>
+        [HttpGet("reports/current-occupancy")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(AccommodationHouseOccupancyReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetCurrentOccupancyReport(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] Guid? houseId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetCurrentOccupancyReportQuery
+            {
+                LaneId = laneId,
+                HouseId = houseId,
+                Status = status,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                SearchTerm = searchTerm,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>Houses that currently have at least one occupant (paged).</summary>
+        [HttpGet("reports/occupied-houses")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(AccommodationHouseOccupancyReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetOccupiedHousesReport(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetOccupiedHousesReportQuery
+            {
+                LaneId = laneId,
+                Status = status,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                SearchTerm = searchTerm,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>Empty houses with their last-occupant evidence (paged).</summary>
+        [HttpGet("reports/empty-houses")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(AccommodationHouseOccupancyReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetEmptyHousesReport(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetEmptyHousesReportQuery
+            {
+                LaneId = laneId,
+                Status = status,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                SearchTerm = searchTerm,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Occupancy history for a period: every occupancy record overlapping the
+        /// From/To range (a null end date means still occupying).
+        /// </summary>
+        [HttpGet("reports/occupancy-history")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(OccupancyHistoryReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetOccupancyHistoryReport(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] Guid? houseId = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] Guid? academicYearId = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetOccupancyHistoryReportQuery
+            {
+                LaneId = laneId,
+                HouseId = houseId,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                AcademicYearId = academicYearId,
+                FromDate = fromDate,
+                ToDate = toDate,
+                SearchTerm = searchTerm,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>Complete occupancy history of one house, oldest first.</summary>
+        [HttpGet("reports/house-history")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(HouseOccupancyHistoryReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetHouseOccupancyHistoryReport(
+            [FromQuery] Guid houseId,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetHouseOccupancyHistoryReportQuery
+            {
+                HouseId = houseId,
+                FromDate = fromDate,
+                ToDate = toDate,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>Occupancy by period: totals plus a per-house breakdown.</summary>
+        [HttpGet("reports/occupancy-by-period")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(OccupancyByPeriodReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetOccupancyByPeriodReport(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] Guid? houseId = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] Guid? academicYearId = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetOccupancyByPeriodReportQuery
+            {
+                LaneId = laneId,
+                HouseId = houseId,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                AcademicYearId = academicYearId,
+                FromDate = fromDate,
+                ToDate = toDate,
+                SearchTerm = searchTerm,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Occupant accommodation history. Search mode (searchTerm) lists matching
+        /// occupants; detail mode (occupantId) returns one occupant's stay history.
+        /// </summary>
+        [HttpGet("reports/occupant-history")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(OccupantAccommodationHistoryReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetOccupantAccommodationHistoryReport(
+            [FromQuery] Guid? occupantId = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetOccupantAccommodationHistoryReportQuery
+            {
+                OccupantId = occupantId,
+                OccupantType = occupantType,
+                SearchTerm = searchTerm,
+                Page = page,
+                PageSize = pageSize
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>House utilization summary: capacity, occupancy and utilization rates.</summary>
+        [HttpGet("reports/utilization-summary")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(typeof(HouseUtilizationSummaryReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetHouseUtilizationSummaryReport(
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] Guid? houseId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] string? searchTerm = null,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new GetHouseUtilizationSummaryReportQuery
+            {
+                LaneId = laneId,
+                HouseId = houseId,
+                Status = status,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                SearchTerm = searchTerm
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Exports any accommodation report as PDF or Excel using exactly the same
+        /// filters and rows as the preview endpoints above.
+        /// </summary>
+        [HttpGet("reports/export")]
+        [Authorize(Policy = "ReceptionistAccess")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ExportAccommodationReport(
+            [FromQuery] string reportKey,
+            [FromQuery] string format = "PDF",
+            [FromQuery] Guid? laneId = null,
+            [FromQuery] Guid? houseId = null,
+            [FromQuery] Guid? occupantId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] OccupantType? occupantType = null,
+            [FromQuery] Guid? semesterId = null,
+            [FromQuery] Guid? academicYearId = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? searchTerm = null,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new ExportAccommodationReportQuery
+            {
+                ReportKey = reportKey,
+                Format = format,
+                LaneId = laneId,
+                HouseId = houseId,
+                OccupantId = occupantId,
+                Status = status,
+                OccupantType = occupantType,
+                SemesterId = semesterId,
+                AcademicYearId = academicYearId,
+                FromDate = fromDate,
+                ToDate = toDate,
+                SearchTerm = searchTerm
+            };
+            var result = await Mediator.Send(query, cancellationToken);
+            return File(result.FileContent, result.ContentType, result.FileName);
         }
 
         // ===== Legacy Building/Room endpoints (preserved for backward compatibility) =====

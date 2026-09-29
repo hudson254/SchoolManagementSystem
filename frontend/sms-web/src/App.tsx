@@ -37,6 +37,7 @@ const UnitStudyMaterialsPage = loadPage(() => import('./pages/UnitStudyMaterials
 const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
+const AccommodationReports = loadPage(() => import('./pages/AccommodationReports'), 'AccommodationReports');
 const OmsDashboard = loadPage(() => import('./pages/oms/OmsDashboard'), 'OmsDashboard');
 const OmsOrders = loadPage(() => import('./pages/oms/OmsOrders'), 'OmsOrders');
 const OmsOrderCreate = loadPage(() => import('./pages/oms/OmsOrderCreate'), 'OmsOrderCreate');
@@ -129,6 +130,7 @@ function App() {
                         <Route path="classes" element={<Classes />} />
                         <Route path="timetable" element={<Timetable />} />
                         <Route path="accommodation" element={<Accommodation />} />
+                        <Route path="accommodation/reports" element={<AccommodationReports />} />
                         {/* OMS (Phase 2D) — routes mirror the Oms.* backend policies. */}
                         <Route path="oms" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsDashboard /></ProtectedRoute>} />
                         <Route path="oms/orders" element={<ProtectedRoute roles={OMS_VIEW_ROLES}><OmsOrders /></ProtectedRoute>} />

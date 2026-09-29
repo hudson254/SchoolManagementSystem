@@ -94,6 +94,58 @@ namespace SMS.Reporting.Services
                 }
             });
         }
+
+        public async Task<byte[]> GenerateTableExcelAsync(
+            string sheetName,
+            IReadOnlyList<string> columns,
+            IReadOnlyList<IReadOnlyList<string>> rows)
+        {
+            if (columns == null) throw new ArgumentNullException(nameof(columns));
+            if (rows == null) throw new ArgumentNullException(nameof(rows));
+
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    using (var package = new ExcelPackage())
+                    {
+                        var safeSheetName = string.IsNullOrWhiteSpace(sheetName) ? "Report" : sheetName;
+                        if (safeSheetName.Length > 31) safeSheetName = safeSheetName.Substring(0, 31);
+                        foreach (var invalid in new[] { ':', '\\', '/', '?', '*', '[' , ']' })
+                            safeSheetName = safeSheetName.Replace(invalid, ' ');
+
+                        var worksheet = package.Workbook.Worksheets.Add(safeSheetName);
+
+                        for (var i = 0; i < columns.Count; i++)
+                        {
+                            worksheet.Cells[1, i + 1].Value = columns[i];
+                            worksheet.Cells[1, i + 1].Style.Font.Bold = true;
+                        }
+
+                        for (var r = 0; r < rows.Count; r++)
+                        {
+                            var row = rows[r];
+                            for (var c = 0; c < columns.Count; c++)
+                            {
+                                worksheet.Cells[r + 2, c + 1].Value = c < row.Count ? row[c] : string.Empty;
+                            }
+                        }
+
+                        if (columns.Count > 0)
+                            worksheet.Cells[1, 1, Math.Max(1, rows.Count + 1), columns.Count].AutoFitColumns();
+
+                        _logger.LogInformation("Table Excel file generated with {RowCount} rows and {ColumnCount} columns",
+                            rows.Count, columns.Count);
+                        return package.GetAsByteArray();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to generate table Excel file");
+                    throw;
+                }
+            });
+        }
     }
 }
 

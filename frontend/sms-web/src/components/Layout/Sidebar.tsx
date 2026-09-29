@@ -123,8 +123,11 @@ const menuItems: MenuItem[] = [
   {
     text: 'Accommodation',
     icon: <Bed />,
-    path: '/accommodation',
     roles: ['SystemAdministrator', 'Administrator', 'Coordinator', 'Receptionist'],
+    children: [
+      { text: 'Houses & Allocation', icon: <Bed />, path: '/accommodation', roles: ['SystemAdministrator', 'Administrator', 'Coordinator', 'Receptionist'] },
+      { text: 'Reports', icon: <Description />, path: '/accommodation/reports', roles: ['SystemAdministrator', 'Administrator', 'Coordinator', 'Receptionist'] },
+    ],
   },
   {
     text: 'Order Management',
@@ -192,11 +195,30 @@ const menuItems: MenuItem[] = [
   },
 ];
 
+const collectMenuPaths = (items: MenuItem[]): string[] =>
+  items.flatMap((item) =>
+    item.children && item.children.length > 0
+      ? collectMenuPaths(item.children)
+      : item.path
+        ? [item.path]
+        : [],
+  );
+
+/**
+ * The longest registered path that matches the URL wins, so a parent route such as
+ * /accommodation is not left highlighted while /accommodation/reports is open.
+ */
+const findActivePath = (pathname: string): string | undefined =>
+  collectMenuPaths(menuItems)
+    .filter((path) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((a, b) => b.length - a.length)[0];
+
 export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  const activePath = findActivePath(location.pathname);
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -228,7 +250,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     if (!hasRole(item.roles)) return null;
 
     const hasChildren = item.children && item.children.length > 0;
-    const isActive = item.path ? location.pathname.startsWith(item.path) : false;
+    const isActive = item.path ? item.path === activePath : false;
     const isOpen = openMenus[item.text] || false;
 
     return (

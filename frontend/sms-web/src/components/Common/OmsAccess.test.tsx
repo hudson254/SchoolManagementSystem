@@ -48,9 +48,9 @@ const renderGuardedRoute = (roles: string[], path = '/oms/orders/new') =>
     </MemoryRouter>,
   );
 
-const renderSidebar = () =>
+const renderSidebar = (path = '/oms/orders') =>
   render(
-    <MemoryRouter initialEntries={['/oms/orders']}>
+    <MemoryRouter initialEntries={[path]}>
       <Sidebar />
     </MemoryRouter>,
   );
@@ -149,3 +149,41 @@ describe('OMS navigation', () => {
   });
 });
 
+describe('Accommodation navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** ListItemButton marks the route it points at with Mui-selected. */
+  const isSelected = (text: string) => {
+    const button = screen.getByText(text).closest('.MuiListItemButton-root');
+    return Boolean(button?.classList.contains('Mui-selected'));
+  };
+
+  it('highlights the reports link alone while the report page is open', () => {
+    mockAuth({ id: 'user-1', firstName: 'Ada', lastName: 'Lovelace', roles: ['Receptionist'] });
+    renderSidebar('/accommodation/reports');
+    fireEvent.click(screen.getByText('Accommodation'));
+
+    expect(screen.getByText('Reports')).toBeInTheDocument();
+    expect(isSelected('Reports')).toBe(true);
+    expect(isSelected('Houses & Allocation')).toBe(false);
+  });
+
+  it('highlights the houses link while the allocation page is open', () => {
+    mockAuth({ id: 'user-1', firstName: 'Ada', lastName: 'Lovelace', roles: ['Receptionist'] });
+    renderSidebar('/accommodation');
+    fireEvent.click(screen.getByText('Accommodation'));
+
+    expect(isSelected('Houses & Allocation')).toBe(true);
+    expect(isSelected('Reports')).toBe(false);
+  });
+
+  it('keeps the accommodation group away from students', () => {
+    mockAuth({ id: 'user-3', firstName: 'Sam', lastName: 'Student', roles: ['Student'] });
+    renderSidebar('/accommodation');
+
+    expect(screen.queryByText('Accommodation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Houses & Allocation')).not.toBeInTheDocument();
+  });
+});

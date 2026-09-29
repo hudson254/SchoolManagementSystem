@@ -19,6 +19,14 @@ import type {
   VacantHouseReport,
   MaintenanceReport,
   OccupancyStatistics,
+  AccommodationHouseOccupancyReport,
+  OccupancyHistoryReport,
+  HouseOccupancyHistoryReport,
+  OccupancyByPeriodReport,
+  OccupantAccommodationHistoryReport,
+  HouseUtilizationSummaryReport,
+  AccommodationReportKey,
+  AccommodationReportParams,
 } from '../types/accommodation.types';
 
 export const accommodationService = {
@@ -123,7 +131,47 @@ export const accommodationService = {
     api.get<MaintenanceReport>('/accommodation/reports/maintenance'),
 
   getOccupancyStatistics: () =>
-    api.get<OccupancyStatistics>('/accommodation/reports/occupancy-statistics'),
+    api.get<OccupancyStatistics>('/accommodation/reports/statistics'),
+
+  // ===== Accommodation Reports (paged previews + export) =====
+
+  getCurrentOccupancyReport: (params?: AccommodationReportParams) =>
+    api.get<AccommodationHouseOccupancyReport>('/accommodation/reports/current-occupancy', { params }),
+
+  getOccupiedHousesReport: (params?: AccommodationReportParams) =>
+    api.get<AccommodationHouseOccupancyReport>('/accommodation/reports/occupied-houses', { params }),
+
+  getEmptyHousesReport: (params?: AccommodationReportParams) =>
+    api.get<AccommodationHouseOccupancyReport>('/accommodation/reports/empty-houses', { params }),
+
+  getOccupancyHistoryReport: (params?: AccommodationReportParams) =>
+    api.get<OccupancyHistoryReport>('/accommodation/reports/occupancy-history', { params }),
+
+  getHouseHistoryReport: (houseId: string, params?: AccommodationReportParams) =>
+    api.get<HouseOccupancyHistoryReport>('/accommodation/reports/house-history', {
+      params: { ...params, houseId },
+    }),
+
+  getOccupancyByPeriodReport: (params?: AccommodationReportParams) =>
+    api.get<OccupancyByPeriodReport>('/accommodation/reports/occupancy-by-period', { params }),
+
+  /** Search occupants (searchTerm) or load one occupant's stay history (occupantId). */
+  getOccupantHistoryReport: (params?: AccommodationReportParams) =>
+    api.get<OccupantAccommodationHistoryReport>('/accommodation/reports/occupant-history', { params }),
+
+  getUtilizationSummaryReport: (params?: AccommodationReportParams) =>
+    api.get<HouseUtilizationSummaryReport>('/accommodation/reports/utilization-summary', { params }),
+
+  /** Downloads any accommodation report as PDF or Excel for the current filters. */
+  exportAccommodationReport: (
+    reportKey: AccommodationReportKey,
+    format: 'PDF' | 'EXCEL',
+    params?: AccommodationReportParams,
+  ) =>
+    api.get<Blob>('/accommodation/reports/export', {
+      params: { ...params, reportKey, format },
+      responseType: 'blob',
+    }),
 
   // ===== Legacy (kept for backward compatibility) =====
   getBuildings: () =>

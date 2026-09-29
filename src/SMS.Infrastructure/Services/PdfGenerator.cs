@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using SMS.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace SMS.Infrastructure.Services
@@ -80,6 +81,19 @@ namespace SMS.Infrastructure.Services
                 _logger.LogError(ex, "Failed to generate report PDF");
                 throw;
             }
+        }
+
+        public async Task<byte[]> GenerateTablePdfAsync(SMS.Domain.Reporting.ReportTableDocument document)
+        {
+            // Placeholder implementation (SMS.Reporting's QuestPDF-based
+            // PdfGeneratorService is the registered provider — see Program.cs).
+            var text = document == null
+                ? string.Empty
+                : string.Join(Environment.NewLine,
+                    new[] { document.SystemName, document.ReportTitle }
+                    .Concat(document.SummaryLines)
+                    .Concat(document.Rows.Select(r => string.Join(" | ", r))));
+            return await GeneratePdfFromHtmlAsync(text);
         }
     }
 }

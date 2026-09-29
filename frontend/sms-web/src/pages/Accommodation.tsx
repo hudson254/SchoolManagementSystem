@@ -38,6 +38,7 @@ import {
   SwapHoriz as TransferIcon,
   Bed as BedIcon,
   Assignment as AssignmentIcon,
+  Description as ReportsIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -613,6 +614,16 @@ return (
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={refreshAll}>
             Refresh
           </Button>
+          {isStaff && (
+            <Button
+              variant="outlined"
+              startIcon={<ReportsIcon />}
+              onClick={() => navigate('/accommodation/reports')}
+              sx={{ ml: 1 }}
+            >
+              Reports
+            </Button>
+          )}
         </Box>
       </Box>
 

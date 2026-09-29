@@ -254,3 +254,195 @@ export interface OccupancyStatistics {
   laneSummaries: LaneOccupancy[];
 }
 
+// ===== Accommodation Reports (occupancy, history, utilization, export) =====
+
+export type AccommodationReportKey =
+  | 'current-occupancy'
+  | 'occupied-houses'
+  | 'empty-houses'
+  | 'occupancy-history'
+  | 'house-history'
+  | 'occupancy-by-period'
+  | 'occupant-history'
+  | 'utilization-summary';
+
+export interface ReportFilterApplied {
+  label: string;
+  value: string;
+}
+
+export interface ReportPagination {
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AccommodationReportBase {
+  reportKey: string;
+  reportTitle: string;
+  generatedAtUtc: string;
+  generatedBy: string;
+  appliedFilters: ReportFilterApplied[];
+}
+
+export interface OccupancySummaryReport {
+  totalHouses: number;
+  occupiedHouses: number;
+  emptyHouses: number;
+  totalCapacity: number;
+  occupiedSpaces: number;
+  availableSpaces: number;
+  housesAtFullCapacity: number;
+  housesWithAvailableCapacity: number;
+  housesNeverOccupied: number;
+  occupancyPercentage: number;
+}
+
+export interface HouseOccupantReport {
+  assignmentId: string;
+  occupantId: string;
+  occupantType: OccupantType;
+  occupantName: string;
+  occupantNumber?: string | null;
+  allocationDate: string;
+  moveInDate?: string | null;
+  checkInDate?: string | null;
+  assignmentStatus: string;
+  semesterId?: string | null;
+  semesterName?: string | null;
+}
+
+export interface HouseOccupancyReportRow {
+  houseId: string;
+  houseNumber: string;
+  houseName?: string | null;
+  laneId: string;
+  laneName: string;
+  status: string;
+  capacity: number;
+  occupiedCount: number;
+  availableSpaces: number;
+  isOccupied: boolean;
+  isAvailable: boolean;
+  isEnabled: boolean;
+  occupancyStatus: 'Occupied' | 'Empty' | 'Full' | string;
+  currentOccupants: HouseOccupantReport[];
+  lastOccupantName?: string | null;
+  lastOccupantNumber?: string | null;
+  lastOccupantType?: OccupantType | null;
+  lastOccupancyEndDate?: string | null;
+  historicalOccupantCount: number;
+  occupiedDate?: string | null;
+  vacatedDate?: string | null;
+}
+
+export interface AccommodationHouseOccupancyReport extends AccommodationReportBase {
+  summary: OccupancySummaryReport;
+  pagination: ReportPagination;
+  rows: HouseOccupancyReportRow[];
+}
+
+export interface OccupancyHistoryReportRow {
+  assignmentId: string;
+  houseId: string;
+  houseNumber: string;
+  houseName?: string | null;
+  laneName: string;
+  occupantId: string;
+  occupantType: OccupantType;
+  occupantName: string;
+  occupantNumber?: string | null;
+  occupancyStartDate: string;
+  occupancyEndDate?: string | null;
+  isCurrent: boolean;
+  durationDays: number;
+  status: string;
+  semesterId?: string | null;
+  semesterName?: string | null;
+  academicYearName?: string | null;
+}
+
+export interface OccupancyHistoryReport extends AccommodationReportBase {
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  distinctOccupants: number;
+  distinctHouses: number;
+  pagination: ReportPagination;
+  rows: OccupancyHistoryReportRow[];
+}
+
+export interface HouseOccupancyHistoryReport extends AccommodationReportBase {
+  houseId: string;
+  houseNumber: string;
+  houseName?: string | null;
+  laneName: string;
+  houseStatus: string;
+  capacity: number;
+  currentOccupants: number;
+  totalStays: number;
+  pagination: ReportPagination;
+  rows: OccupancyHistoryReportRow[];
+}
+
+export interface OccupancyByPeriodHouseRow {
+  houseId: string;
+  houseNumber: string;
+  houseName?: string | null;
+  laneName: string;
+  status: string;
+  capacity: number;
+  occupiedInPeriod: number;
+  availableInPeriod: number;
+  occupantsInPeriod: string;
+  wasOccupiedInPeriod: boolean;
+}
+
+export interface OccupancyByPeriodReport extends AccommodationReportBase {
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  periodLabel: string;
+  summary: OccupancySummaryReport;
+  pagination: ReportPagination;
+  rows: OccupancyByPeriodHouseRow[];
+}
+
+export interface OccupantCandidate {
+  occupantId: string;
+  occupantType: OccupantType;
+  occupantName: string;
+  occupantNumber?: string | null;
+  currentHouseId?: string | null;
+  currentHouseNumber?: string | null;
+  totalStays: number;
+  isCurrent: boolean;
+}
+
+export interface OccupantAccommodationHistoryReport extends AccommodationReportBase {
+  mode: 'Search' | 'Detail' | string;
+  selectedOccupant?: OccupantCandidate | null;
+  candidates: OccupantCandidate[];
+  stays: OccupancyHistoryReportRow[];
+  currentHouse: string;
+  pagination: ReportPagination;
+}
+
+export interface HouseUtilizationSummaryReport extends AccommodationReportBase {
+  summary: OccupancySummaryReport;
+}
+
+export interface AccommodationReportParams {
+  laneId?: string;
+  houseId?: string;
+  occupantId?: string;
+  status?: string;
+  occupantType?: OccupantType;
+  semesterId?: string;
+  academicYearId?: string;
+  fromDate?: string;
+  toDate?: string;
+  searchTerm?: string;
+  page?: number;
+  pageSize?: number;
+}
+
