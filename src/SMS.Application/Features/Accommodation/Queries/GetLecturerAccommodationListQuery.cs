@@ -34,6 +34,14 @@ namespace SMS.Application.Features.Accommodation.Queries
 
             var query = assignments.Where(a => a.OccupantType == SMS.Domain.Enums.OccupantType.Lecturer).AsEnumerable();
 
+            // The controller binds laneId from the query string and forwards it
+            // here, so the filter has to be applied or the endpoint advertises a
+            // narrowing filter that silently returns every lane.
+            if (request.LaneId.HasValue)
+            {
+                query = query.Where(a => a.LaneId == request.LaneId);
+            }
+
             if (!string.IsNullOrWhiteSpace(request.SearchTerm))
             {
                 var search = request.SearchTerm.ToLower();

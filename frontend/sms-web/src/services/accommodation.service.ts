@@ -112,17 +112,27 @@ export const accommodationService = {
     api.get<AccommodationDashboard>('/accommodation/dashboard'),
 
   // ===== Reports =====
-  getLaneOccupancyReport: (laneId?: string) =>
-    api.get<LaneOccupancyReport[]>('/accommodation/reports/lane-occupancy', { params: { laneId } }),
+
+  /**
+   * Occupancy for one lane. The backend contract is
+   * GET /accommodation/reports/lane-occupancy/{laneId}: the lane id is a
+   * required route parameter (not a query string) and the response is a single
+   * report object, not a list. A lane the caller cannot see resolves to 404.
+   * Use getOccupancyStatistics() for the per-lane summaries of every lane.
+   */
+  getLaneOccupancyReport: (laneId: string) =>
+    api.get<LaneOccupancyReport>(`/accommodation/reports/lane-occupancy/${laneId}`),
 
   getHouseOccupancyReport: (laneId?: string, status?: string) =>
     api.get<HouseOccupancyReport[]>('/accommodation/reports/house-occupancy', { params: { laneId, status } }),
 
-  getStudentAccommodationList: (searchTerm?: string, status?: string) =>
-    api.get<StudentAccommodation[]>('/accommodation/reports/student-accommodation', { params: { searchTerm, status } }),
+  // Both occupant-list reports narrow by laneId + searchTerm. There is no
+  // status filter on these endpoints, so none is sent.
+  getStudentAccommodationList: (laneId?: string, searchTerm?: string) =>
+    api.get<StudentAccommodation[]>('/accommodation/reports/student-accommodation', { params: { laneId, searchTerm } }),
 
-  getLecturerAccommodationList: (searchTerm?: string, status?: string) =>
-    api.get<LecturerAccommodation[]>('/accommodation/reports/lecturer-accommodation', { params: { searchTerm, status } }),
+  getLecturerAccommodationList: (laneId?: string, searchTerm?: string) =>
+    api.get<LecturerAccommodation[]>('/accommodation/reports/lecturer-accommodation', { params: { laneId, searchTerm } }),
 
   getVacantHouseReport: (laneId?: string) =>
     api.get<VacantHouseReport>('/accommodation/reports/vacant-houses', { params: { laneId } }),
