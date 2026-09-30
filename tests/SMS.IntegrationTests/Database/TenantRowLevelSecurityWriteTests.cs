@@ -20,8 +20,15 @@ namespace SMS.IntegrationTests.Database
     /// case for each one. A policy that rejected every write would satisfy a
     /// naive "writes are blocked" test while leaving the application
     /// completely broken.</para>
+    /// <para>Joined to <see cref="TenantRowLevelSecurityCollection"/> rather
+    /// than declaring an <c>IClassFixture</c> of its own. This class INSERTs,
+    /// UPDATEs and soft-DELETEs <c>Lanes</c> rows for both tenants while
+    /// <see cref="TenantRowLevelSecurityTests"/> asserts on live row counts in
+    /// the same database, so the two must share one fixture instance and must
+    /// not run concurrently - see that collection for the full reasoning.</para>
     /// </summary>
-    public class TenantRowLevelSecurityWriteTests : IClassFixture<TenantRowLevelSecurityFixture>
+    [Collection(TenantRowLevelSecurityCollection.Name)]
+    public class TenantRowLevelSecurityWriteTests
     {
         private readonly TenantRowLevelSecurityFixture _fixture;
 

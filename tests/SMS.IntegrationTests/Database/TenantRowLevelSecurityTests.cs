@@ -34,8 +34,15 @@ namespace SMS.IntegrationTests.Database
     /// not the owner of any table. Those attributes are asserted first,
     /// because a suite that silently ran as a superuser would prove nothing.
     /// </para>
+    /// <para>Joined to <see cref="TenantRowLevelSecurityCollection"/> rather
+    /// than declaring an <c>IClassFixture</c> of its own. Both this class and
+    /// <see cref="TenantRowLevelSecurityWriteTests"/> mutate the same seed
+    /// rows in the same database, so they must share one fixture instance and
+    /// must not run concurrently - see that collection for the full
+    /// reasoning.</para>
     /// </summary>
-    public class TenantRowLevelSecurityTests : IClassFixture<TenantRowLevelSecurityFixture>
+    [Collection(TenantRowLevelSecurityCollection.Name)]
+    public class TenantRowLevelSecurityTests
     {
         private readonly TenantRowLevelSecurityFixture _fixture;
 

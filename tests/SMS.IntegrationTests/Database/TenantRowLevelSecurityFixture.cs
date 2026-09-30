@@ -99,6 +99,19 @@ namespace SMS.IntegrationTests.Database
                     await DatabaseMigrationRunner.ApplyAsync(MigrationConnectionString);
                 }
 
+                // Re-apply the Tenants narrowing AFTER migrations.
+                //
+                // The grants above set ALTER DEFAULT PRIVILEGES so that every
+                // table sms_migration goes on to create is immediately usable
+                // by the runtime role - which necessarily includes "Tenants",
+                // because default privileges cannot name an exception. In
+                // production the equivalent re-run is
+                // docker/grant-least-privilege-privileges.sql, which the
+                // documented deployment flow executes after migrating. Without
+                // this step the suite would assert a privilege boundary that
+                // the real arrangement does not actually have.
+                await ApplyTenantsRegistryGrantsAsync();
+
                 await SeedAsync();
             }
             finally
@@ -237,6 +250,23 @@ namespace SMS.IntegrationTests.Database
         }
 
         /// <summary>
+        /// Runs a non-query statement over raw ADO.NET as the OWNER
+        /// (sms_migration). Used to prove that the migration role is itself
+        /// constrained: it may perform DDL against the tables it owns, but it
+        /// is still NOSUPERUSER / NOCREATEROLE / NOCREATEDB.
+        /// </summary>
+        public async Task ExecuteAsOwnerNonQueryAsync(string sql)
+        {
+            await using var connection = new NpgsqlConnection(MigrationConnectionString);
+            await connection.OpenAsync();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
         /// Reads a scalar as the OWNER of the tables, bypassing policies
         /// entirely. Establishes ground truth so that a "cannot see" result is
         /// distinguishable from "was never written".
@@ -256,8 +286,26 @@ namespace SMS.IntegrationTests.Database
             return result is null or DBNull ? 0L : Convert.ToInt64(result, CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// Drops (if present) and recreates the dedicated test database.
+        ///
+        /// <para><c>NpgsqlConnection.ClearAllPools()</c> is called immediately
+        /// before the drop. Npgsql keeps a <b>process-wide static</b>
+        /// connection pool, so a pooled connector created for
+        /// <c>sms_rls_test</c> survives this database being destroyed and
+        /// recreated, and the next rental hands back a connector whose backend
+        /// is gone. PostgreSQL therefore still counts the doomed database as
+        /// referenced, and the failure surfaces much later as an unrelated
+        /// "database is being accessed by other users" or a connection reset
+        /// inside a test that has nothing to do with teardown. Clearing the
+        /// pools makes the drop total: no live or pooled reference to the old
+        /// database can outlive it.</para>
+        /// </summary>
         private static async Task RecreateDatabaseAsync()
         {
+            // No live or pooled connection may outlive the database below.
+            NpgsqlConnection.ClearAllPools();
+
             await using var connection = new NpgsqlConnection(AdminConnectionString("postgres"));
             await connection.OpenAsync();
 
@@ -269,6 +317,29 @@ namespace SMS.IntegrationTests.Database
 
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{DatabaseName}\"", connection);
             await create.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Narrows "Tenants" to SELECT for the runtime role, after migrations.
+        /// Mirrors section 2a of docker/grant-least-privilege-privileges.sql.
+        /// </summary>
+        private static async Task ApplyTenantsRegistryGrantsAsync()
+        {
+            await using var connection = new NpgsqlConnection(AdminConnectionString(DatabaseName));
+            await connection.OpenAsync();
+
+            const string sql = @"
+                DO $do$
+                BEGIN
+                    IF to_regclass('public.""Tenants""') IS NOT NULL THEN
+                        EXECUTE 'GRANT SELECT ON TABLE public.""Tenants"" TO sms_app';
+                        EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON TABLE public.""Tenants"" FROM sms_app';
+                    END IF;
+                END
+                $do$;";
+
+            await using var command = new NpgsqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
         }
 
         /// <summary>
@@ -295,24 +366,73 @@ namespace SMS.IntegrationTests.Database
                 ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
                     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sms_app;
                 ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
-                    GRANT USAGE, SELECT ON SEQUENCES TO sms_app;";
+                    GRANT USAGE, SELECT ON SEQUENCES TO sms_app;
+
+                -- Mirrors section 2a of docker/grant-least-privilege-privileges.sql.
+                -- SELECT on Tenants is what tenant resolution needs and is
+                -- kept; the three write privileges are revoked so the runtime
+                -- role cannot create or rewrite a tenant registry row.
+                --
+                -- Guarded on existence because this block runs BEFORE
+                -- migrations: at this point the Tenants table has not been
+                -- created yet, and an unconditional GRANT/REVOKE on a missing
+                -- relation aborts the whole provisioning step.
+                DO $$
+                BEGIN
+                    IF to_regclass('public.""Tenants""') IS NOT NULL THEN
+                        EXECUTE 'GRANT SELECT ON TABLE public.""Tenants"" TO sms_app';
+                        EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON TABLE public.""Tenants"" FROM sms_app';
+                    END IF;
+                END $$;";
 
             await using var command = new NpgsqlCommand(sql, connection);
             await command.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// A context bound to the migration role, used only for seed rows the
+        /// runtime role is deliberately not allowed to write - the "Tenants"
+        /// registry in particular. The migration role owns every table here, so
+        /// it is exempt from their row level security policies and retains the
+        /// privileges the runtime role has had revoked.
+        /// </summary>
+        public ApplicationDbContext CreateMigrationContext()
+        {
+            var tenant = new Mock<ITenantContext>();
+            tenant.Setup(x => x.TenantId).Returns(TenantA.ToString());
+            tenant.Setup(x => x.TenantName).Returns("RLS Seed");
+            tenant.Setup(x => x.ConnectionString).Returns(string.Empty);
+
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseNpgsql(MigrationConnectionString, npgsql => npgsql.CommandTimeout(60))
+                .Options;
+
+            return new ApplicationDbContext(
+                options,
+                new Mock<ICurrentUserService>().Object,
+                tenant.Object);
+        }
+
         private async Task SeedAsync()
         {
-            await using var context = CreateContext();
+            // The tenant registry rows are written over the MIGRATION
+            // connection. The runtime role holds SELECT only on "Tenants" -
+            // it reads the registry to resolve the tenant, and nothing at
+            // runtime writes it - so seeding over the runtime connection would
+            // fail with `permission denied for table Tenants`. This is the same
+            // split production uses: DatabaseSeeder writes bootstrap rows on
+            // ConnectionStrings:MigrationConnection, and sms_migration owns the
+            // table so it is exempt from its own RLS.
+            await using var seedContext = CreateMigrationContext();
 
             // Both tenants must exist as real rows: every tenant-owned table
             // carries a foreign key into Tenants.
-            var existingTenants = await context.Tenants.IgnoreQueryFilters()
+            var existingTenants = await seedContext.Tenants.IgnoreQueryFilters()
                 .Select(t => t.Id).ToListAsync();
 
             if (!existingTenants.Contains(TenantA))
             {
-                context.Tenants.Add(new SMS.Domain.Entities.Tenant
+                seedContext.Tenants.Add(new SMS.Domain.Entities.Tenant
                 {
                     Id = TenantA, Name = "RLS Tenant A", Organization = "RLS Org A",
                     Subdomain = "rls-a", IsActive = true
@@ -321,14 +441,14 @@ namespace SMS.IntegrationTests.Database
 
             if (!existingTenants.Contains(TenantB))
             {
-                context.Tenants.Add(new SMS.Domain.Entities.Tenant
+                seedContext.Tenants.Add(new SMS.Domain.Entities.Tenant
                 {
                     Id = TenantB, Name = "RLS Tenant B", Organization = "RLS Org B",
                     Subdomain = "rls-b", IsActive = true
                 });
             }
 
-            await context.SaveChangesAsync();
+            await seedContext.SaveChangesAsync();
 
             // Read the lane ids back rather than creating them unconditionally:
             // the second fixture instance must find the SAME rows, otherwise
@@ -362,5 +482,50 @@ namespace SMS.IntegrationTests.Database
             await context.SaveChangesAsync();
             return context.Lanes.IgnoreQueryFilters().First(l => l.LaneName == laneName).Id;
         }
+    }
+
+    /// <summary>
+    /// xUnit collection that owns the single shared
+    /// <see cref="TenantRowLevelSecurityFixture"/> and serialises every class
+    /// that joins it.
+    ///
+    /// <para><b>Why this exists.</b> Both <see cref="TenantRowLevelSecurityTests"/>
+    /// (read isolation) and <see cref="TenantRowLevelSecurityWriteTests"/> (write
+    /// isolation) use the SAME <c>sms_rls_test</c> database and the SAME seed
+    /// rows. They previously declared it as <c>IClassFixture</c>, which xUnit
+    /// honours by constructing <b>one independent fixture instance per test
+    /// class</b> - and each test class is its own collection, so the two ran in
+    /// parallel. That produced two real defects:</para>
+    ///
+    /// <list type="number">
+    /// <item>Two <c>InitializeAsync</c> runs racing over one database. The
+    /// <c>IsProvisionedAsync</c> guard made a second <c>DROP DATABASE</c>
+    /// unlikely, but only by luck of ordering: the check and the recreate are
+    /// not atomic, so whichever class evaluated the check first could still be
+    /// mid-<c>DROP</c> when the other decided to recreate.</item>
+    ///
+    /// <item>Concurrent mutation of shared rows. The write tests INSERT, UPDATE
+    /// and soft-DELETE <c>Lanes</c> rows for BOTH tenants, while the read tests
+    /// assert on live counts - for example
+    /// <c>RawSql_TenantA_SeesOnlyItsOwnRows</c> requires
+    /// <c>visible &lt; allLanes</c>. A row deleted or inserted between those two
+    /// reads makes a security assertion fail for a reason that has nothing to
+    /// do with row level security.</item>
+    /// </list>
+    ///
+    /// <para>Joining a collection fixes both at once: the collection fixture is
+    /// constructed <b>once</b> for the whole collection, and xUnit never runs
+    /// two classes from the same collection in parallel. No test is removed, no
+    /// seed row is dropped, and no timeout is increased.</para>
+    /// </summary>
+    [CollectionDefinition(Name)]
+    public class TenantRowLevelSecurityCollection
+        : ICollectionFixture<TenantRowLevelSecurityFixture>
+    {
+        /// <summary>
+        /// Name both test classes join. Declared here rather than as a separate
+        /// constant so the attribute and the definition cannot drift apart.
+        /// </summary>
+        public const string Name = "TenantRowLevelSecurity";
     }
 }

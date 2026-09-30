@@ -114,6 +114,16 @@ namespace SMS.IntegrationTests.Database
                 await DatabaseMigrationRunner.ApplyAsync(
                     BuildMigrationConnectionString(DatabaseName));
 
+                // Narrow "Tenants" to SELECT for the runtime role AFTER
+                // migrations, mirroring section 2a of
+                // docker/grant-least-privilege-privileges.sql. The grants above
+                // used ALTER DEFAULT PRIVILEGES, which necessarily covers
+                // "Tenants" because default privileges cannot name an
+                // exception; production closes that by re-running the grant
+                // script after migrating, and this fixture mirrors it so the
+                // two arrangements cannot drift apart.
+                await ApplyTenantsRegistryGrantsAsync();
+
                 await using var context = CreateContext();
                 if (!string.Equals(context.Database.ProviderName, NpgsqlProviderName, StringComparison.Ordinal))
                 {
@@ -123,7 +133,7 @@ namespace SMS.IntegrationTests.Database
                         "InMemory provider does not reproduce the Modified/Added misclassification under test.");
                 }
 
-                await SeedTenantsAsync(context);
+                await SeedTenantsAsync();
             }
             finally
             {
@@ -137,8 +147,19 @@ namespace SMS.IntegrationTests.Database
         /// Both tenants referenced by the tests must exist as real rows, because
         /// Courses/Students/Enrollments carry a tenant_id foreign key into
         /// "Tenants".
+        ///
+        /// <para>This runs on the MIGRATION connection, not the runtime one,
+        /// and that is not incidental. The runtime role holds SELECT only on
+        /// "Tenants" - tenant resolution reads it, nothing writes it - so a
+        /// seed performed over the runtime connection would now fail with
+        /// <c>permission denied for table Tenants</c>. This mirrors production
+        /// exactly: <c>DatabaseSeeder.SeedDefaultTenantAsync</c> is reached only
+        /// from the <c>seed-data</c> CLI, which builds its DbContext on
+        /// ConnectionStrings:MigrationConnection. The migration role owns the
+        /// table, so it is exempt from its own RLS and retains the write
+        /// privilege.</para>
         /// </summary>
-        private static async Task SeedTenantsAsync(ApplicationDbContext context)
+        private static async Task SeedTenantsAsync()
         {
             var wanted = new[]
             {
@@ -146,6 +167,7 @@ namespace SMS.IntegrationTests.Database
                 (OtherTenantId, "Other Test Tenant", "other-test")
             };
 
+            await using var context = CreateMigrationContext();
             foreach (var (id, name, subdomain) in wanted)
             {
                 var exists = await context.Tenants.AnyAsync(t => t.Id == id);
@@ -166,12 +188,56 @@ namespace SMS.IntegrationTests.Database
         }
 
         /// <summary>
+        /// A context bound to the migration role. Used only for seed data that
+        /// the runtime role is not permitted to write - "Tenants" in
+        /// particular.
+        /// </summary>
+        private static ApplicationDbContext CreateMigrationContext()
+        {
+            var currentUser = new Mock<ICurrentUserService>();
+            currentUser.Setup(x => x.UserId).Returns("integration-test-user");
+            currentUser.Setup(x => x.Username).Returns("integration-test");
+            currentUser.Setup(x => x.IsAuthenticated).Returns(true);
+
+            var tenant = new Mock<ITenantContext>();
+            tenant.Setup(x => x.TenantId).Returns(TenantId.ToString());
+            tenant.Setup(x => x.TenantName).Returns("Enrollment State Test Tenant");
+            tenant.Setup(x => x.ConnectionString).Returns(string.Empty);
+
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseNpgsql(BuildMigrationConnectionString(DatabaseName),
+                    npgsql => npgsql.CommandTimeout(60))
+                .Options;
+
+            return new ApplicationDbContext(options, currentUser.Object, tenant.Object);
+        }
+
+        /// <summary>
         /// Drops (if present) and recreates the dedicated test database.
         /// Connections are terminated first so a pooled connection left
         /// behind by a previous run cannot block the drop.
+        ///
+        /// <para><c>NpgsqlConnection.ClearAllPools()</c> is what makes the
+        /// drop total. Npgsql's connection pool is <b>process-wide static</b>,
+        /// so a connector opened against <c>sms_enrollment_state_test</c> by an
+        /// earlier fixture or an earlier test class outlives this database
+        /// being dropped and recreated. <c>WITH (FORCE)</c> terminates the
+        /// server-side backends, but it cannot retract a client-side pooled
+        /// connector that still believes the database exists, so the next
+        /// rental is handed a dead backend. That is the intermittent failure
+        /// this method used to cause: a connection reset or a "database is
+        /// being accessed by other users" error raised inside an unrelated
+        /// test, sometimes minutes after the drop that caused it. Clearing
+        /// every pool first means no reference to the old database can survive
+        /// it, so the suite is deterministic regardless of what ran before.</para>
         /// </summary>
         private static async Task RecreateDatabaseAsync()
         {
+            // Discard every pooled connection before destroying what it points
+            // at. This is the fix for the DROP ... WITH (FORCE) vs static-pool
+            // interaction; it is a correctness fix, not a retry.
+            NpgsqlConnection.ClearAllPools();
+
             await using var connection = new NpgsqlConnection(BuildAdminConnectionString(AdminDatabaseName));
             await connection.OpenAsync();
 
@@ -183,6 +249,29 @@ namespace SMS.IntegrationTests.Database
 
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{DatabaseName}\"", connection);
             await create.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Narrows "Tenants" to SELECT for the runtime role, after migrations.
+        /// Mirrors section 2a of docker/grant-least-privilege-privileges.sql.
+        /// </summary>
+        private static async Task ApplyTenantsRegistryGrantsAsync()
+        {
+            await using var connection = new NpgsqlConnection(BuildAdminConnectionString(DatabaseName));
+            await connection.OpenAsync();
+
+            const string sql = @"
+                DO $do$
+                BEGIN
+                    IF to_regclass('public.""Tenants""') IS NOT NULL THEN
+                        EXECUTE 'GRANT SELECT ON TABLE public.""Tenants"" TO sms_app';
+                        EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON TABLE public.""Tenants"" FROM sms_app';
+                    END IF;
+                END
+                $do$;";
+
+            await using var command = new NpgsqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
         }
 
         /// <summary>
@@ -211,7 +300,23 @@ namespace SMS.IntegrationTests.Database
                 ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
                     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sms_app;
                 ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
-                    GRANT USAGE, SELECT ON SEQUENCES TO sms_app;";
+                    GRANT USAGE, SELECT ON SEQUENCES TO sms_app;
+
+                -- Mirrors section 2a of docker/grant-least-privilege-privileges.sql.
+                -- The runtime role resolves tenants by READING this table, so
+                -- SELECT is kept; the three write privileges are revoked.
+                --
+                -- Guarded on existence because this block runs BEFORE
+                -- migrations: at this point the Tenants table has not been
+                -- created yet, and an unconditional GRANT/REVOKE on a missing
+                -- relation aborts the whole provisioning step.
+                DO $$
+                BEGIN
+                    IF to_regclass('public.""Tenants""') IS NOT NULL THEN
+                        EXECUTE 'GRANT SELECT ON TABLE public.""Tenants"" TO sms_app';
+                        EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON TABLE public.""Tenants"" FROM sms_app';
+                    END IF;
+                END $$;";
 
             await using var command = new NpgsqlCommand(sql, connection);
             await command.ExecuteNonQueryAsync();
