@@ -118,9 +118,7 @@ namespace SMS.ApiTests.Controllers
             // Handle both InMemory and real PostgreSQL providers
             if (db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
             {
-                var pending = await db.Database.GetPendingMigrationsAsync();
-                if (pending.Any())
-                    await db.Database.MigrateAsync();
+                await TestDatabaseMigrator.MigrateAsync(Services);
             }
             else
             {

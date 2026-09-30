@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SMS.Domain.Interfaces;
 using SMS.Persistence.Data;
@@ -56,8 +57,17 @@ namespace SMS.IntegrationTests.Database
             }
             else
             {
+                // Least-privilege runtime role (NOSUPERUSER, NOBYPASSRLS,
+                // owns nothing). The tenant interceptor is attached for the
+                // same reason the runtime DI root attaches it: without
+                // app.tenant_id on the session, an enabled RLS policy
+                // resolves every row to the all-zero sentinel and the
+                // tenant-scoped tests would pass vacuously.
                 var npgsqlOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
-                    .UseNpgsql("Host=localhost;Port=5433;Database=testdb;Username=testuser;Password=testpass123")
+                    .UseNpgsql("Host=localhost;Port=5433;Database=testdb;Username=sms_app;Password=testapp123")
+                    .AddInterceptors(new TenantContextDbInterceptor(
+                        mockTenantContext.Object,
+                        NullLogger<TenantContextDbInterceptor>.Instance))
                     .Options;
 
                 _context = new ApplicationDbContext(

@@ -49,9 +49,14 @@ namespace SMS.Persistence.Services
 
             try
             {
-                // Ensure database is created and migrated
-                await _context.Database.MigrateAsync();
-                _logger.LogInformation("Database migrations verified.");
+                // Roles, the default tenant and the administrator are all
+                // bootstrap data. They are written with no tenant context,
+                // so under row level security they must go through the
+                // migration/seed connection (ConnectionStrings:MigrationConnection),
+                // not the least-privilege runtime connection. The runtime
+                // connection is used for the ordinary per-tenant reads
+                // below, which is where it belongs.
+                await EnsureMigratedAsync();
 
                 // Seed roles
                 await SeedRolesAsync();
@@ -69,6 +74,29 @@ namespace SMS.Persistence.Services
                 _logger.LogError(ex, "Error during database seeding");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Applies pending migrations over the dedicated migration
+        /// connection. Guarded because the API also runs a startup
+        /// migration gate; whoever gets there first wins and the other is
+        /// a no-op, which is safe because migrations are idempotent under
+        /// EF Core's migration lock.
+        /// </summary>
+        private async Task EnsureMigratedAsync()
+        {
+            var migrationConnection = DatabaseMigrationRunner.ResolveConnectionString(
+                _configuration, out var usedRuntimeConnectionAsFallback);
+
+            if (usedRuntimeConnectionAsFallback)
+            {
+                _logger.LogWarning(
+                    "ConnectionStrings:{Key} is not configured; seeding will use the runtime " +
+                    "connection, which cannot write bootstrap rows once row level security is enabled.",
+                    DatabaseMigrationRunner.MigrationConnectionName);
+            }
+
+            await DatabaseMigrationRunner.ApplyAsync(migrationConnection, _logger);
         }
 
         private async Task SeedRolesAsync()

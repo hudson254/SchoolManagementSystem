@@ -67,51 +67,40 @@ static async Task RunMigrateDatabaseAsync(string[] args)
             .AddEnvironmentVariables();
 
         // Get connection string
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        //
+        // Migrations run over the DEDICATED migration connection, not over
+        // the runtime application connection. The runtime role is
+        // NOBYPASSRLS/NOSUPERUSER and owns nothing, which is what makes
+        // row level security enforceable - and which also means it cannot
+        // run DDL. Falling back to DefaultConnection keeps un-provisioned
+        // deployments working, but it is announced so that a misconfigured
+        // production box does not quietly keep running DDL as the app role.
+        var connectionString = DatabaseMigrationRunner.ResolveConnectionString(
+            builder.Configuration, out var usedRuntimeConnectionAsFallback);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            Console.WriteLine("ERROR: DefaultConnection connection string not configured.");
+            Console.WriteLine("ERROR: neither MigrationConnection nor DefaultConnection is configured.");
             Environment.Exit(1);
             return;
         }
 
-        // Register stub services required by ApplicationDbContext constructor
-        builder.Services.AddHttpContextAccessor();
-        builder.Services.AddScoped<ICurrentUserService>(_ => new StubCurrentUserService());
-        builder.Services.AddScoped<SMS.Domain.Interfaces.ITenantContext>(_ => new StubTenantContext());
-
-        // Ensure DbContext is registered
-        builder.Services.AddDbContext<SMS.Persistence.Data.ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.EnableRetryOnFailure(3);
-                npgsqlOptions.CommandTimeout(60);
-            }));
-
-        var app = builder.Build();
-
-        using (var scope = app.Services.CreateScope())
+        if (usedRuntimeConnectionAsFallback)
         {
-            var dbContext = scope.ServiceProvider.GetRequiredService<SMS.Persistence.Data.ApplicationDbContext>();
-
-            Console.WriteLine($"Connecting to database: {connectionString.Split(';')[0]}...");
-
-            // Apply migrations
-            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
-            if (pendingMigrations.Any())
-            {
-                Console.WriteLine($"Applying {pendingMigrations.Count()} pending migration(s)...");
-                await dbContext.Database.MigrateAsync();
-                Console.WriteLine("Database migrations applied successfully.");
-            }
-            else
-            {
-                Console.WriteLine("Database is already up to date. No migrations to apply.");
-            }
-
-            Console.WriteLine("Migration completed successfully!");
-            Environment.Exit(0);
+            Console.WriteLine(
+                "WARNING: ConnectionStrings:MigrationConnection is not configured; " +
+                "migrations will run over the runtime connection. Provision the " +
+                "sms_migration role and set that connection string.");
         }
+
+        Console.WriteLine($"Applying migrations as: {connectionString.Split(';')[0]}...");
+
+        var applied = await DatabaseMigrationRunner.ApplyAsync(connectionString);
+        Console.WriteLine(applied == 0
+            ? "Database is already up to date. No migrations to apply."
+            : $"Database migrations applied successfully ({applied} migration(s)).");
+
+        Console.WriteLine("Migration completed successfully!");
+        Environment.Exit(0);
     }
     catch (Exception ex)
     {
@@ -141,13 +130,25 @@ static async Task RunSeedDataAsync(string[] args)
             .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
             .AddEnvironmentVariables();
 
-        // Get connection string
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        // Seeding writes bootstrap rows (roles, the default tenant, the
+        // administrator) with no tenant context. Under row level security
+        // those writes must come from the migration/seed role, not from the
+        // least-privilege runtime role, so this whole CLI runs on the
+        // dedicated MigrationConnection.
+        var connectionString = DatabaseMigrationRunner.ResolveConnectionString(
+            builder.Configuration, out var usedRuntimeConnectionAsFallback);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            Console.WriteLine("ERROR: DefaultConnection connection string not configured.");
+            Console.WriteLine("ERROR: neither MigrationConnection nor DefaultConnection is configured.");
             Environment.Exit(1);
             return;
+        }
+
+        if (usedRuntimeConnectionAsFallback)
+        {
+            Console.WriteLine(
+                "WARNING: ConnectionStrings:MigrationConnection is not configured; seeding will " +
+                "run over the runtime connection and will fail once row level security is enabled.");
         }
 
         // Ensure DbContext is registered
@@ -156,6 +157,7 @@ static async Task RunSeedDataAsync(string[] args)
             {
                 npgsqlOptions.EnableRetryOnFailure(3);
                 npgsqlOptions.CommandTimeout(60);
+                npgsqlOptions.MigrationsAssembly(typeof(SMS.Persistence.Data.ApplicationDbContext).Assembly.FullName);
             }));
 
         // Add Identity services
@@ -982,14 +984,24 @@ using (var scope = app.Services.CreateScope())
         // InMemory provider does not support GetPendingMigrationsAsync.
         if (dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
         {
-            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
-            if (pendingMigrations.Any())
+            // Migrations must NOT run over the scoped runtime DbContext.
+            // That connection is the least-privilege sms_app role, which
+            // owns nothing and cannot run DDL. Using it here would either
+            // fail or, worse, force the runtime role to be kept
+            // over-privileged so that deploys keep working.
+            var migrationConnection = DatabaseMigrationRunner.ResolveConnectionString(
+                app.Configuration, out var usedRuntimeConnectionAsFallback);
+
+            if (usedRuntimeConnectionAsFallback)
             {
-                Log.Information("Applying {Count} pending migration(s)...", pendingMigrations.Count());
-                await dbContext.Database.MigrateAsync();
-                Log.Information("Database migrations applied successfully.");
+                Log.Warning(
+                    "ConnectionStrings:{Key} is not configured; applying migrations over the " +
+                    "runtime connection. Provision the sms_migration role and configure it.",
+                    DatabaseMigrationRunner.MigrationConnectionName);
             }
-            else
+
+            var applied = await DatabaseMigrationRunner.ApplyAsync(migrationConnection);
+            if (applied == 0)
             {
                 Log.Information("Database is already up to date. No migrations to apply.");
             }

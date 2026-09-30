@@ -161,7 +161,7 @@ namespace SMS.ApiTests
                     // To avoid username collisions across test runs, each test generates
                     // unique emails/names using GUIDs. Migrations are applied by Program.cs
                     // at server startup, but we also ensure they run here for safety.
-                    await dbContext.Database.MigrateAsync();
+                    await TestDatabaseMigrator.MigrateAsync(Services);
 
                     // Seed the default tenant FIRST because AspNetUsers has a
                     // foreign key constraint FK_AspNetUsers_Tenants_TenantId.

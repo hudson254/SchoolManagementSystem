@@ -114,9 +114,7 @@ namespace SMS.ApiTests.Controllers
             // Only migrate if there are pending migrations
             if (db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
             {
-                var pending = await db.Database.GetPendingMigrationsAsync();
-                if (pending.Any())
-                    await db.Database.MigrateAsync();
+                await TestDatabaseMigrator.MigrateAsync(Services);
             }
             else
             {

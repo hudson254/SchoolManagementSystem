@@ -127,9 +127,7 @@ namespace SMS.ApiTests.Controllers
 
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var pending = await db.Database.GetPendingMigrationsAsync();
-            if (pending.Any())
-                await db.Database.MigrateAsync();
+            await TestDatabaseMigrator.MigrateAsync(Services);
 
             if (!await db.Tenants.AnyAsync(t => t.Id == DefaultTenantId))
             {

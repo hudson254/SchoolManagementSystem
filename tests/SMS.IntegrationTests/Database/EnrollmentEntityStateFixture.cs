@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Npgsql;
 using SMS.Domain.Entities;
@@ -53,12 +54,41 @@ namespace SMS.IntegrationTests.Database
 
         public static string Host => Env("SMS_TEST_PG_HOST", "localhost");
         public static int Port => int.Parse(Env("SMS_TEST_PG_PORT", "5433"), CultureInfo.InvariantCulture);
-        public static string User => Env("SMS_TEST_PG_USER", "testuser");
-        public static string Password => Env("SMS_TEST_PG_PASSWORD", "testpass123");
+
+        /// <summary>
+        /// Bootstrap role. Only used to CREATE DATABASE and to hand the
+        /// freshly created database's schema to the migration role. The
+        /// application never connects as this.
+        /// </summary>
+        public static string AdminUser => Env("SMS_TEST_PG_ADMIN_USER", "testuser");
+        public static string AdminPassword => Env("SMS_TEST_PG_ADMIN_PASSWORD", "testpass123");
+
+        /// <summary>
+        /// Least-privilege runtime role: NOSUPERUSER, NOBYPASSRLS, owns
+        /// nothing. Every query the tests make runs as this role, which is
+        /// what lets them observe row level security rather than bypass it.
+        /// </summary>
+        public static string User => Env("SMS_TEST_PG_USER", "sms_app");
+        public static string Password => Env("SMS_TEST_PG_PASSWORD", "testapp123");
+
+        /// <summary>
+        /// DDL role. Applies migrations and therefore owns the tables it
+        /// creates. Kept separate from <see cref="User"/> so the runtime
+        /// role never needs DDL.
+        /// </summary>
+        public static string MigrationUser => Env("SMS_TEST_PG_MIGRATION_USER", "sms_migration");
+        public static string MigrationPassword => Env("SMS_TEST_PG_MIGRATION_PASSWORD", "testmigr123");
 
         private static string BuildConnectionString(string database) =>
             $"Host={Host};Port={Port};Database={database};Username={User};Password={Password};" +
             "Minimum Pool Size=1;Maximum Pool Size=10;Include Error Detail=true;";
+
+        private static string BuildAdminConnectionString(string database) =>
+            $"Host={Host};Port={Port};Database={database};Username={AdminUser};Password={AdminPassword};";
+
+        private static string BuildMigrationConnectionString(string database) =>
+            $"Host={Host};Port={Port};Database={database};Username={MigrationUser};Password={MigrationPassword};" +
+            "Minimum Pool Size=1;Maximum Pool Size=2;Include Error Detail=true;";
 
 
         public async Task InitializeAsync()
@@ -68,7 +98,21 @@ namespace SMS.IntegrationTests.Database
             {
                 _connectionString = BuildConnectionString(DatabaseName);
 
-                await EnsureDatabaseExistsAsync();
+                // The database is owned outright by this fixture, so it is
+                // dropped and rebuilt on every run. That is not tidiness:
+                // a database left over from a previous run has tables owned
+                // by whichever role created them, and reusing it would
+                // silently keep the old, over-privileged ownership instead
+                // of exercising the runtime/migration split.
+                await RecreateDatabaseAsync();
+
+                // A brand-new database has a stock `public` schema with no
+                // CREATE for sms_migration, so the migration role could not
+                // create anything. Hand it over before migrating.
+                await ApplyLeastPrivilegeGrantsAsync();
+
+                await DatabaseMigrationRunner.ApplyAsync(
+                    BuildMigrationConnectionString(DatabaseName));
 
                 await using var context = CreateContext();
                 if (!string.Equals(context.Database.ProviderName, NpgsqlProviderName, StringComparison.Ordinal))
@@ -78,10 +122,6 @@ namespace SMS.IntegrationTests.Database
                         $"'{context.Database.ProviderName}'. These tests must not be downgraded to InMemory: the " +
                         "InMemory provider does not reproduce the Modified/Added misclassification under test.");
                 }
-
-                var pending = await context.Database.GetPendingMigrationsAsync();
-                if (pending.Any())
-                    await context.Database.MigrateAsync();
 
                 await SeedTenantsAsync(context);
             }
@@ -125,22 +165,56 @@ namespace SMS.IntegrationTests.Database
             await context.SaveChangesAsync();
         }
 
-        private static async Task EnsureDatabaseExistsAsync()
+        /// <summary>
+        /// Drops (if present) and recreates the dedicated test database.
+        /// Connections are terminated first so a pooled connection left
+        /// behind by a previous run cannot block the drop.
+        /// </summary>
+        private static async Task RecreateDatabaseAsync()
         {
-            await using var connection = new NpgsqlConnection(BuildConnectionString(AdminDatabaseName));
+            await using var connection = new NpgsqlConnection(BuildAdminConnectionString(AdminDatabaseName));
             await connection.OpenAsync();
 
-            await using (var probe = new NpgsqlCommand(
-                "select 1 from pg_database where datname = @name", connection))
+            await using (var drop = new NpgsqlCommand(
+                $"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE)", connection))
             {
-                probe.Parameters.AddWithValue("name", DatabaseName);
-                var found = await probe.ExecuteScalarAsync();
-                if (found is not null && Convert.ToInt32(found, CultureInfo.InvariantCulture) == 1)
-                    return;
+                await drop.ExecuteNonQueryAsync();
             }
 
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{DatabaseName}\"", connection);
             await create.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Applies the same least-privilege grants that
+        /// docker/init-db-least-privilege.sql and
+        /// docker/grant-least-privilege-privileges.sql apply to the main
+        /// database. Kept here so the fixture exercises the real role
+        /// arrangement instead of testing against a superuser.
+        /// </summary>
+        private static async Task ApplyLeastPrivilegeGrantsAsync()
+        {
+            await using var connection = new NpgsqlConnection(BuildAdminConnectionString(DatabaseName));
+            await connection.OpenAsync();
+
+            const string sql = @"
+                GRANT CREATE, USAGE ON SCHEMA public TO sms_migration;
+                GRANT USAGE ON SCHEMA public TO sms_app;
+                REVOKE CREATE ON SCHEMA public FROM sms_app;
+                REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
+                -- PG15+ requires database-level CREATE for CREATE SCHEMA,
+                -- which the RLS migration performs (CREATE SCHEMA app).
+                GRANT CONNECT, CREATE ON DATABASE """ + DatabaseName + @""" TO sms_migration;
+                GRANT CONNECT ON DATABASE """ + DatabaseName + @""" TO sms_app;
+
+                ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
+                    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sms_app;
+                ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
+                    GRANT USAGE, SELECT ON SEQUENCES TO sms_app;";
+
+            await using var command = new NpgsqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
         }
 
         /// <summary>
@@ -163,8 +237,17 @@ namespace SMS.IntegrationTests.Database
             tenant.Setup(x => x.TenantId).Returns(tenantId.ToString());
             tenant.Setup(x => x.TenantName).Returns("Enrollment State Test Tenant");
 
+            // The tenant interceptor has to be attached here, exactly as the
+            // runtime DI root attaches it. This context connects as the
+            // least-privilege NOBYPASSRLS role, so once row level security is
+            // enabled a context without it reads nothing at all: no
+            // app.tenant_id on the session means every policy evaluates
+            // against the all-zero sentinel.
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseNpgsql(_connectionString, npgsql => npgsql.CommandTimeout(60))
+                .AddInterceptors(new TenantContextDbInterceptor(
+                    tenant.Object,
+                    NullLogger<TenantContextDbInterceptor>.Instance))
                 .Options;
 
             return new ApplicationDbContext(options, currentUser.Object, tenant.Object);
