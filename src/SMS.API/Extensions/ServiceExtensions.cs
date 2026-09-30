@@ -51,6 +51,11 @@ namespace SMS.API.Extensions
                 var tenantContext = serviceProvider.GetRequiredService<ITenantContext>();
                 var logger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TenantContextDbInterceptor>>();
                 options.AddInterceptors(new TenantContextDbInterceptor(tenantContext, logger));
+
+                // Publish on connection open too, so raw ADO.NET issued on the
+                // same connection is covered by the tenant policies.
+                var connectionLogger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TenantConnectionDbInterceptor>>();
+                options.AddInterceptors(new TenantConnectionDbInterceptor(tenantContext, connectionLogger));
             });
 
             // Register repositories

@@ -226,10 +226,36 @@ namespace SMS.IntegrationTests.Database
         // Direct database verification (bypasses EF change tracker + query filter)
         // ─────────────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Publishes the tenant onto a raw ADO.NET connection so that the
+        /// row level security policies evaluate against it.
+        ///
+        /// <para>A plain <see cref="NpgsqlConnection"/> is completely outside
+        /// Entity Framework, so neither the command interceptor nor the
+        /// connection interceptor runs for it. Without this the policies would
+        /// evaluate against the all-zero sentinel and every direct read would
+        /// return zero rows.</para>
+        /// </summary>
+        private static async Task PublishTenantAsync(NpgsqlConnection connection, Guid tenantId)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT set_config('app.tenant_id', @tenant, false)";
+            command.Parameters.AddWithValue("tenant", tenantId.ToString());
+            await command.ExecuteNonQueryAsync();
+        }
+
         private async Task<int> CountEnrollmentRowsDirectlyAsync(Guid studentId, Guid tenantId)
         {
+            // Raw ADO.NET, deliberately bypassing EF. Row level security is
+            // enforced by PostgreSQL on THIS connection, so the tenant context
+            // has to be published explicitly here - a plain NpgsqlConnection
+            // does not go through the runtime interceptors. Publishing it is
+            // what makes this an honest end-to-end check: the count can only be
+            // non-zero if the row really was written for this tenant AND the
+            // policy admitted it.
             await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
             await connection.OpenAsync();
+            await PublishTenantAsync(connection, tenantId);
 
             await using var command = connection.CreateCommand();
             command.CommandText =
@@ -246,6 +272,7 @@ namespace SMS.IntegrationTests.Database
         {
             await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
             await connection.OpenAsync();
+            await PublishTenantAsync(connection, EnrollmentEntityStateFixture.TenantId);
 
             await using var command = connection.CreateCommand();
             command.CommandText =

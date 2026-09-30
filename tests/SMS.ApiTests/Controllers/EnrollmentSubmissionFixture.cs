@@ -380,25 +380,41 @@ namespace SMS.ApiTests.Controllers
 
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var connection = db.Database.GetDbConnection();
-            await connection.OpenAsync();
 
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "select \"UnitId\", \"Status\", \"IsActive\", \"tenant_id\" " +
-                "from \"Enrollments\" where \"StudentId\" = @student";
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = "student";
-            parameter.Value = studentId;
-            command.Parameters.Add(parameter);
-
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            // Open through Entity Framework rather than calling
+            // connection.OpenAsync() directly. OpenConnectionAsync() is what
+            // raises DbConnectionInterceptor.ConnectionOpened, which is where
+            // the tenant context is published for the session. Opening the
+            // raw DbConnection bypasses that entirely, and once row level
+            // security is on the policy would evaluate against whatever the
+            // pooled connection last carried - returning zero rows. This is
+            // the same call the production number generators use.
+            await db.Database.OpenConnectionAsync();
+            try
             {
-                rows.Add((reader.GetGuid(0), reader.GetString(1), reader.GetBoolean(2), reader.GetGuid(3)));
-            }
+                var connection = db.Database.GetDbConnection();
 
-            return rows;
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    "select \"UnitId\", \"Status\", \"IsActive\", \"tenant_id\" " +
+                    "from \"Enrollments\" where \"StudentId\" = @student";
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = "student";
+                parameter.Value = studentId;
+                command.Parameters.Add(parameter);
+
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    rows.Add((reader.GetGuid(0), reader.GetString(1), reader.GetBoolean(2), reader.GetGuid(3)));
+                }
+
+                return rows;
+            }
+            finally
+            {
+                await db.Database.CloseConnectionAsync();
+            }
         }
     }
 }

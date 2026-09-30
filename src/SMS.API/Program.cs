@@ -420,13 +420,22 @@ builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
     // changes no application or OMS behaviour: when RLS is disabled the
     // set_config call is inert.
     options.AddInterceptors(sp.GetRequiredService<TenantContextDbInterceptor>());
+
+    // Publish the tenant on connection OPEN as well, so raw ADO.NET on the
+    // same connection (reporting, OMS number allocation, maintenance) is
+    // covered too. Without it, a DbCommand created from
+    // db.Database.GetDbConnection() bypasses the command interceptor and
+    // evaluates the RLS policies against whatever the pooled connection was
+    // last used by.
+    options.AddInterceptors(sp.GetRequiredService<TenantConnectionDbInterceptor>());
 },
     contextLifetime: ServiceLifetime.Scoped,
     optionsLifetime: ServiceLifetime.Scoped);
 
-// The RLS tenant-context interceptor consumed above. It is scoped because it
-// depends on the scoped ITenantContext.
+// The RLS tenant-context interceptors consumed above. Scoped because they
+// depend on the scoped ITenantContext.
 builder.Services.AddScoped<TenantContextDbInterceptor>();
+builder.Services.AddScoped<TenantConnectionDbInterceptor>();
 
 // Configure Identity
 builder.Services.AddIdentity<User, Role>(options =>

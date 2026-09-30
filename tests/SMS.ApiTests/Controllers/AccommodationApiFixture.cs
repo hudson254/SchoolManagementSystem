@@ -217,6 +217,9 @@ namespace SMS.ApiTests.Controllers
                 .AddInterceptors(new TenantContextDbInterceptor(
                     tenantContext.Object,
                     NullLogger<TenantContextDbInterceptor>.Instance))
+                .AddInterceptors(new TenantConnectionDbInterceptor(
+                    tenantContext.Object,
+                    NullLogger<TenantConnectionDbInterceptor>.Instance))
                 .Options;
 
             return new ApplicationDbContext(

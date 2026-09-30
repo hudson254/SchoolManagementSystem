@@ -115,10 +115,27 @@ $$;
 
 -- The `app` schema holds the RLS helper functions and is created by the
 -- RLS migration. It is owned by the runtime role today, so move it too.
+--
+-- Function ownership has to be transferred explicitly: CREATE OR REPLACE
+-- FUNCTION and ALTER FUNCTION both require the caller to own the function,
+-- not merely the schema that contains it. Without this the RLS migration
+-- fails with "42501: must be owner of function enable_tenant_rls".
 DO $$
+DECLARE
+    r record;
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'app') THEN
         EXECUTE 'ALTER SCHEMA app OWNER TO sms_migration';
+
+        FOR r IN
+            SELECT p.oid::regprocedure AS signature
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'app'
+              AND pg_get_userbyid(p.proowner) <> 'sms_migration'
+        LOOP
+            EXECUTE format('ALTER FUNCTION %s OWNER TO sms_migration', r.signature);
+        END LOOP;
     END IF;
 END
 $$;

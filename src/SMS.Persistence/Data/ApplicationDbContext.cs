@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SMS.Certificates.Domain.Entities;
@@ -1281,16 +1282,36 @@ base.OnModelCreating(modelBuilder);
                 }
             }
 
-            foreach (var entry in ChangeTracker.Entries<UserRole>())
+            foreach (var entry in ChangeTracker.Entries<IdentityUserRole<string>>())
             {
-                switch (entry.State)
+                if (entry.State != EntityState.Added)
                 {
-                    case EntityState.Added:
-                        if (_tenantContext != null && Guid.TryParse(_tenantContext.TenantId, out var urTenantId))
-                        {
-                            entry.Entity.TenantId = urTenantId;
-                        }
-                        break;
+                    continue;
+                }
+
+                if (_tenantContext == null || !Guid.TryParse(_tenantContext.TenantId, out var urTenantId))
+                {
+                    continue;
+                }
+
+                // ASP.NET Identity's UserStore adds an IdentityUserRole<string>
+                // - the TPH BASE type - not the derived SMS.Domain.Entities.UserRole.
+                // An earlier version of this loop iterated
+                // ChangeTracker.Entries<UserRole>() (the derived type), which
+                // therefore never matched, so every role assignment was
+                // written with a NULL TenantId.
+                //
+                // The base instance cannot carry the value at all: TenantId is
+                // declared on the derived type, and under TPH a base-typed
+                // instance writes only base columns. Stamping it here would
+                // also be a no-op, which is why the AspNetUserRoles policies
+                // derive the tenant from AspNetUsers instead of trusting this
+                // column. The stamp below still applies to the derived
+                // instances the application creates itself, and the RLS
+                // migration backfills the historical NULLs.
+                if (entry.Entity is UserRole tenantAwareUserRole)
+                {
+                    tenantAwareUserRole.TenantId = urTenantId;
                 }
             }
 

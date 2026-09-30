@@ -9,6 +9,104 @@ using SMS.Domain.Interfaces;
 namespace SMS.Persistence.Data
 {
     /// <summary>
+    /// Publishes the tenant context on connection OPEN, so that any query on
+    /// that connection sees it - including queries that never pass through
+    /// Entity Framework.
+    ///
+    /// <para><b>Why this exists.</b> <see cref="TenantContextDbInterceptor"/>
+    /// publishes the context per EF Core command. That covers everything the
+    /// ORM issues, but it does not cover raw ADO.NET: a caller that resolves
+    /// <c>db.Database.GetDbConnection()</c> and runs its own
+    /// <c>DbCommand</c> - reporting queries, OMS number allocation,
+    /// maintenance scripts - bypasses the command interceptor completely.
+    /// Under row level security such a query then evaluates against whatever
+    /// the pooled connection happened to be carrying, which is the exact
+    /// cross-tenant failure this whole mechanism exists to prevent.</para>
+    ///
+    /// <para>Publishing at connection open closes that gap, and it is also
+    /// what makes pooled-connection reuse safe by construction: Npgsql rents
+    /// a physical connection for a scope and returns it to the pool on close,
+    /// so every new rental rewrites the context before anything can read it.
+    /// The command interceptor remains as a second layer for the case where a
+    /// long-lived connection is reused within a scope.</para>
+    /// </summary>
+    public class TenantConnectionDbInterceptor : DbConnectionInterceptor
+    {
+        private readonly ITenantContext _tenantContext;
+        private readonly ILogger<TenantConnectionDbInterceptor> _logger;
+
+        public TenantConnectionDbInterceptor(
+            ITenantContext tenantContext,
+            ILogger<TenantConnectionDbInterceptor> logger)
+        {
+            _tenantContext = tenantContext;
+            _logger = logger;
+        }
+
+        /// <inheritdoc />
+        public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
+        {
+            Publish(connection);
+            base.ConnectionOpened(connection, eventData);
+        }
+
+        /// <inheritdoc />
+        public override Task ConnectionOpenedAsync(
+            DbConnection connection,
+            ConnectionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            Publish(connection);
+            return base.ConnectionOpenedAsync(connection, eventData, cancellationToken);
+        }
+
+        private void Publish(DbConnection connection)
+        {
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT set_config('app.tenant_id', @tenant, false)";
+
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = "tenant";
+                parameter.Value = ResolveTenant();
+                command.Parameters.Add(parameter);
+
+                command.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                // Fail CLOSED. Returning without publishing would hand the
+                // connection to the caller carrying whatever tenant it was
+                // last used by, which is a silent cross-tenant read. An
+                // unavailable tenant context must stop the request instead.
+                _logger.LogError(
+                    ex,
+                    "Failed to publish the tenant context when opening a PostgreSQL connection; " +
+                    "refusing to hand it out under an unknown tenant.");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// The tenant for this connection, or the empty string when no tenant
+        /// is resolved. Empty maps to the all-zero sentinel inside
+        /// <c>app.current_tenant_id()</c>, which matches no row - the
+        /// fail-closed default.
+        /// </summary>
+        private string ResolveTenant()
+        {
+            var tenantId = _tenantContext?.TenantId;
+            if (string.IsNullOrWhiteSpace(tenantId) || !Guid.TryParse(tenantId, out _))
+            {
+                return string.Empty;
+            }
+
+            return tenantId;
+        }
+    }
+
+    /// <summary>
     /// Publishes the authenticated tenant to PostgreSQL as the
     /// <c>app.tenant_id</c> session GUC, which every row level security
     /// policy evaluates through <c>app.current_tenant_id()</c>.

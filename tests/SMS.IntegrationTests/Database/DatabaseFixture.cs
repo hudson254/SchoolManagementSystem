@@ -68,6 +68,9 @@ namespace SMS.IntegrationTests.Database
                     .AddInterceptors(new TenantContextDbInterceptor(
                         mockTenantContext.Object,
                         NullLogger<TenantContextDbInterceptor>.Instance))
+                    .AddInterceptors(new TenantConnectionDbInterceptor(
+                        mockTenantContext.Object,
+                        NullLogger<TenantConnectionDbInterceptor>.Instance))
                     .Options;
 
                 _context = new ApplicationDbContext(
