@@ -2,6 +2,18 @@
 # Usage: docker compose -f docker/docker-compose.test.yml up -d
 # Then run: dotnet test tests/SMS.ApiTests/SMS.ApiTests.csproj
 # Then: docker compose -f docker/docker-compose.test.yml down -v
+#
+# A FRESH volume must be able to run the RLS suite. The integration fixtures
+# connect as sms_app / sms_migration - the same least-privilege split
+# production uses - so those roles have to exist before any test runs, not be
+# created by hand once against a long-lived volume. Without the mounts below,
+# `down -v` followed by `up -d` produced a cluster with no sms_app at all and
+# every database-level RLS test failed on connection.
+#
+# The values below are fixed test credentials and are the defaults the
+# fixtures themselves fall back to (SMS_TEST_PG_USER / SMS_TEST_PG_PASSWORD /
+# SMS_TEST_PG_MIGRATION_USER / SMS_TEST_PG_MIGRATION_PASSWORD), so the two
+# stay in agreement. They are test-only and carry no production meaning.
 
 services:
   postgres-test:
@@ -11,6 +23,18 @@ services:
       POSTGRES_DB: sms_test
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass123
+      # Consumed once by 02-init-db-least-privilege-passwords.sh on volume
+      # initialisation. tmpfs is empty on every start, so for this service the
+      # script effectively runs each time - which is exactly why it must be
+      # idempotent about which roles exist and must never rotate a password
+      # when the variable is absent.
+      SMS_DB_APP_PASSWORD: ${SMS_TEST_PG_PASSWORD:-testapp123}
+      SMS_DB_MIGRATION_PASSWORD: ${SMS_TEST_PG_MIGRATION_PASSWORD:-testmigr123}
+    volumes:
+      # Lexical order in /docker-entrypoint-initdb.d decides execution order,
+      # hence the numeric prefixes: roles first, then their passwords.
+      - ./init-db-least-privilege.sql:/docker-entrypoint-initdb.d/01-init-db-least-privilege.sql:ro
+      - ./init-db-least-privilege-passwords.sh:/docker-entrypoint-initdb.d/02-init-db-least-privilege-passwords.sh:ro
     ports:
       - "5433:5432"
     healthcheck:

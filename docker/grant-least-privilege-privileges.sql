@@ -155,6 +155,47 @@ REVOKE CREATE ON SCHEMA public FROM sms_app;
 -- SELECT/INSERT/UPDATE/DELETE plus ASP.NET Identity's user/role work.
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sms_app;
 
+-- ------------------------------------------------------------------
+-- 2a. "Tenants" is READ-ONLY for the runtime role.
+-- ------------------------------------------------------------------
+-- The blanket grant above is deliberately narrowed here, and this is a
+-- privilege reduction, NOT a change to the Tenants RLS design.
+--
+-- Why: "Tenants" is the bootstrap registry. The runtime role must be able
+-- to SELECT it, because reading it is how the tenant context is resolved in
+-- the first place (TenantResolutionMiddleware -> TenantContext ->
+-- app.tenant_id). It must NOT be able to INSERT, UPDATE or DELETE rows:
+--
+--   * the application has no runtime requirement that writes it. The only
+--     writer is DatabaseSeeder.SeedDefaultTenantAsync, which runs exclusively
+--     on the `seed-data` CLI path, and that CLI builds its DbContext on
+--     ConnectionStrings:MigrationConnection - i.e. as sms_migration. So
+--     removing the write privileges from sms_app removes no functionality.
+--   * INSERT/UPDATE/DELETE on the registry is a privilege-escalation
+--     primitive: a compromised application could rewrite another tenant's
+--     subdomain or flip IsActive, and the next request would be resolved
+--     into a tenant it should never reach.
+--
+-- Deliberately NOT changed: RLS is still NOT enabled on "Tenants". Policing
+-- it would be circular - the policy would have to evaluate app.tenant_id to
+-- decide who may read the very table that establishes app.tenant_id - and
+-- every request would answer 400 "Invalid tenant". Tenants_RegistryRemains-
+-- ReadableWithoutATenantContext in the RLS suite pins that exemption.
+--
+-- The runtime role keeps SELECT, so tenant resolution is unaffected.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_tables
+         WHERE schemaname = 'public'
+           AND tablename  = 'Tenants'
+    ) THEN
+        EXECUTE 'GRANT SELECT ON TABLE public."Tenants" TO sms_app';
+        EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON TABLE public."Tenants" FROM sms_app';
+    END IF;
+END
+$$;
+
 -- Sequence use. Only two identity sequences exist, but a future Identity
 -- mapping may add more, and a missing USAGE grant is a runtime crash.
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sms_app;
@@ -241,6 +282,37 @@ BEGIN
 
     IF missing IS NOT NULL THEN
         RAISE EXCEPTION 'sms_app is missing runtime DML on: %', missing;
+    END IF;
+END
+$$;
+
+-- The "Tenants" registry must stay readable and must stay read-only. SELECT
+-- is what tenant resolution needs; the three write privileges are the
+-- privilege-escalation primitive that section 2a removes, and this makes a
+-- partially-applied or reverted run impossible to mistake for a good one.
+DO $$
+DECLARE
+    bad text;
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_tables
+         WHERE schemaname = 'public'
+           AND tablename  = 'Tenants'
+    ) THEN
+        -- No Tenants table (e.g. a pre-migration database). Nothing to check.
+        RETURN;
+    END IF;
+
+    IF NOT has_table_privilege('sms_app', 'public."Tenants"', 'SELECT') THEN
+        bad := 'SELECT on "Tenants" (tenant resolution would break)';
+    ELSIF has_table_privilege('sms_app', 'public."Tenants"', 'INSERT')
+       OR has_table_privilege('sms_app', 'public."Tenants"', 'UPDATE')
+       OR has_table_privilege('sms_app', 'public."Tenants"', 'DELETE') THEN
+        bad := 'INSERT/UPDATE/DELETE on "Tenants" (tenant registry must be read-only)';
+    END IF;
+
+    IF bad IS NOT NULL THEN
+        RAISE EXCEPTION 'sms_app must not have: %', bad;
     END IF;
 END
 $$;

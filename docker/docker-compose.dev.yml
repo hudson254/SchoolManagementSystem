@@ -8,9 +8,18 @@ services:
       POSTGRES_USER: sms_user
       POSTGRES_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
       PGDATA: /var/lib/postgresql/data/pgdata
+      # Dev-only, fixed test credentials. A fresh dev volume now provisions
+      # sms_app / sms_migration exactly like production does, so
+      # scripts/provision-least-privilege-roles.sh and the least-privilege
+      # rollout can be rehearsed locally before being run on a real box.
+      SMS_DB_APP_PASSWORD: ${SMS_DB_APP_PASSWORD:-SecurePassword123!}
+      SMS_DB_MIGRATION_PASSWORD: ${SMS_DB_MIGRATION_PASSWORD:-SecurePassword123!}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+      # Lexical order in /docker-entrypoint-initdb.d decides execution order.
+      - ./init-db-least-privilege.sql:/docker-entrypoint-initdb.d/01-init-db-least-privilege.sql
+      - ./init-db-least-privilege-passwords.sh:/docker-entrypoint-initdb.d/02-init-db-least-privilege-passwords.sh
     ports:
       - "5433:5432"
     healthcheck:
@@ -49,6 +58,15 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
+      # DELIBERATE DEVIATION FROM PRODUCTION, documented rather than silent:
+      # the dev API still connects as sms_user. It is the local convenience
+      # file, its POSTGRES_USER is a throwaway local superuser, and the dev
+      # volume is long-lived - moving it to sms_app would break any developer
+      # whose postgres_dev_data volume predates the role provisioning added
+      # above. The postgres service above DOES now create sms_app and
+      # sms_migration, so switching this over later is a one-line change
+      # once scripts/provision-least-privilege-roles.sh has been run.
+      # Production is held to the opposite rule - see docker-compose.prod.yml.
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD:-SecurePassword123!}"
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-min-64-characters-long-for-development-only}
       JWT__Issuer: SMSAPI

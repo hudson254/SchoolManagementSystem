@@ -12,10 +12,24 @@ services:
       POSTGRES_USER: sms_user
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       PGDATA: /var/lib/postgresql/data/pgdata
+      # Least-privilege role passwords, consumed ONCE by
+      # 02-init-db-least-privilege-passwords.sh when the volume is first
+      # initialised. They are never written to a file or an image layer, and
+      # this script does not re-run on a restart of an existing volume, so an
+      # established password can never be silently rotated. They are also
+      # never logged: the assignment is a parameterised ALTER ROLE.
+      SMS_DB_APP_PASSWORD: ${SMS_DB_APP_PASSWORD:?SMS_DB_APP_PASSWORD is required to provision the sms_app role}
+      SMS_DB_MIGRATION_PASSWORD: ${SMS_DB_MIGRATION_PASSWORD:?SMS_DB_MIGRATION_PASSWORD is required to provision the sms_migration role}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Lexical order in /docker-entrypoint-initdb.d decides execution order,
+      # hence the numeric prefixes. The roles MUST exist before the API's
+      # first migration, because the API now connects as sms_app/sms_migration
+      # rather than as this container's POSTGRES_USER.
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
       - ./init-db-rls.sql:/docker-entrypoint-initdb.d/init-db-rls.sql
+      - ./init-db-least-privilege.sql:/docker-entrypoint-initdb.d/01-init-db-least-privilege.sql
+      - ./init-db-least-privilege-passwords.sh:/docker-entrypoint-initdb.d/02-init-db-least-privilege-passwords.sh
     # Production: PostgreSQL is not exposed to the host. Only internal Docker network.
     # Health checks and API communication use the internal hostname "postgres".
     expose:
@@ -50,7 +64,22 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:80
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD}"
+      # ----------------------------------------------------------------
+      # Least-privilege runtime wiring. This is the correction that makes
+      # ENABLE ROW LEVEL SECURITY mean something: sms_user is the cluster
+      # bootstrap SUPERUSER with BYPASSRLS, so connecting as it bypassed all
+      # 70 RLS-enabled tables and their 280 policies. The API must not use it.
+      #
+      #   DefaultConnection    -> sms_app        (NOSUPERUSER, NOBYPASSRLS)
+      #   MigrationConnection  -> sms_migration  (NOBYPASSRLS, owns the tables)
+      #
+      # The two passwords are separate secrets and neither is hard-coded. The
+      # migration password is confined to this one variable: it is needed for
+      # `docker compose run --rm api migrate-database` / `seed-data` and is
+      # not referenced by DefaultConnection or by any other service.
+      # ----------------------------------------------------------------
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_app;Password=${SMS_DB_APP_PASSWORD:?SMS_DB_APP_PASSWORD is required}"
+      ConnectionStrings__MigrationConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_migration;Password=${SMS_DB_MIGRATION_PASSWORD:?SMS_DB_MIGRATION_PASSWORD is required}"
       ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required for seeding}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required for seeding}
       ADMIN_FIRST_NAME: ${ADMIN_FIRST_NAME:-System}

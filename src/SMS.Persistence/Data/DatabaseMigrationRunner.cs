@@ -23,11 +23,24 @@ namespace SMS.Persistence.Data
     /// runtime role lose its superuser powers without breaking deploys.</para>
     ///
     /// <para>The migration connection is taken from
-    /// <c>ConnectionStrings:MigrationConnection</c>. When it is absent the
-    /// runtime connection is used, which preserves the previous behaviour
-    /// for any deployment that has not been provisioned yet. That fallback
-    /// is logged as a warning rather than silently taken, because on a
-    /// provisioned deployment it means the wrong role is running DDL.</para>
+    /// <c>ConnectionStrings:MigrationConnection</c>.
+    ///
+    /// <para><b>No fallback in Production.</b> When
+    /// <c>MigrationConnection</c> is absent, a Production deployment now
+    /// throws instead of falling back. The reason is that the fallback is
+    /// precisely the failure this split exists to prevent: on a provisioned
+    /// deployment the runtime connection is <c>sms_app</c> - NOSUPASSRLS,
+    /// non-owner - so "fall back" does not mean "carry on as before", it means
+    /// running DDL as the least-privilege role, which either fails obscurely
+    /// or, worse, on an un-provisioned box silently executes schema changes as
+    /// a superuser. A loud failure at boot is the correct outcome in both
+    /// cases; guessing is not.
+    ///
+    /// <para>The fallback is retained for Development and Testing, where the
+    /// database is frequently a local throwaway that has never been
+    /// provisioned and where failing would be a worse outcome than a warning.
+    /// It is reported through <paramref name="usedFallback"/> and logged as a
+    /// warning, never taken silently.</para>
     ///
     /// <para>Migrations themselves need no tenant context: they run DDL,
     /// and DDL is not subject to row level security. The stubs supplied
@@ -39,6 +52,15 @@ namespace SMS.Persistence.Data
         /// <summary>Configuration key holding the elevated migration connection.</summary>
         public const string MigrationConnectionName = "MigrationConnection";
 
+        /// <summary>Configuration key holding the runtime application connection.</summary>
+        public const string DefaultConnectionName = "DefaultConnection";
+
+        /// <summary>
+        /// The one environment in which falling back to the runtime
+        /// connection is permitted. Compared case-insensitively.
+        /// </summary>
+        public const string ProductionEnvironmentName = "Production";
+
         /// <summary>
         /// Resolves the connection string migrations should run over, and
         /// reports whether that was the dedicated one or a fallback.
@@ -48,9 +70,19 @@ namespace SMS.Persistence.Data
         /// True when no dedicated migration connection is configured and the
         /// runtime connection string was returned instead.
         /// </param>
+        /// <param name="environmentName">
+        /// Overrides the detected environment name. Only used by tests; when
+        /// null the environment is read from configuration and then from the
+        /// process environment.
+        /// </param>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when no <c>MigrationConnection</c> is configured and the
+        /// deployment is running in Production.
+        /// </exception>
         public static string? ResolveConnectionString(
             IConfiguration configuration,
-            out bool usedFallback)
+            out bool usedFallback,
+            string? environmentName = null)
         {
             var migrationConnection = configuration.GetConnectionString(MigrationConnectionName);
             if (!string.IsNullOrWhiteSpace(migrationConnection))
@@ -59,9 +91,57 @@ namespace SMS.Persistence.Data
                 return migrationConnection;
             }
 
+            if (IsProduction(ResolveEnvironmentName(configuration, environmentName)))
+            {
+                // Deliberately thrown before `usedFallback` is assigned: this
+                // path must never return a connection string at all.
+                throw new InvalidOperationException(
+                    $"ConnectionStrings:{MigrationConnectionName} is not configured, and this " +
+                    $"deployment is running in the {ProductionEnvironmentName} environment. " +
+                    "Migrations would otherwise fall back to " +
+                    $"ConnectionStrings:{DefaultConnectionName} - the least-privilege runtime " +
+                    "connection - and either fail part-way through or, on an un-provisioned " +
+                    "database, quietly run DDL as a superuser. Set " +
+                    $"ConnectionStrings:{MigrationConnectionName} to a connection string for the " +
+                    "sms_migration role: it owns the tables, so it is the only role that may " +
+                    "perform DDL against them.");
+            }
+
             usedFallback = true;
-            return configuration.GetConnectionString("DefaultConnection");
+            return configuration.GetConnectionString(DefaultConnectionName);
         }
+
+        /// <summary>
+        /// Determines the environment name from the explicit override, then
+        /// from configuration, then from the process environment.
+        /// </summary>
+        public static string ResolveEnvironmentName(
+            IConfiguration configuration,
+            string? environmentName = null)
+        {
+            if (!string.IsNullOrWhiteSpace(environmentName))
+                return environmentName!.Trim();
+
+            // ASPNETCORE_ENVIRONMENT wins over DOTNET_ENVIRONMENT: that is the
+            // order the generic host itself applies.
+            var fromConfiguration =
+                configuration["ASPNETCORE_ENVIRONMENT"] ??
+                configuration["DOTNET_ENVIRONMENT"];
+
+            if (!string.IsNullOrWhiteSpace(fromConfiguration))
+                return fromConfiguration!.Trim();
+
+            var fromEnvironment =
+                Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+                Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+            return fromEnvironment?.Trim() ?? string.Empty;
+        }
+
+        /// <summary>True when <paramref name="environmentName"/> is Production.</summary>
+        public static bool IsProduction(string? environmentName)
+            => string.Equals(environmentName?.Trim(), ProductionEnvironmentName,
+                StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Applies every pending migration over <paramref name="connectionString"/>.

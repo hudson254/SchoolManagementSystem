@@ -126,6 +126,12 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 -- These are enumerated on purpose. "GRANT ALL PRIVILEGES" is never used:
 -- the runtime role is not granted REFERENCES or TRUNCATE, and it is not
 -- granted any DDL right of any kind.
+--
+-- KNOWN NARROWING, applied by grant-least-privilege-privileges.sql:
+-- the grant above necessarily includes "Tenants", because ALTER DEFAULT
+-- PRIVILEGES cannot name an exception. That script revokes
+-- INSERT/UPDATE/DELETE from sms_app on it and keeps SELECT. Run it after
+-- migrations on any database, fresh or existing - it is idempotent.
 ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sms_app;
 
@@ -136,3 +142,20 @@ ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
 -- every boot. It is not tenant-owned, so it needs a plain SELECT.
 ALTER DEFAULT PRIVILEGES FOR ROLE sms_migration IN SCHEMA public
     GRANT SELECT ON TABLES TO sms_migration;
+
+-- ------------------------------------------------------------------
+-- 5. Signal that role PASSWORDS still have to be assigned.
+-- ------------------------------------------------------------------
+-- The roles created above have LOGIN but no password, so they cannot
+-- authenticate yet. init-db-least-privilege-passwords.sh reads
+-- SMS_DB_APP_PASSWORD / SMS_DB_MIGRATION_PASSWORD from the container
+-- environment and assigns them. Nothing is hard-coded here: a password in
+-- this file would be a password in git.
+DO $$
+BEGIN
+    RAISE NOTICE
+        'sms_app / sms_migration created. Assign their passwords with '
+        'SMS_DB_APP_PASSWORD / SMS_DB_MIGRATION_PASSWORD, then run '
+        'docker/grant-least-privilege-privileges.sql after migrations.';
+END
+$$;

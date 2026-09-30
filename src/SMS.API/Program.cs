@@ -68,18 +68,23 @@ static async Task RunMigrateDatabaseAsync(string[] args)
 
         // Get connection string
         //
-        // Migrations run over the DEDICATED migration connection, not over
+        // Migrations run over the DEDICATED migration connection, never over
         // the runtime application connection. The runtime role is
-        // NOBYPASSRLS/NOSUPERUSER and owns nothing, which is what makes
-        // row level security enforceable - and which also means it cannot
-        // run DDL. Falling back to DefaultConnection keeps un-provisioned
-        // deployments working, but it is announced so that a misconfigured
-        // production box does not quietly keep running DDL as the app role.
+        // NOBYPASSRLS/NOSUPERUSER and owns nothing, which is what makes row
+        // level security enforceable - and which also means it cannot run DDL.
+        //
+        // In Production there is no fallback: a missing MigrationConnection
+        // throws here and the process exits non-zero, because falling back
+        // would run DDL as the least-privilege role (or, on an un-provisioned
+        // box, as a superuser). In Development/Testing the fallback survives
+        // and is announced, so a local throwaway database still works.
         var connectionString = DatabaseMigrationRunner.ResolveConnectionString(
             builder.Configuration, out var usedRuntimeConnectionAsFallback);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            Console.WriteLine("ERROR: neither MigrationConnection nor DefaultConnection is configured.");
+            Console.WriteLine(
+                "ERROR: neither ConnectionStrings:MigrationConnection nor " +
+                "ConnectionStrings:DefaultConnection is configured.");
             Environment.Exit(1);
             return;
         }
@@ -89,7 +94,8 @@ static async Task RunMigrateDatabaseAsync(string[] args)
             Console.WriteLine(
                 "WARNING: ConnectionStrings:MigrationConnection is not configured; " +
                 "migrations will run over the runtime connection. Provision the " +
-                "sms_migration role and set that connection string.");
+                "sms_migration role and set that connection string. This fallback is " +
+                "refused in Production.");
         }
 
         Console.WriteLine($"Applying migrations as: {connectionString.Split(';')[0]}...");
@@ -134,12 +140,16 @@ static async Task RunSeedDataAsync(string[] args)
         // administrator) with no tenant context. Under row level security
         // those writes must come from the migration/seed role, not from the
         // least-privilege runtime role, so this whole CLI runs on the
-        // dedicated MigrationConnection.
+        // dedicated MigrationConnection. In Production that is enforced: a
+        // missing MigrationConnection throws rather than silently downgrading
+        // the seed to the runtime role.
         var connectionString = DatabaseMigrationRunner.ResolveConnectionString(
             builder.Configuration, out var usedRuntimeConnectionAsFallback);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            Console.WriteLine("ERROR: neither MigrationConnection nor DefaultConnection is configured.");
+            Console.WriteLine(
+                "ERROR: neither ConnectionStrings:MigrationConnection nor " +
+                "ConnectionStrings:DefaultConnection is configured.");
             Environment.Exit(1);
             return;
         }

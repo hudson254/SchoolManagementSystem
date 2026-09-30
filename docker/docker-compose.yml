@@ -8,10 +8,18 @@ services:
       POSTGRES_USER: sms_user
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       PGDATA: /var/lib/postgresql/data/pgdata
+      # Consumed once, by 02-init-db-least-privilege-passwords.sh, when the
+      # volume is first initialised. Not re-run on restart, so an existing
+      # password is never silently rotated.
+      SMS_DB_APP_PASSWORD: ${SMS_DB_APP_PASSWORD:?SMS_DB_APP_PASSWORD must be set}
+      SMS_DB_MIGRATION_PASSWORD: ${SMS_DB_MIGRATION_PASSWORD:?SMS_DB_MIGRATION_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
       - ./init-db-rls.sql:/docker-entrypoint-initdb.d/init-db-rls.sql
+      # Lexical order in /docker-entrypoint-initdb.d decides execution order.
+      - ./init-db-least-privilege.sql:/docker-entrypoint-initdb.d/01-init-db-least-privilege.sql
+      - ./init-db-least-privilege-passwords.sh:/docker-entrypoint-initdb.d/02-init-db-least-privilege-passwords.sh
     ports:
       - "5433:5432"
     healthcheck:
@@ -41,7 +49,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:80
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_user;Password=${DB_PASSWORD:?DB_PASSWORD must be set}"
+      # This service also runs ASPNETCORE_ENVIRONMENT=Production, so it is held
+      # to the same rule: sms_user is a SUPERUSER with BYPASSRLS and must never
+      # serve application traffic. DefaultConnection -> sms_app (runtime),
+      # MigrationConnection -> sms_migration (DDL). Separate secrets, neither
+      # hard-coded.
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_app;Password=${SMS_DB_APP_PASSWORD:?SMS_DB_APP_PASSWORD must be set}"
+      ConnectionStrings__MigrationConnection: "Host=postgres;Database=SchoolManagementSystem;Username=sms_migration;Password=${SMS_DB_MIGRATION_PASSWORD:?SMS_DB_MIGRATION_PASSWORD must be set}"
       JWT_SECRET: ${JWT_SECRET}
       JWT__Issuer: ${JWT_ISSUER:-SMSAPI}
       JWT__Audience: ${JWT_AUDIENCE:-SMSWeb}

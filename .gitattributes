@@ -1,0 +1,24 @@
+# ==================================================================
+# Line-ending policy for files that are executed or mounted into a container.
+# ==================================================================
+# This repository is developed on Windows with `core.autocrlf=true`, which
+# checks text files out with CRLF. That is fine for C# and TypeScript, but it
+# silently breaks shell scripts:
+#
+#   docker/init-db-least-privilege-passwords.sh is bind-mounted into
+#   postgres:16-alpine and executed by the image entrypoint. A CRLF working
+#   copy turns its `#!/bin/sh` shebang into `#!/bin/sh\r`, the kernel fails
+#   to resolve the interpreter, and a brand new database volume never
+#   finishes initialising:
+#       env: can't execute 'bash'   /  ': No such file or directory'
+#
+# Pinning `eol=lf` makes the working-tree copy LF regardless of the
+# developer's core.autocrlf setting, so the file is executable on the
+# developer's machine and inside the container. The index content is
+# unchanged (already LF), so this introduces no diff to existing files.
+*.sh text eol=lf
+
+# Docker entrypoint scripts are executed directly by the postgres image, so
+# they additionally need the executable bit recorded in the index.
+docker/*.sh text eol=lf
+scripts/*.sh text eol=lf

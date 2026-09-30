@@ -82,9 +82,18 @@ namespace SMS.Persistence.Services
         /// migration gate; whoever gets there first wins and the other is
         /// a no-op, which is safe because migrations are idempotent under
         /// EF Core's migration lock.
+        ///
+        /// <para>In Production this does not degrade gracefully. Roles, the
+        /// default tenant and the administrator are bootstrap rows with no
+        /// tenant context, and <c>sms_app</c> is NOBYPASSRLS and holds no
+        /// write privilege on "Tenants", so seeding over the runtime
+        /// connection cannot work by design. Failing loudly at that point is
+        /// the correct outcome; a warning that lets the process limp on would
+        /// leave a half-seeded database.</para>
         /// </summary>
         private async Task EnsureMigratedAsync()
         {
+            // Throws in Production when MigrationConnection is missing.
             var migrationConnection = DatabaseMigrationRunner.ResolveConnectionString(
                 _configuration, out var usedRuntimeConnectionAsFallback);
 
