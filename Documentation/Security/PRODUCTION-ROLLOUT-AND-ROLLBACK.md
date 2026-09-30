@@ -74,6 +74,10 @@ already performing.
 Never enable RLS on production first.
 
 ```bash
+# A fresh cluster must be able to provision the roles itself. Verify that first.
+docker compose -f docker/docker-compose.test.yml down -v
+docker compose -f docker/docker-compose.test.yml up -d
+
 # Restore a production-representative clone, then:
 SMS_DESIGN_TIME_CONNECTION="Host=...;Database=<clone>;Username=sms_migration;Password=..." \
   dotnet ef database update --project src/SMS.Persistence
@@ -82,9 +86,21 @@ dotnet test tests/SMS.ApiTests
 dotnet test tests/SMS.IntegrationTests
 ```
 
-Expect `723 / 187 / 86`. The integration suite provisions its own database
-(`sms_rls_test`) and runs 31 database-level RLS tests against a real
-`NOBYPASSRLS` connection.
+Expect `769 / 187 / 120`. Run the three suites **sequentially**: running
+two of them concurrently against one PostgreSQL server produces spurious
+connection failures that look like regressions.
+
+The integration suite provisions its own database (`sms_rls_test`) and
+runs 31 database-level RLS tests plus 34 privilege/role-escalation tests
+against a real `NOBYPASSRLS` connection. The RLS classes share one
+collection fixture and must not run against each other; see
+`TenantRowLevelSecurityCollection`.
+
+The counts moved from `723 / 187 / 86` when the least-privilege roles were
+wired into the deployment configuration: 46 unit tests were added for the
+production migration-connection contract and a static audit of the compose
+files, and 34 integration tests for the `Tenants` privilege boundary and
+role escalation. No existing test was removed, skipped or weakened.
 
 ### Stage 4 — back up production
 
