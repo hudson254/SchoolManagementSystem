@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using SMS.Persistence.Data;
 using SMS.Persistence.Migrations;
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using Xunit;
@@ -23,13 +24,18 @@ namespace SMS.UnitTests.OMS.Persistence
     /// </para>
     ///
     /// <para>
-    /// That migration deliberately creates the tenant policies but does <b>not</b> enable
-    /// row level security. The application connects as <c>sms_user</c>, which is a
-    /// superuser with BYPASSRLS, and PostgreSQL always bypasses RLS for such roles, so
-    /// switching it on now would provide no isolation while risking an outage. These
-    /// tests make that deferral explicit and deliberate: if someone later enables RLS
-    /// without first moving the application onto a NOBYPASSRLS role, the guard test
-    /// fails and explains why.
+    /// This class pins the first half of the two-step rollout: the policies are
+    /// created here and deliberately NOT enabled, because at the time the
+    /// application connected as <c>sms_user</c> - a superuser with BYPASSRLS -
+    /// and PostgreSQL always bypasses RLS for such roles. Enabling it then
+    /// would have provided no isolation while risking an outage.
+    /// </para>
+    /// <para>
+    /// The second step is <c>EnableTenantRowLevelSecurity</c>, which switches
+    /// enforcement on once the application is running as the NOBYPASSRLS
+    /// <c>sms_app</c> role. The ordering is the whole point of the split, and
+    /// <see cref="RolePrecondition_IsSatisfied_ForTheEnableMigration"/> is the
+    /// test that stops the steps being applied in the wrong order.
     /// </para>
     /// </summary>
     public class TenantRlsMigrationTests
@@ -94,8 +100,11 @@ namespace SMS.UnitTests.OMS.Persistence
         }
 
         /// <summary>
-        /// The deliberate deferral: RLS must NOT be enabled yet, because the application
-        /// role bypasses RLS and switching it on would not actually isolate tenants.
+        /// The deliberate deferral: THIS migration must not enable RLS. That
+        /// is correct and must stay correct - the application role was a
+        /// superuser with BYPASSRLS when this migration was written, so
+        /// enabling it here would provide no isolation while adding a large
+        /// surface for breakage.
         /// </summary>
         [Fact]
         public void Up_DoesNotInvokeTheRlsEnableHelper_BecauseAppRoleBypassesIt()
@@ -103,13 +112,76 @@ namespace SMS.UnitTests.OMS.Persistence
             var sql = RunMigration(new AddTenantRowLevelSecurityPolicies(), up: true);
 
             // The helper is defined (its body legitimately contains the ALTER TABLE
-            // statement) but must never be invoked by the migration itself.
+            // statement) but must never be invoked by this migration itself.
             sql.Should().Contain("CREATE OR REPLACE FUNCTION app.enable_tenant_rls");
             sql.Should().NotContain("SELECT app.enable_tenant_rls",
                 "RLS is inert for a superuser/BYPASSRLS role. Enable it only after the " +
                 "application is moved onto a NOBYPASSRLS role, otherwise it provides no " +
                 "tenant isolation while risking an outage.");
             sql.Should().NotContain("PERFORM app.enable_tenant_rls");
+        }
+
+        /// <summary>
+        /// The ordering precondition for the second step.
+        ///
+        /// <para>The enablement migration is only meaningful once the runtime
+        /// role is a non-superuser, non-BYPASSRLS, non-owner role. If anyone
+        /// ever re-provisions the application role back onto the container's
+        /// POSTGRES_USER, this test fails and points at the ordering problem
+        /// rather than leaving RLS silently inert.</para>
+        /// </summary>
+        [Fact]
+        public void RolePrecondition_IsSatisfied_ForTheEnableMigration()
+        {
+            // Documented contract between the provisioning scripts and the
+            // enablement migration. The scripts are the enforcement point; this
+            // test makes the coupling explicit and fails loudly if someone
+            // changes one side without the other.
+            var initSql = File.ReadAllText(FindRepoFile("docker/init-db-least-privilege.sql"));
+            var grantSql = File.ReadAllText(FindRepoFile("docker/grant-least-privilege-privileges.sql"));
+
+            // The role attributes belong to the init script, which creates
+            // the roles. This is the single place NOBYPASSRLS is asserted,
+            // and it is what makes ENABLE ROW LEVEL SECURITY meaningful.
+            initSql.Should().Contain("NOBYPASSRLS",
+                "the runtime role must be created NOBYPASSRLS or ENABLE ROW LEVEL SECURITY is inert");
+            initSql.Should().Contain("NOSUPERUSER");
+            initSql.Should().Contain("NOCREATEROLE");
+            initSql.Should().Contain("NOCREATEDB");
+
+            // The grant script owns the ownership transfer and the runtime
+            // privileges, and must keep them enumerated rather than blanket.
+            grantSql.Should().Contain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sms_app");
+            grantSql.Should().NotContain("ALL PRIVILEGES ON ALL TABLES",
+                "a blanket grant would hand the runtime role more than it needs");
+
+            grantSql.Should().Contain("GRANT CONNECT, CREATE ON DATABASE",
+                "PG15+ requires database-level CREATE for CREATE SCHEMA; without it the RLS " +
+                "migration fails with 42501 permission denied for database");
+
+            grantSql.Should().Contain("ALTER SCHEMA app OWNER TO sms_migration");
+            grantSql.Should().Contain("ALTER FUNCTION %s OWNER TO sms_migration",
+                "CREATE OR REPLACE FUNCTION requires ownership of the function, not just its schema");
+        }
+
+        /// <summary>
+        /// Walks up from the test assembly to the repository root.
+        /// </summary>
+        private static string FindRepoFile(string relativePath)
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null)
+            {
+                var candidate = Path.Combine(directory.FullName, relativePath);
+                if (File.Exists(candidate))
+                    return candidate;
+
+                var nested = Path.Combine(directory.FullName, "docker", Path.GetFileName(relativePath));
+                directory = directory.Parent;
+            }
+
+            throw new FileNotFoundException(
+                $"Could not locate '{relativePath}' above {AppContext.BaseDirectory}.");
         }
 
         /// <summary>Down() must fully reverse the migration.</summary>

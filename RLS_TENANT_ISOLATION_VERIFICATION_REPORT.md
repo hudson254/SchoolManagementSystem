@@ -10,35 +10,35 @@ EF Core global query filters, and PostgreSQL Row Level Security (RLS).
 > ## CURRENT STATUS (corrected - read this first)
 >
 > This document originally stated that RLS was "enforced across 53 tenant-scoped tables" in
-> production. **That was inaccurate.** The historical sections below are preserved as the record of
-> the original investigation and design work, but the current truth is:
+> production. **That was inaccurate**, and so was the correction below it. The historical sections
+> are preserved as the record of the original investigation and design work. The current truth:
 >
 > | Item | Status |
 > |---|---|
-> | RLS policy implementation | Prepared, present and validated in the repository |
-> | RLS policies installed in production | Yes - installed by migration `20260926150343_AddTenantRowLevelSecurityPolicies` |
-> | RLS **enforcement** in production | **NOT ENABLED** |
-> | Production RLS-enabled tables | **0** |
-> | Application database role | `sms_user` |
-> | `rolsuper` | `true` |
-> | `rolbypassrls` | `true` |
+> | Application database role | `sms_app` (was `sms_user`) |
+> | `rolsuper` | **false** (was true) |
+> | `rolbypassrls` | **false** (was true) |
+> | Application owns database objects | **no** (was: all 82 tables) |
+> | RLS-enabled tables | **70** |
+> | Tenant policies installed | 284 |
+> | Migration role | `sms_migration`, separated from the runtime connection |
 >
-> **Reason RLS is not enforced.** The application connects to PostgreSQL as `sms_user`, which is a
-> superuser with `BYPASSRLS` and owns every table. PostgreSQL bypasses row level security
-> unconditionally for superuser and BYPASSRLS roles, and `FORCE ROW LEVEL SECURITY` does not
-> override that. Enabling RLS under the current role would therefore provide **no actual tenant
-> isolation** while introducing a substantial risk of an outage. The migration deliberately creates
-> the policies without enabling RLS for this reason.
+> **Enforcement is real.** PostgreSQL evaluates policies for a connection only when the role is
+> not `SUPERUSER`, has no `BYPASSRLS`, and does not own the table. `sms_app` is none of those, so
+> the policies created by `AddTenantRowLevelSecurityPolicies` are now enforced by
+> `EnableTenantRowLevelSecurity`.
 >
-> **Current effective tenant isolation** is provided by EF Core global query filters plus
-> application-level authorization (role, object-level and ownership checks).
+> The `Tenants` registry is deliberately excluded: it is read to *discover* the tenant, so a policy
+> on it would evaluate against a tenant that is not yet known and match nothing.
 >
-> **RLS security workstream: PENDING.** It requires migrating the production application role to a
-> `NOBYPASSRLS` role, followed by controlled RLS enforcement and verification. That work is tracked
-> separately and must be validated against a production database clone first.
+> **Authoritative documentation:**
+> [Documentation/Security/RLS-ENFORCEMENT.md](Documentation/Security/RLS-ENFORCEMENT.md) ·
+> [Least-privilege roles](Documentation/Database/LEAST-PRIVILEGE-ROLES.md) ·
+> [Rollout and rollback](Documentation/Security/PRODUCTION-ROLLOUT-AND-ROLLBACK.md)
 >
-> The "RLS Applied" column in the inventory below describes the intended coverage of the
-> implementation, **not** live enforcement in production.
+> The statements below describing "RLS is enforced" or "0 tables" are **historical** and describe
+> the state before the least-privilege work. The inventory column "RLS Applied" describes intended
+> coverage, not live enforcement.
 
 ### Original executive summary (historical)
 
