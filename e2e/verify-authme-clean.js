@@ -1,14 +1,10 @@
-/** Minimal, low-volume confirmation after the 15-minute rate-limit ban clears. */
+﻿/** Minimal, low-volume confirmation after the 15-minute rate-limit ban clears. */
 const { chromium } = require('@playwright/test');
 
 const BASE = 'https://sms-server.school.internal';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  // The ban is 15 minutes; the last breach was at 20:08:52.
-  console.log('[pace] waiting 16 minutes for the ban to clear...');
-  await sleep(16 * 60 * 1000);
-
+  // ONE login, ONE page load, ONE /auth/me. Nothing that could re-trip the limiter.
   const browser = await chromium.launch({
     args: ['--host-resolver-rules=MAP sms-server.school.internal 192.168.110.161'],
   });
@@ -35,3 +31,4 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   await browser.close();
 })().catch((e) => { console.error('HARNESS ERROR', e); process.exit(2); });
+
