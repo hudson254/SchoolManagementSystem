@@ -42,10 +42,24 @@ namespace SMS.Domain.Reporting
         /// <summary>Restrict to an academic year (via the assignment's semester).</summary>
         public Guid? AcademicYearId { get; set; }
 
-        /// <summary>Inclusive start of the reporting period.</summary>
+        /// <summary>
+        /// Inclusive start of the reporting period, in application-UTC.
+        /// </summary>
+        /// <remarks>
+        /// Normalised by <see cref="OccupancyDateRules.NormalizeBound"/> before it
+        /// reaches a repository, so it never carries
+        /// <see cref="DateTimeKind.Unspecified"/> into a query.
+        /// </remarks>
         public DateTime? FromDate { get; set; }
 
-        /// <summary>Inclusive end of the reporting period.</summary>
+        /// <summary>
+        /// Inclusive end of the reporting period, in application-UTC.
+        /// </summary>
+        /// <remarks>
+        /// Normalised by <see cref="OccupancyDateRules.NormalizeBound"/> before it
+        /// reaches a repository, so it never carries
+        /// <see cref="DateTimeKind.Unspecified"/> into a query.
+        /// </remarks>
         public DateTime? ToDate { get; set; }
 
         /// <summary>Free-text search (occupant name/number, house number/name, lane).</summary>

@@ -117,6 +117,60 @@ namespace SMS.UnitTests.Accommodation
             OccupancyDateRules.DurationInDays(Jan1, null, new DateTime(2026, 1, 31)).Should().Be(30);
         }
 
+        // ===== Interval semantics must be unchanged by the date fix =====
+
+        [Fact]
+        public void OverlapsPeriod_WithUtcBounds_ShouldKeepBoundaryEqualityInclusive()
+        {
+            var periodStart = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+            var periodEnd = new DateTime(2026, 2, 28, 0, 0, 0, DateTimeKind.Utc);
+
+            // Boundary equality stays INCLUSIVE on both ends.
+            OccupancyDateRules.OverlapsPeriod(periodEnd, null, periodStart, periodEnd).Should().BeTrue();
+            OccupancyDateRules.OverlapsPeriod(periodStart, periodStart, periodStart, periodEnd).Should().BeTrue();
+        }
+
+        [Fact]
+        public void OverlapsPeriod_WithOpenEndedStayAcrossUtcPeriod_ShouldOverlap()
+        {
+            var (periodStart, periodEnd) = OccupancyDateRules.NormalizePeriod(
+                new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                new DateTime(2026, 2, 28, 0, 0, 0, DateTimeKind.Unspecified));
+
+            // Moved in before the period and never vacated (VacatedDate IS NULL).
+            OccupancyDateRules.OverlapsPeriod(Jan1, null, periodStart, periodEnd).Should().BeTrue();
+        }
+
+        [Fact]
+        public void OverlapsPeriod_WithSameDayRange_ShouldStillCoverTheWholeDay()
+        {
+            // fromDate == toDate: NormalizePeriod must still cover the WHOLE day.
+            var (periodStart, periodEnd) = OccupancyDateRules.NormalizePeriod(
+                new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Unspecified),
+                new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Unspecified));
+
+            periodStart.Date.Should().Be(new DateTime(2026, 3, 15));
+            periodEnd.Date.Should().Be(new DateTime(2026, 3, 15));
+            periodEnd.TimeOfDay.Should().BeGreaterThan(TimeSpan.FromHours(23));
+
+            var midday = new DateTime(2026, 3, 15, 12, 0, 0, DateTimeKind.Utc);
+            OccupancyDateRules.OverlapsPeriod(midday, null, periodStart, periodEnd).Should().BeTrue();
+
+            var nextDay = new DateTime(2026, 3, 16, 0, 0, 0, DateTimeKind.Utc);
+            OccupancyDateRules.OverlapsPeriod(nextDay, null, periodStart, periodEnd).Should().BeFalse();
+        }
+
+        [Fact]
+        public void OverlapsPeriod_WithStayEndingBeforeUtcPeriod_ShouldNotOverlap()
+        {
+            var (periodStart, periodEnd) = OccupancyDateRules.NormalizePeriod(
+                new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                new DateTime(2026, 2, 28, 0, 0, 0, DateTimeKind.Unspecified));
+
+            OccupancyDateRules.OverlapsPeriod(Jan1, new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), periodStart, periodEnd)
+                .Should().BeFalse();
+        }
+
         // ===== Query filters / paging =====
 
         [Fact]
@@ -175,6 +229,78 @@ namespace SMS.UnitTests.Accommodation
             filters.PageSize.Should().Be(25);
         }
 
+        // ===== Date/time contract (regression: HTTP 500 on unspecified kinds) =====
+
+        [Theory]
+        [InlineData("2026-10-01T00:00:00")]      // no designator -> Unspecified
+        [InlineData("2026-10-01T00:00:00Z")]     // explicit UTC
+        [InlineData("2026-10-01T00:00:00+03:00")]
+        [InlineData("2026-10-01")]
+        [InlineData("2026-10-01T12:34:56")]
+        public void NormalizeBound_AnySuppliedRepresentation_ShouldYieldUtc(string raw)
+        {
+            // Parsed the way ASP.NET Core binds a query-string value.
+            var bound = DateTime.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+
+            var result = OccupancyDateRules.NormalizeBound(bound);
+
+            result.Should().NotBeNull();
+            result!.Value.Kind.Should().Be(DateTimeKind.Utc,
+                "a timestamp with time zone column only accepts UTC");
+        }
+
+        [Fact]
+        public void NormalizeBound_WhenMissing_ShouldStayNull()
+        {
+            OccupancyDateRules.NormalizeBound(null).Should().BeNull();
+        }
+
+        [Fact]
+        public void NormalizeBound_WhenUtc_ShouldKeepExactInstant()
+        {
+            var utc = new DateTime(2026, 10, 1, 3, 4, 5, DateTimeKind.Utc);
+
+            OccupancyDateRules.NormalizeBound(utc).Should().Be(utc);
+        }
+
+        [Fact]
+        public void NormalizeBound_WhenUnspecified_ShouldKeepWallClockValue()
+        {
+            // The reported production failure: "2026-10-01T00:00:00" binds Unspecified.
+            var unspecified = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+            var result = OccupancyDateRules.NormalizeBound(unspecified);
+
+            result.Should().NotBeNull();
+            result!.Value.Kind.Should().Be(DateTimeKind.Utc);
+            result.Value.Should().Be(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc),
+                "an offset-less value is read as the UTC wall clock the caller wrote");
+        }
+
+        [Fact]
+        public void NormalizePeriod_WhenBoundsMissing_ShouldStillReturnUtcKind()
+        {
+            // DateTime.MinValue / MaxValue are Unspecified by default and would
+            // reproduce the same Npgsql failure on the open-ended reports.
+            var (start, end) = OccupancyDateRules.NormalizePeriod(null, null);
+
+            start.Kind.Should().Be(DateTimeKind.Utc);
+            end.Kind.Should().Be(DateTimeKind.Utc);
+            start.Should().Be(DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc));
+            end.Should().Be(DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));
+        }
+
+        [Fact]
+        public void NormalizePeriod_WhenBoundsUnspecified_ShouldReturnUtcKind()
+        {
+            var (start, end) = OccupancyDateRules.NormalizePeriod(
+                new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                new DateTime(2026, 3, 31, 0, 0, 0, DateTimeKind.Unspecified));
+
+            start.Kind.Should().Be(DateTimeKind.Utc);
+            end.Kind.Should().Be(DateTimeKind.Utc);
+        }
+
         [Fact]
         public void ValidatePeriod_WhenFromIsAfterTo_ShouldThrowValidationException()
         {
@@ -183,6 +309,110 @@ namespace SMS.UnitTests.Accommodation
             var act = () => query.ValidatePeriod();
 
             act.Should().Throw<ValidationException>().WithMessage("*From date*");
+        }
+
+        [Theory]
+        [InlineData("2026-10-01T00:00:00")]
+        [InlineData("2026-10-01T00:00:00Z")]
+        [InlineData("2026-10-01T00:00:00+03:00")]
+        public void ToFilters_ShouldNormalizeEveryDateRepresentationToUtc(string raw)
+        {
+            var query = new GetOccupancyHistoryReportQuery
+            {
+                FromDate = DateTime.Parse(raw, System.Globalization.CultureInfo.InvariantCulture),
+                ToDate = DateTime.Parse(raw, System.Globalization.CultureInfo.InvariantCulture)
+            };
+
+            var filters = query.ToFilters();
+
+            filters.FromDate.Should().NotBeNull();
+            filters.FromDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
+            filters.ToDate.Should().NotBeNull();
+            filters.ToDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        }
+
+        [Fact]
+        public void ToFilters_WhenDatesAreUtc_ShouldNotShiftThem()
+        {
+            var query = new GetOccupancyHistoryReportQuery { FromDate = Jan1, ToDate = Mar31 };
+
+            var filters = query.ToFilters();
+
+            filters.FromDate.Should().Be(Jan1);
+            filters.ToDate.Should().Be(Mar31);
+        }
+
+        [Fact]
+        public void ToFilters_WhenDatesMissing_ShouldLeaveThemNull()
+        {
+            var filters = new GetOccupancyHistoryReportQuery().ToFilters();
+
+            filters.FromDate.Should().BeNull();
+            filters.ToDate.Should().BeNull();
+        }
+
+        [Fact]
+        public void ToFilters_WhenDatesUnspecified_ShouldNotChangeTheCalendarDay()
+        {
+            // Normalisation must re-tag the kind only; it must never shift the day
+            // the user asked for.
+            var query = new GetOccupancyHistoryReportQuery
+            {
+                FromDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                ToDate = new DateTime(2026, 10, 31, 0, 0, 0, DateTimeKind.Unspecified)
+            };
+
+            var filters = query.ToFilters();
+
+            filters.FromDate!.Value.Should().Be(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+            filters.ToDate!.Value.Should().Be(new DateTime(2026, 10, 31, 0, 0, 0, DateTimeKind.Utc));
+        }
+
+        [Theory]
+        [InlineData("2026-10-01T00:00:00", "2026-09-30T00:00:00")]   // plain -> plain
+        [InlineData("2026-10-01T00:00:00Z", "2026-09-30T00:00:00Z")] // Z -> Z
+        [InlineData("2026-10-01T00:00:00+03:00", "2026-09-30T00:00:00")]
+        public void ValidatePeriod_WithMixedRepresentations_ShouldStillRejectReversedRange(string from, string to)
+        {
+            var query = new GetOccupancyHistoryReportQuery
+            {
+                FromDate = DateTime.Parse(from, System.Globalization.CultureInfo.InvariantCulture),
+                ToDate = DateTime.Parse(to, System.Globalization.CultureInfo.InvariantCulture)
+            };
+
+            var act = () => query.ValidatePeriod();
+
+            act.Should().Throw<ValidationException>("a reversed range must still be a 400, not a 500");
+        }
+
+        [Theory]
+        [InlineData("2026-10-01T00:00:00", "2026-10-01T00:00:00Z")]  // same instant, mixed kinds
+        [InlineData("2026-10-01T00:00:00", "2026-10-31T00:00:00")]
+        public void ValidatePeriod_WithForwardOrEqualRangeInAnyRepresentation_ShouldBeValid(string from, string to)
+        {
+            var query = new GetOccupancyHistoryReportQuery
+            {
+                FromDate = DateTime.Parse(from, System.Globalization.CultureInfo.InvariantCulture),
+                ToDate = DateTime.Parse(to, System.Globalization.CultureInfo.InvariantCulture)
+            };
+
+            var act = () => query.ValidatePeriod();
+
+            act.Should().NotThrow("an equal or forward range is valid in every representation");
+        }
+
+        [Fact]
+        public void ValidatePeriod_WhenEqualRegardlessOfRepresentation_ShouldBeValid()
+        {
+            var query = new GetOccupancyHistoryReportQuery
+            {
+                FromDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Unspecified),
+                ToDate = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)
+            };
+
+            var act = () => query.ValidatePeriod();
+
+            act.Should().NotThrow("fromDate == toDate is a valid same-day range");
         }
 
         // ===== Report support helpers =====

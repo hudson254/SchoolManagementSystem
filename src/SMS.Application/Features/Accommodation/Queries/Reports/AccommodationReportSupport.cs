@@ -33,6 +33,17 @@ namespace SMS.Application.Features.Accommodation.Queries.Reports
         /// <paramref name="maxPageSize"/> is used by exports so a single file can
         /// never grow unbounded.
         /// </summary>
+        /// <remarks>
+        /// The From/To bounds are normalised to application-UTC here, at the
+        /// boundary where the HTTP query string becomes a domain object. ASP.NET
+        /// Core binds <c>fromDate=2026-10-01T00:00:00</c> (no designator) as
+        /// <see cref="DateTimeKind.Unspecified"/>, which Npgsql refuses to send to
+        /// a <c>timestamp with time zone</c> column — that was the HTTP 500 on
+        /// /reports/occupancy-history. Normalising in the one method every
+        /// accommodation report query calls keeps the contract in a single place
+        /// and leaves <see cref="OccupancyDateRules.NormalizePeriod"/> (and the
+        /// interval-overlap semantics it encodes) untouched.
+        /// </remarks>
         public AccommodationReportFilters ToFilters(int? maxPageSize = null)
         {
             var size = PageSize < 1 ? 50 : PageSize;
@@ -47,8 +58,8 @@ namespace SMS.Application.Features.Accommodation.Queries.Reports
                 OccupantType = OccupantType,
                 SemesterId = SemesterId,
                 AcademicYearId = AcademicYearId,
-                FromDate = FromDate,
-                ToDate = ToDate,
+                FromDate = OccupancyDateRules.NormalizeBound(FromDate),
+                ToDate = OccupancyDateRules.NormalizeBound(ToDate),
                 SearchTerm = SearchTerm,
                 Page = Page < 1 ? 1 : Page,
                 PageSize = size
