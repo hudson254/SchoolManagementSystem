@@ -88,6 +88,13 @@ interface ReportDefinition {
   needsOccupantInput: boolean;
   /** Column set used by the shared house table. */
   houseVariant?: 'current' | 'occupied' | 'empty';
+  /**
+   * The endpoint rejects this report without a From and To date (see
+   * GetOccupancyHistoryReportHandler), so the page must not call it until the
+   * user has chosen a period. Without this the report fired immediately on
+   * selection, returned 400, and surfaced an error instead of guidance.
+   */
+  periodRequired?: boolean;
 }
 
 const REPORT_DEFINITIONS: ReportDefinition[] = [
@@ -161,6 +168,8 @@ const REPORT_DEFINITIONS: ReportDefinition[] = [
     occupantTypeFilter: true,
     semesterFilter: true,
     periodFilter: true,
+    // The endpoint requires both bounds, so both must be chosen before it is called.
+    periodRequired: true,
     searchFilter: true,
     paged: true,
     needsOccupantInput: false,
@@ -911,6 +920,7 @@ export const AccommodationReports: React.FC = () => {
 
   const missingRequirement =
     (definition.houseFilterRequired && !houseId) ||
+    (definition.periodRequired && (!fromDate || !toDate)) ||
     (definition.needsOccupantInput && !selectedOccupant && !appliedSearch.trim());
 
   const reportQuery = useQuery({
@@ -1197,6 +1207,7 @@ export const AccommodationReports: React.FC = () => {
                   size="small"
                   fullWidth
                   type="date"
+                  required={definition.periodRequired}
                   label="From"
                   InputLabelProps={{ shrink: true }}
                   value={fromDate}
@@ -1211,6 +1222,7 @@ export const AccommodationReports: React.FC = () => {
                   size="small"
                   fullWidth
                   type="date"
+                  required={definition.periodRequired}
                   label="To"
                   InputLabelProps={{ shrink: true }}
                   value={toDate}
@@ -1273,6 +1285,11 @@ export const AccommodationReports: React.FC = () => {
         {definition.houseFilterRequired && !houseId ? (
           <Alert severity="info" sx={{ mt: 1.5 }}>
             Choose a house to load its stay-by-stay occupancy history.
+          </Alert>
+        ) : null}
+        {definition.periodRequired && (!fromDate || !toDate) ? (
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            Choose both a From and a To date — this report only covers a selected period.
           </Alert>
         ) : null}
 

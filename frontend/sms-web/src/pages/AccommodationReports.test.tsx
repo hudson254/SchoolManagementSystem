@@ -358,7 +358,67 @@ describe('AccommodationReports', () => {
     expect(screen.getByText(/John Roe \(STS\/002\)/)).toBeInTheDocument();
   });
 
+  it('waits for a period before calling the endpoint that requires one', async () => {
+    // GetOccupancyHistoryReportHandler rejects the request unless BOTH From and To
+    // are supplied. The page used to call it straight away on selection, which
+    // produced a 400 and an error banner instead of guidance.
+    mock(accommodationService.getOccupancyHistoryReport).mockResolvedValue({
+      ...meta,
+      reportTitle: 'Occupancy History',
+      periodStart: '2026-01-01T00:00:00Z',
+      periodEnd: '2026-03-31T00:00:00Z',
+      distinctOccupants: 1,
+      distinctHouses: 1,
+      pagination,
+      rows: [stay],
+    });
+
+    renderWithProviders(<AccommodationReports />);
+    await waitFor(() => {
+      expect(mock(accommodationService.getCurrentOccupancyReport)).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+
+    expect(
+      await screen.findByText(/Choose both a From and a To date/i),
+    ).toBeInTheDocument();
+    expect(accommodationService.getOccupancyHistoryReport).not.toHaveBeenCalled();
+
+    // Only From is not enough.
+    fireEvent.change(screen.getByLabelText(/^From/), { target: { value: '2026-01-01' } });
+    await waitFor(() => {
+      expect(accommodationService.getOccupancyHistoryReport).not.toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByLabelText(/^To/), { target: { value: '2026-03-31' } });
+
+    await waitFor(() => {
+      expect(mock(accommodationService.getOccupancyHistoryReport)).toHaveBeenCalledWith(
+        expect.objectContaining({ fromDate: expect.stringContaining('2026-01-01'), toDate: expect.stringContaining('2026-03-31') }),
+      );
+    });
+    expect(await screen.findByText('Distinct occupants: 1')).toBeInTheDocument();
+  });
+
+  it('does not require a period for the report that can run without one', async () => {
+    // Regression guard for the fix above: "By period" has a period filter but the
+    // endpoint accepts an empty one, so it must still load immediately.
+    renderWithProviders(<AccommodationReports />);
+    await waitFor(() => {
+      expect(mock(accommodationService.getCurrentOccupancyReport)).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'By period' }));
+
+    await waitFor(() => {
+      expect(mock(accommodationService.getOccupancyByPeriodReport)).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/Choose both a From and a To date/i)).not.toBeInTheDocument();
+  });
+
   it('shows the empty state, and a real zero, for a period with no occupancy', async () => {
+
     mock(accommodationService.getOccupancyByPeriodReport).mockResolvedValue({
       ...periodReport,
       periodLabel: '01 Apr 2026 to 30 Apr 2026',
