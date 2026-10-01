@@ -150,9 +150,12 @@ namespace SMS.Persistence.Repositories
             summary.TotalCapacity = stats.Sum(s => s.Capacity);
             summary.OccupiedSpaces = stats.Sum(s => s.ActiveCount);
             summary.AvailableSpaces = Math.Max(0, summary.TotalCapacity - summary.OccupiedSpaces);
-            summary.HousesAtFullCapacity = stats.Count(s => s.Capacity > 0 && s.ActiveCount >= s.Capacity);
-            summary.HousesWithAvailableCapacity = stats.Count(s => s.ActiveCount < s.Capacity);
-            summary.HousesNeverOccupied = stats.Count(s => s.TotalRecords == 0);
+            summary.HousesAtFullCapacity = AccommodationCapacityRules.CountAtFullCapacity(
+                stats, s => s.Capacity, s => s.ActiveCount);
+            summary.HousesWithAvailableCapacity = AccommodationCapacityRules.CountWithAvailableCapacity(
+                stats, s => s.Capacity, s => s.ActiveCount);
+            summary.HousesNeverOccupied = AccommodationCapacityRules.CountNeverOccupied(
+                stats, s => s.TotalRecords);
             summary.OccupancyPercentage = summary.TotalCapacity > 0
                 ? Math.Round((decimal)summary.OccupiedSpaces * 100 / summary.TotalCapacity, 2)
                 : 0m;
@@ -555,6 +558,23 @@ namespace SMS.Persistence.Repositories
             var occupiedHouses = await overlapQuery.Select(a => a.HouseId).Distinct().CountAsync(cancellationToken);
             var occupiedSpaces = await overlapQuery.CountAsync(cancellationToken);
 
+            // Capacity-pressure tiles. These need a per-house figure, so they are the
+            // one part of the summary that cannot be a plain scalar: each house is
+            // projected with how many occupants it held *inside the selected period*
+            // (the same overlap rule the breakdown rows use, so the summary can never
+            // disagree with the rows it summarises) and how many assignment records it
+            // has ever had. One lightweight row per house, same shape the house and
+            // utilization reports already use.
+            var capacityStats = await houseQuery
+                .Select(h => new
+                {
+                    h.Capacity,
+                    OccupiedInPeriod = overlapQuery.Count(a => a.HouseId == h.Id),
+                    TotalRecords = _context.Set<AccommodationAssignment>()
+                        .Count(a => a.HouseId == h.Id && !a.IsDeleted)
+                })
+                .ToListAsync(cancellationToken);
+
             var summary = new OccupancySummaryReportRow
             {
                 TotalHouses = totalHouses,
@@ -563,6 +583,15 @@ namespace SMS.Persistence.Repositories
                 TotalCapacity = totalCapacity,
                 OccupiedSpaces = occupiedSpaces,
                 AvailableSpaces = Math.Max(0, totalCapacity - occupiedSpaces),
+                // DEFECT-02: these three were never assigned, so the page rendered
+                // them as 0. They now go through the shared rules so they cannot
+                // drift from the house reports again.
+                HousesAtFullCapacity = AccommodationCapacityRules.CountAtFullCapacity(
+                    capacityStats, s => s.Capacity, s => s.OccupiedInPeriod),
+                HousesWithAvailableCapacity = AccommodationCapacityRules.CountWithAvailableCapacity(
+                    capacityStats, s => s.Capacity, s => s.OccupiedInPeriod),
+                HousesNeverOccupied = AccommodationCapacityRules.CountNeverOccupied(
+                    capacityStats, s => s.TotalRecords),
                 OccupancyPercentage = totalCapacity > 0
                     ? Math.Round((decimal)occupiedSpaces * 100 / totalCapacity, 2)
                     : 0m
@@ -673,9 +702,12 @@ namespace SMS.Persistence.Repositories
                 OccupiedHouses = stats.Count(s => s.ActiveCount > 0),
                 TotalCapacity = stats.Sum(s => s.Capacity),
                 OccupiedSpaces = stats.Sum(s => s.ActiveCount),
-                HousesAtFullCapacity = stats.Count(s => s.Capacity > 0 && s.ActiveCount >= s.Capacity),
-                HousesWithAvailableCapacity = stats.Count(s => s.ActiveCount < s.Capacity),
-                HousesNeverOccupied = stats.Count(s => s.TotalRecords == 0)
+                HousesAtFullCapacity = AccommodationCapacityRules.CountAtFullCapacity(
+                    stats, s => s.Capacity, s => s.ActiveCount),
+                HousesWithAvailableCapacity = AccommodationCapacityRules.CountWithAvailableCapacity(
+                    stats, s => s.Capacity, s => s.ActiveCount),
+                HousesNeverOccupied = AccommodationCapacityRules.CountNeverOccupied(
+                    stats, s => s.TotalRecords)
             };
             summary.EmptyHouses = summary.TotalHouses - summary.OccupiedHouses;
             summary.AvailableSpaces = Math.Max(0, summary.TotalCapacity - summary.OccupiedSpaces);

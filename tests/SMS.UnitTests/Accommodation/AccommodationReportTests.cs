@@ -6,10 +6,187 @@ using SMS.Domain.Enums;
 using SMS.Domain.Reporting;
 using SMS.Domain.Rules;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace SMS.UnitTests.Accommodation
 {
+    /// <summary>
+    /// DEFECT-02 — the occupancy-by-period summary never assigned
+    /// <c>HousesAtFullCapacity</c> / <c>HousesWithAvailableCapacity</c> (or
+    /// <c>HousesNeverOccupied</c>), so the three "capacity pressure" tiles on the
+    /// Accommodation Reports page rendered 0 while the house reports showed the
+    /// real numbers. The classification now lives in
+    /// <see cref="AccommodationCapacityRules"/>, shared by every report summary,
+    /// and these tests pin the values down so the tile and the data cannot drift
+    /// apart again.
+    /// </summary>
+    public class AccommodationCapacitySummaryTests
+    {
+        /// <summary>
+        /// Mirrors the anonymous projection the repository builds: capacity, the
+        /// occupant count for the report's window, and the all-time record count.
+        /// </summary>
+        private sealed class HouseFacts
+        {
+            public int Capacity { get; init; }
+            public int OccupiedCount { get; init; }
+            public int TotalRecords { get; init; }
+        }
+
+        private static List<HouseFacts> Facts(params (int capacity, int occupied, int records)[] houses)
+            => houses
+                .Select(h => new HouseFacts
+                {
+                    Capacity = h.capacity,
+                    OccupiedCount = h.occupied,
+                    TotalRecords = h.records,
+                })
+                .ToList();
+
+        private static int CountFull(List<HouseFacts> houses)
+            => AccommodationCapacityRules.CountAtFullCapacity(houses, h => h.Capacity, h => h.OccupiedCount);
+
+        private static int CountWithFreeSpace(List<HouseFacts> houses)
+            => AccommodationCapacityRules.CountWithAvailableCapacity(houses, h => h.Capacity, h => h.OccupiedCount);
+
+        private static int CountNeverOccupied(List<HouseFacts> houses)
+            => AccommodationCapacityRules.CountNeverOccupied(houses, h => h.TotalRecords);
+
+        [Fact]
+        public void IsAtFullCapacity_WhenCapacityIsPositiveAndEverySpaceIsTaken_ShouldBeTrue()
+        {
+            AccommodationCapacityRules.IsAtFullCapacity(4, 4).Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsAtFullCapacity_WhenOverCapacity_ShouldStillBeFull()
+        {
+            // Capacity can be reduced after allocation, leaving more occupants than
+            // spaces. The house is full, not "under pressure".
+            AccommodationCapacityRules.IsAtFullCapacity(2, 3).Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsAtFullCapacity_WhenCapacityIsZero_ShouldNotCountAsFull()
+        {
+            // Nothing to fill: reporting a zero-capacity house as "full" would inflate
+            // the tile with bad data instead of surfacing it.
+            AccommodationCapacityRules.IsAtFullCapacity(0, 0).Should().BeFalse();
+            AccommodationCapacityRules.IsAtFullCapacity(-1, 0).Should().BeFalse();
+        }
+
+        [Fact]
+        public void HasAvailableCapacity_WhenUnderCapacity_ShouldBeTrue()
+        {
+            AccommodationCapacityRules.HasAvailableCapacity(4, 3).Should().BeTrue();
+        }
+
+        [Fact]
+        public void HasAvailableCapacity_WhenExactlyFull_ShouldBeFalse()
+        {
+            AccommodationCapacityRules.HasAvailableCapacity(4, 4).Should().BeFalse();
+            AccommodationCapacityRules.HasAvailableCapacity(4, 5).Should().BeFalse();
+        }
+
+        [Fact]
+        public void CountAtFullCapacity_ShouldCountOnlyCompletelyFilledHouses()
+        {
+            // capacity, occupants in window, all-time records
+            var houses = Facts(
+                (4, 4, 9),  // full
+                (4, 2, 5),  // free space
+                (2, 2, 2),  // full
+                (0, 0, 0),  // zero capacity -> excluded from "full"
+                (6, 0, 3)); // empty
+
+            CountFull(houses).Should().Be(2);
+        }
+
+        [Fact]
+        public void CountWithAvailableCapacity_ShouldCountEveryHouseNotFilledToCapacity()
+        {
+            var houses = Facts(
+                (4, 4, 9),  // no free space
+                (4, 2, 5),  // free space
+                (2, 2, 2),  // no free space
+                (6, 0, 3)); // empty, all 6 spaces free
+
+            CountWithFreeSpace(houses).Should().Be(2);
+        }
+
+        [Fact]
+        public void CountNeverOccupied_ShouldUseTheAllTimeRecordCount()
+        {
+            var houses = Facts(
+                (4, 4, 9),  // currently occupied, has history
+                (4, 0, 1),  // vacant now but has an assignment record
+                (6, 0, 0),  // never occupied
+                (2, 0, 0)); // never occupied
+
+            CountNeverOccupied(houses).Should().Be(2);
+        }
+
+        [Fact]
+        public void NeverOccupied_HouseIsNotCountedWhenItHasARecordOutsideTheWindow()
+        {
+            // Guards the semantics: "never occupied" is an all-time question, so it is
+            // driven by TotalRecords and never contradicts the per-window count.
+            var houses = Facts((4, 0, 1));
+
+            CountNeverOccupied(houses).Should().Be(0);
+        }
+
+        [Fact]
+        public void AllThreeCounts_ShouldBeComputedFromTheSameHouseSet()
+        {
+            // The bug was one report rendering 0 for these tiles while another report
+            // rendered real numbers. Same input -> same numbers, whichever report asks.
+            var houses = Facts((4, 4, 9), (4, 2, 5), (2, 2, 2), (0, 0, 0), (6, 0, 3));
+
+            CountFull(houses).Should().Be(2);
+            CountWithFreeSpace(houses).Should().Be(2);
+            CountNeverOccupied(houses).Should().Be(1);
+        }
+
+        [Fact]
+        public void Counts_WhenNoHousesMatchTheFilters_ShouldAllBeZero()
+        {
+            var houses = Facts();
+
+            CountFull(houses).Should().Be(0);
+            CountWithFreeSpace(houses).Should().Be(0);
+            CountNeverOccupied(houses).Should().Be(0);
+        }
+
+        [Fact]
+        public void Counts_WhenTheSequenceIsNull_ShouldReturnZeroRatherThanThrow()
+        {
+            List<HouseFacts>? none = null;
+
+            AccommodationCapacityRules.CountAtFullCapacity(none, h => h.Capacity, h => h.OccupiedCount)
+                .Should().Be(0);
+            AccommodationCapacityRules.CountWithAvailableCapacity(none, h => h.Capacity, h => h.OccupiedCount)
+                .Should().Be(0);
+            AccommodationCapacityRules.CountNeverOccupied(none, h => h.TotalRecords)
+                .Should().Be(0);
+        }
+
+        [Fact]
+        public void UniformCapacityEstate_ShouldClassifyOccupiedAndVacantHousesOppositely()
+        {
+            // Mirrors production, where every active house has Capacity = 1:
+            // an occupied house is full and has no free space; a vacant house is the
+            // other way round. This is the exact shape the defect was observed in.
+            var houses = Facts((1, 1, 2), (1, 0, 1), (1, 0, 0), (1, 0, 0));
+
+            CountFull(houses).Should().Be(1);
+            CountWithFreeSpace(houses).Should().Be(3);
+            CountNeverOccupied(houses).Should().Be(2);
+        }
+    }
+
     /// <summary>
     /// Unit tests for the accommodation report read models and helpers.
     ///

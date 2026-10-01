@@ -12,6 +12,7 @@ import type {
   AccommodationReportBase,
   HouseOccupantReport,
   HouseUtilizationSummaryReport,
+  OccupancyByPeriodReport,
   OccupancyHistoryReportRow,
   OccupancySummaryReport,
   OccupantAccommodationHistoryReport,
@@ -157,6 +158,74 @@ const stay: OccupancyHistoryReportRow = {
   academicYearName: '2026',
 };
 
+/**
+ * DEFECT-02 fixture. The occupancy-by-period summary used to leave
+ * housesAtFullCapacity / housesWithAvailableCapacity / housesNeverOccupied at 0, so
+ * these three tiles rendered "0" while the house reports showed real numbers. The
+ * values below are deliberately distinct from every other number on the page so a
+ * regression cannot hide behind an unrelated tile.
+ */
+const periodSummary: OccupancySummaryReport = {
+  totalHouses: 11,
+  occupiedHouses: 3,
+  emptyHouses: 8,
+  totalCapacity: 40,
+  occupiedSpaces: 17,
+  availableSpaces: 23,
+  housesAtFullCapacity: 3,
+  housesWithAvailableCapacity: 8,
+  housesNeverOccupied: 6,
+  occupancyPercentage: 42.5,
+};
+
+const periodReport: OccupancyByPeriodReport = {
+  ...meta,
+  reportKey: 'occupancy-by-period',
+  reportTitle: 'Occupancy by Period',
+  periodStart: '2026-01-01T00:00:00Z',
+  periodEnd: '2026-03-31T00:00:00Z',
+  periodLabel: '01 Jan 2026 to 31 Mar 2026',
+  summary: periodSummary,
+  pagination: { totalCount: 2, page: 1, pageSize: 50, totalPages: 1 },
+  rows: [
+    {
+      houseId: 'house-1',
+      houseNumber: 'H-001',
+      houseName: 'Block A',
+      laneName: 'Boys Lane',
+      status: 'Occupied',
+      capacity: 4,
+      occupiedInPeriod: 4,
+      availableInPeriod: 0,
+      occupantsInPeriod: 'Jane Doe (STS/001), John Roe (STS/002), Ada Ray (STS/003), Sam Poe (STS/004)',
+      wasOccupiedInPeriod: true,
+    },
+    {
+      houseId: 'house-2',
+      houseNumber: 'H-002',
+      houseName: null,
+      laneName: 'Boys Lane',
+      status: 'Vacant',
+      capacity: 4,
+      occupiedInPeriod: 0,
+      availableInPeriod: 4,
+      occupantsInPeriod: '',
+      wasOccupiedInPeriod: false,
+    },
+  ],
+};
+
+/**
+ * Reads a summary tile as "label + rendered value". Scoped to the tile's own Paper
+ * so a value that happens to appear elsewhere on the page cannot satisfy the
+ * assertion.
+ */
+function summaryTile(label: string): { labelNode: HTMLElement; value: string } {
+  const labelNode = screen.getByText(label);
+  const paper = labelNode.closest('.MuiPaper-root') as HTMLElement;
+  return { labelNode, value: paper.textContent ?? '' };
+}
+
 function renderWithProviders(ui: ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -193,6 +262,7 @@ beforeEach(() => {
   ]);
   mock(semesterService.getSemesters).mockResolvedValue([{ id: 'sem-1', name: 'Semester 1' }]);
   mock(accommodationService.getCurrentOccupancyReport).mockResolvedValue(houseReport);
+  mock(accommodationService.getOccupancyByPeriodReport).mockResolvedValue(periodReport);
   mock(accommodationService.getUtilizationSummaryReport).mockResolvedValue({
     ...meta,
     reportTitle: 'House Utilization Summary',
@@ -254,6 +324,67 @@ describe('AccommodationReports', () => {
     });
     expect(await screen.findByText(/These totals cover 4 house/)).toBeInTheDocument();
     expect(screen.getByText('House Utilization Summary')).toBeInTheDocument();
+  });
+
+  // DEFECT-02: the occupancy-by-period summary shipped without
+  // housesAtFullCapacity / housesWithAvailableCapacity / housesNeverOccupied, so
+  // these three tiles silently rendered 0. They must render the payload the API
+  // actually returns, and they must render it per report — not inherit the
+  // current-occupancy numbers.
+  it('renders the occupancy-by-period capacity tiles from the report payload', async () => {
+    renderWithProviders(<AccommodationReports />);
+    await waitFor(() => {
+      expect(mock(accommodationService.getCurrentOccupancyReport)).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'By period' }));
+
+    await waitFor(() => {
+      expect(mock(accommodationService.getOccupancyByPeriodReport)).toHaveBeenCalled();
+    });
+    expect(await screen.findByText('Occupancy by Period')).toBeInTheDocument();
+
+    // Headline tiles that already worked stay correct.
+    expect(summaryTile('Total houses').value).toContain('11');
+    expect(summaryTile('Occupied spaces').value).toContain('17');
+
+    // The three tiles that were stuck at 0.
+    expect(summaryTile('At full capacity').value).toContain('3');
+    expect(summaryTile('With free space').value).toContain('8');
+    expect(summaryTile('Never occupied').value).toContain('6');
+
+    // Per-house breakdown rows load for the selected period.
+    expect(screen.getByText(/Jane Doe \(STS\/001\)/)).toBeInTheDocument();
+    expect(screen.getByText(/John Roe \(STS\/002\)/)).toBeInTheDocument();
+  });
+
+  it('shows the empty state, and a real zero, for a period with no occupancy', async () => {
+    mock(accommodationService.getOccupancyByPeriodReport).mockResolvedValue({
+      ...periodReport,
+      periodLabel: '01 Apr 2026 to 30 Apr 2026',
+      summary: {
+        ...periodSummary,
+        occupiedHouses: 0,
+        occupiedSpaces: 0,
+        availableSpaces: 40,
+        housesAtFullCapacity: 0,
+        housesWithAvailableCapacity: 11,
+      },
+      rows: [],
+    });
+
+    renderWithProviders(<AccommodationReports />);
+    await waitFor(() => {
+      expect(mock(accommodationService.getCurrentOccupancyReport)).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'By period' }));
+
+    expect(await screen.findByText('Nothing occupied in this period')).toBeInTheDocument();
+    // A genuine zero still renders as 0 — which is what distinguishes a real empty
+    // result from the old "field never assigned" bug.
+    expect(summaryTile('At full capacity').value).toContain('0');
+    expect(summaryTile('With free space').value).toContain('11');
   });
 
   it('keeps a required house until it is chosen, then loads that house history', async () => {
