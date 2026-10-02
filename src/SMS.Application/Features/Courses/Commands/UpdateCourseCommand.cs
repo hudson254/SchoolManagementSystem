@@ -2,6 +2,7 @@ using FluentValidation;
 using SMS.Shared.DTOs;
 using SMS.Domain.Interfaces;
 using SMS.Multitenancy.Interfaces;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -45,6 +46,7 @@ namespace SMS.Application.Features.Courses.Commands
         private readonly IDepartmentRepository _departmentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<UpdateCourseCommandHandler> _logger;
 
         public UpdateCourseCommandHandler(
@@ -52,12 +54,14 @@ namespace SMS.Application.Features.Courses.Commands
             IDepartmentRepository departmentRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<UpdateCourseCommandHandler> logger)
         {
             _courseRepository = courseRepository;
             _departmentRepository = departmentRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -82,6 +86,9 @@ namespace SMS.Application.Features.Courses.Commands
                 departmentCode = department.Code;
             }
 
+            var wasActive = course.IsActive;
+            var previousName = course.Name;
+
             course.Name = request.Name;
             course.Description = request.Description;
             course.Duration = request.Duration;
@@ -97,6 +104,25 @@ namespace SMS.Application.Features.Courses.Commands
             await _auditService.LogActivityAsync("Course", "Update", course.Id.ToString(), "Update-Course");
 
             _logger.LogInformation("Course updated: {CourseCode}", course.Code);
+
+            // AFTER the commit. Only students enrolled in THIS course are told, and
+            // only on a change they would act on (rename, or availability being
+            // withdrawn/restored). A no-op save notifies nobody, so re-saving the
+            // course form cannot flood anyone.
+            var renamed = !string.Equals(previousName, course.Name, StringComparison.Ordinal);
+            var availabilityChanged = wasActive != request.IsActive;
+
+            if (renamed || availabilityChanged)
+            {
+                var detail = availabilityChanged
+                    ? (request.IsActive
+                        ? "This course is available for selection again."
+                        : "This course is no longer available for selection.")
+                    : $"This course is now titled \"{course.Name}\" ({course.TotalCredits} credits).";
+
+                await _notifier.NotifyCourseChangedAsync(
+                    course.Id, course.Code, course.Name, detail, cancellationToken);
+            }
 
             return new CourseDto
             {

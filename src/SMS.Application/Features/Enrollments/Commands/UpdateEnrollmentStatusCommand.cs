@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Interfaces;
@@ -31,17 +32,20 @@ namespace SMS.Application.Features.Enrollments.Commands
         private readonly IEnrollmentRepository _enrollmentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<UpdateEnrollmentStatusCommandHandler> _logger;
 
         public UpdateEnrollmentStatusCommandHandler(
             IEnrollmentRepository enrollmentRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<UpdateEnrollmentStatusCommandHandler> logger)
         {
             _enrollmentRepository = enrollmentRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -51,6 +55,8 @@ namespace SMS.Application.Features.Enrollments.Commands
             if (enrollment == null)
                 throw new NotFoundException("Enrollment", request.EnrollmentId);
 
+            var previousStatus = enrollment.Status;
+
             enrollment.Status = request.Status;
 
             await _enrollmentRepository.UpdateAsync(enrollment, cancellationToken);
@@ -59,6 +65,18 @@ namespace SMS.Application.Features.Enrollments.Commands
             await _auditService.LogAsync("Enrollment", "UpdateStatus", enrollment.Id.ToString());
 
             _logger.LogInformation("Enrollment {EnrollmentId} status updated to {Status}", request.EnrollmentId, request.Status);
+
+            // AFTER the commit, and only on a real transition. Setting a status to the
+            // value it already holds notifies nobody, so a retried request cannot
+            // produce duplicate rows for the same event.
+            if (!string.Equals(previousStatus, enrollment.Status, StringComparison.OrdinalIgnoreCase))
+            {
+                await _notifier.NotifyEnrollmentStatusChangedAsync(
+                    enrollment.StudentId,
+                    enrollment.Status,
+                    enrollment.Unit?.Name ?? enrollment.Course?.Name ?? "your unit",
+                    cancellationToken);
+            }
 
             return new EnrollmentDto
             {

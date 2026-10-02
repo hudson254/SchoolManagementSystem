@@ -32,6 +32,14 @@ namespace SMS.Application
             // never abort the business transition that triggered it.
             services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 
+            // Business-event notifications. This is the semantic layer above the
+            // dispatcher: it owns the academic-relationship-to-recipient mapping
+            // (student/lecturer -> UserId, unit -> enrolled students) so individual
+            // handlers do not each re-derive "who is affected". It still writes
+            // through INotificationDispatcher, so there remains exactly ONE code path
+            // that can create a notification row.
+            services.AddScoped<IBusinessEventNotifier, BusinessEventNotifier>();
+
             // OMS request notifications: thin adapter over the existing in-app
             // notification pipeline (no SMTP / Twilio / external gateway).
             services.AddScoped<IOmsRequestNotifier, OmsRequestNotifier>();

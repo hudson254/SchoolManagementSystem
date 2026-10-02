@@ -6,6 +6,7 @@ using FluentValidation.TestHelper;
 using Moq;
 using Microsoft.Extensions.Logging;
 using SMS.Application.Exceptions;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.Features.Assignments.Commands;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
@@ -15,6 +16,11 @@ namespace SMS.UnitTests.Assignments
 {
     public class CreateAssignmentCommandTests
     {
+        // Notification collaborator. These tests assert BUSINESS behaviour, so the
+        // notifier is stubbed out (see BusinessEventNotifierStub for why the stub
+        // must be explicit); notification routing is covered separately in
+        // BusinessEventNotifierTests.
+        private readonly Mock<IBusinessEventNotifier> notifierMock = BusinessEventNotifierStub.Create();
         private readonly CreateAssignmentCommandValidator _validator;
         private readonly Mock<IAssignmentRepository> _assignmentRepositoryMock;
         private readonly Mock<IUnitRepository> _unitRepositoryMock;
@@ -103,6 +109,7 @@ namespace SMS.UnitTests.Assignments
                 _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
 
             await Assert.ThrowsAsync<NotFoundException>(
@@ -146,6 +153,7 @@ namespace SMS.UnitTests.Assignments
                 _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
 
             await Assert.ThrowsAsync<NotFoundException>(
@@ -216,6 +224,7 @@ namespace SMS.UnitTests.Assignments
                 _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
 
             var result = await handler.Handle(command, CancellationToken.None);
@@ -294,6 +303,7 @@ namespace SMS.UnitTests.Assignments
                 _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
 
             var result = await handler.Handle(command, CancellationToken.None);
@@ -363,6 +373,7 @@ namespace SMS.UnitTests.Assignments
                 _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<CreateAssignmentCommandHandler>>());
 
             var result = await handler.Handle(command, CancellationToken.None);

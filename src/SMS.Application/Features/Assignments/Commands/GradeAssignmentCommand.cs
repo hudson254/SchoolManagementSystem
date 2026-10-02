@@ -1,4 +1,5 @@
 using SMS.Domain.Interfaces;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -19,6 +20,7 @@ namespace SMS.Application.Features.Assignments.Commands
         private readonly IAuditService _auditService;
         private readonly IAssessmentRepository _assessmentRepository;
         private readonly IAssessmentEngine _assessmentEngine;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<GradeAssignmentCommandHandler> _logger;
 
         public GradeAssignmentCommandHandler(
@@ -27,6 +29,7 @@ namespace SMS.Application.Features.Assignments.Commands
             IAuditService auditService,
             IAssessmentRepository assessmentRepository,
             IAssessmentEngine assessmentEngine,
+            IBusinessEventNotifier notifier,
             ILogger<GradeAssignmentCommandHandler> logger)
         {
             _assignmentRepository = assignmentRepository;
@@ -34,6 +37,7 @@ namespace SMS.Application.Features.Assignments.Commands
             _auditService = auditService;
             _assessmentRepository = assessmentRepository;
             _assessmentEngine = assessmentEngine;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -107,6 +111,17 @@ namespace SMS.Application.Features.Assignments.Commands
             await _auditService.LogActivityAsync("AssignmentSubmission", "Grade", submission.Id.ToString(), request.SubmissionId.ToString());
 
             _logger.LogInformation("Assignment graded: Submission {SubmissionId} scored {Score}", submission.Id, request.Score);
+
+            // AFTER every commit this handler makes, including the assessment bridge
+            // and the "all graded" flag above. The student is the only affected party
+            // and is notified about their OWN submission only.
+            await _notifier.NotifyAssignmentGradedAsync(
+                assignment.Id,
+                submission.StudentId,
+                assignment.Title,
+                request.Score,
+                (int)assignment.MaxScore,
+                cancellationToken);
 
             return new AssignmentSubmissionDto
             {

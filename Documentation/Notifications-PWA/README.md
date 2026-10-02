@@ -22,8 +22,8 @@ Management System's in-app notification system and its installable PWA client.
 | Severity (Informational → Critical) | **Yes** | Rendered as text *and* colour. |
 | Role / user targeting | **Yes** | Recipients resolved server-side, deduplicated. |
 | SignalR hub, authenticated + claim-scoped | **Yes** | Hub requires authorization; groups come from token claims. |
-| Updates when the app regains focus | **Yes** | Client re-reads history on window focus. |
-| Live push into an open browser tab | **No (see 1.1)** | The hub exists and is secured, but no web client connects to it. |
+| Live push into an open browser tab | **Yes (see 1.1)** | One authenticated SignalR connection per session; the client re-reads on `ReceiveNotification`. |
+| Updates when the app regains focus | **Yes** | Client re-reads history on window focus. This is the fallback when the socket is down. |
 | Standalone installed app (Android/Desktop) | **Yes** | Chromium install flow. |
 | Standalone installed app (iOS/iPadOS) | **Yes, manually** | Share → Add to Home Screen. iOS has no install API. |
 | **Background delivery to a CLOSED app** | **No** | Not achievable without an external push service. |
@@ -31,40 +31,116 @@ Management System's in-app notification system and its installable PWA client.
 
 ### 1.1 Honest statement of the live-update path
 
-The bell and the notification centre refresh through React Query with
-`refetchOnWindowFocus: true`. A notification raised while the window is in the
-background therefore **appears when the user returns to the tab**, without a manual
-reload, but it does **not** animate in while the tab is already focused and active.
+**Live delivery (app open, socket up).** `useNotificationRealtime` opens **one**
+`HubConnection` from the authenticated `Layout` — one per signed-in session, not
+one per page. The server pushes `ReceiveNotification`; the client invalidates the
+existing `['header-notifications']` and `['header-unread-count']` queries so the
+UI re-reads authoritative server state. The payload is never inserted into a local
+list, because the server has already persisted the row and the database is the
+source of truth. Important/Critical items also raise a non-intrusive snackbar;
+Normal items do not, so routine activity cannot become an interruption.
 
-The server side of live push is complete and secured: `NotificationHub` is mapped with
-`RequireAuthorization()`, carries `[Authorize]`, and derives group membership solely
-from the validated token's claims, with no client-supplied user id anywhere.
-`SignalRNotificationRealtimePublisher` publishes to `user_{id}` groups sourced from the
-just-persisted notification. **No web client subscribes to the hub**, because
-`@microsoft/signalr` is not a frontend dependency, so that push currently reaches no
-browser. Section 8 of the validation report records this as a deployment blocker.
+**Fallback (socket unavailable).** If the connection cannot be established —
+negotiate fails, the hub is down, the LAN drops — the client reports state
+`error`, logs a warning, and the application continues to work normally. The
+notification centre and bell still read through the REST API, and
+`refetchOnWindowFocus: true` remains in place. Reconnection uses bounded
+`withAutomaticReconnect`; on reconnect the client re-reads notifications, because
+anything raised while it was offline exists only in the database and was never
+pushed.
 
 **Do not claim OS-level background push to users.** A closed or suspended browser
 process is suspended by the OS and cannot poll the LAN. The system compensates by
 making everything durable and re-reading on next activation, but it cannot wake a
 closed app, and it says so rather than pretending otherwise.
 
-### 1.2 Business events that currently raise notifications
+### 1.1a SignalR authentication posture
 
-Only the OMS request lifecycle is wired to the notification write path:
+* The client authenticates with the **same httpOnly cookie** the REST API already
+  uses (`withCredentials: true`). It sends **no** user id, **no** token and **no**
+  password — no `accessTokenFactory`, so nothing secret is handed to JavaScript.
+* The server remains the authority: `NotificationHub` carries `[Authorize]`, is
+  mapped with `RequireAuthorization()`, and derives group membership solely from
+  the validated principal's claims.
+* The client exposes no group-subscription method, so the removed
+  `SubscribeToNotifications(userId)` cross-user disclosure hole cannot be
+  reintroduced from the browser. A test pins this.
 
-| Business event | Raises a notification? |
-| --- | --- |
-| OMS request submitted (`SubmitRequestCommand`) | **Yes** — fans out to approver roles |
-| Accommodation (allocation, transfer, correction) | No |
-| Assignments (create, extend, reopen, correct) | No |
-| Unit / course selection and enrolment | No |
-| Lecture notes published | No |
-| Registration approval / rejection | No — `RegistrationNotificationService` exists but is **not registered in DI** and is never invoked |
+### 1.2 Business events that raise notifications
 
-The catalogue, the DTOs, the presentation layer and the `ActionUrl` routing in
-`frontend/sms-web/src/utils/notifications.ts` all already understand these types; what
-is missing is the business-handler wiring that would create them.
+All of the events below are wired. Each one dispatches **after** its own
+`SaveChangesAsync`, so a notification can never describe a change that was then
+rolled back, and a notification failure can never fail the business operation.
+
+#### Event matrix
+
+| Domain | Event | Recipient (resolved server-side) | Priority | Action URL |
+| --- | --- | --- | --- | --- |
+| Accommodation | House allocated (`AssignHouse`) | The occupant (student **or** lecturer) | Important | `/accommodation` |
+| Accommodation | Room allocated (`AssignRoom`) | The student | Important | `/accommodation` |
+| Accommodation | House reassigned (`ReassignHouse`) | The occupant | Important | `/accommodation` |
+| Accommodation | House vacated (`VacateHouse`) | Every occupant whose assignment was closed, de-duplicated | Important | `/accommodation` |
+| Assignment | Assignment published (`CreateAssignment`) | Students **enrolled in that unit** + the assigning lecturer | Important / Normal | `/assignments` |
+| Assignment | Due date or status changed (`UpdateAssignment`) | Students enrolled in that unit, only on a real change | Important | `/assignments` |
+| Assignment | Submission (`SubmitAssignment`) | The assignment's lecturer. **Never** the submitting student | Normal | `/assignments` |
+| Assignment | Graded (`GradeAssignment`) | The student whose work it was | Important | `/assignments` |
+| Unit | Unit renamed / withdrawn (`UpdateUnit`) | Students enrolled in **that** unit, only on a real change | Important | `/units` |
+| Course | Course renamed / availability changed (`UpdateCourse`) | Students enrolled in **that** course, only on a real change | Important | `/courses` |
+| Enrolment | Enrolled (`CreateEnrollment`) | The enrolled student | Important | `/courses` |
+| Enrolment | Dropped (`DropEnrollment`) | The student | Important | `/courses` |
+| Enrolment | Status changed (`UpdateEnrollmentStatus`) | The student, only on a real transition | Important | `/courses` |
+| Registration | Approved / rejected | The applicant themselves, with the reason | Important | — |
+| Request | OMS request submitted | Approver roles (pre-existing) | Normal | `/oms/requests` |
+
+Scoping rules that the tests pin down:
+
+* **No tenant-wide fan-out.** A notification never goes to "everyone". Recipients
+  come from the academic relationship the event actually touched.
+* **Sibling units are excluded.** `IEnrollmentRepository.GetEnrollmentsByUnitAsync`
+  joins through the *course*, so it also returns students enrolled in a different
+  unit of the same course. `BusinessEventNotifier` filters on the enrollment's own
+  `UnitId`; without that filter one unit's assessment would leak to another unit.
+* **Dropped enrollments are excluded** from unit/course fan-out.
+* **Students and lecturers without a linked identity account produce nothing**,
+  rather than an orphan notification addressed to a blank id.
+* **No-op updates notify nobody.** Re-saving a unit/course/assignment form without
+  changing anything, or setting an enrolment status to the value it already holds,
+  produces no row, so a retried request cannot create duplicates.
+
+### 1.3 Two layers, one write path
+
+```
+Business handler  ──after SaveChangesAsync──►  IBusinessEventNotifier
+                                                   │  who is affected?
+                                                   ▼
+                                              INotificationDispatcher   ◄── the ONLY writer
+                                                   │  type/priority, dedup,
+                                                   │  action-URL sanitisation,
+                                                   │  fault isolation
+                                                   ▼
+                                              CreateNotificationCommand → Notifications table
+```
+
+`INotificationDispatcher` was already the single write path but knew nothing about
+the academic graph, so every call site would have had to re-derive "who is
+affected" and each derivation would drift. `IBusinessEventNotifier` is the thin
+semantic layer above it that owns that mapping in **one** place. It never writes a
+row itself — it delegates to the dispatcher — so there is still exactly one code
+path that can create a notification.
+
+### 1.4 `RegistrationNotificationService` — removed
+
+The previously-registered-nowhere `RegistrationNotificationService` was dead code:
+not in `DependencyInjection.cs`, never injected, and therefore never invoked. It
+also bypassed the dispatcher, calling MediatR's `CreateNotificationCommand`
+directly, so it had **no** recipient de-duplication, **no** type/priority
+normalisation, **no** action-URL sanitisation and **no** fault isolation.
+
+It has been **deleted**, and the events it was supposed to cover are now raised by
+`ApproveRegistrationCommandHandler` / `RejectRegistrationCommandHandler` through
+the dispatcher. Registration outcomes therefore behave like every other
+notification. See `tests/SMS.UnitTests/Notifications/BusinessEventNotifierTests.cs`
+for the covering tests.
 
 ---
 
@@ -221,6 +297,89 @@ never cached or served from cache.
 > lists, student records and auth responses into a cache shared across users on the
 > same browser profile. One user could have been served another user's data, and a
 > cached `/auth/me` could have resurrected a session after logout.
+
+---
+
+## 5a. Frontend dependency and the air-gapped build
+
+**This section is the record of how `@microsoft/signalr` reaches a production
+build on a LAN-only, air-gapped network.**
+
+### 5a.1 What changed
+
+`frontend/sms-web/package.json` gains exactly one dependency:
+
+```json
+"@microsoft/signalr": "^8.0.7"
+```
+
+and `package-lock.json` gains the corresponding entries, each with an `integrity`
+SHA-512 hash. Pinned to 8.x deliberately: it is the version line that targets the
+same modern browsers this PWA already supports, and it is the current maintained
+release at the time of writing.
+
+### 5a.2 How the production build obtains it
+
+The production frontend image is built by `docker/Dockerfile.frontend`, which
+copies `frontend/sms-web/package*.json` and runs:
+
+```dockerfile
+RUN npm ci
+```
+
+`npm ci` installs **strictly from the committed lockfile**. That is the existing,
+already-approved controlled dependency mechanism for this repository — it is the
+same command, in the same file, that already installs the other 430 packages.
+`@microsoft/signalr` and its transitive dependencies are now pinned there with
+integrity hashes exactly like the rest of the tree, so the build is reproducible
+and a tampered tarball fails verification.
+
+**No new mechanism was introduced, no CDN was added, and nothing is loaded from
+an external URL at runtime.** The SignalR client is bundled by Vite into
+`/assets/*.js` and served from the same nginx origin as the rest of the app.
+
+### 5a.3 Verifying it resolves without internet access
+
+The deployment host is air-gapped, so the registry cannot be assumed reachable.
+Before deploying, confirm the build works with no egress:
+
+```bash
+# From the deployment host, with the WAN link down:
+docker compose -f docker/docker-compose.prod.yml build frontend
+```
+
+If the host has a pre-seeded npm cache or an internal mirror, `npm ci` will resolve
+from it. **If it does not**, the approved remedy is to prime the same lockfile on a
+connected machine and transfer the artifacts, not to weaken the build:
+
+```bash
+# ON A CONNECTED MACHINE (produces a verifiable tarball set)
+cd frontend/sms-web
+npm ci
+npm pack @microsoft/signalr@8.0.7        # or: npm cache verify / npm ci --offline
+```
+
+The tarball's SHA-512 must equal the `integrity` value recorded in
+`package-lock.json` before it is transferred. The deployment host then installs
+from that local copy:
+
+```bash
+npm ci --offline --cache /path/to/seeded/npm-cache
+```
+
+Because the lockfile pins both version and integrity, an offline install is
+byte-for-byte the same artifact a connected build would produce. **Do not** relax
+`npm ci` to `npm install`, delete the lockfile entry, or point the registry at an
+external mirror — any of those trades an air-gap guarantee for convenience.
+
+### 5a.4 Why the client cannot work without it
+
+`@microsoft/signalr` is the official Microsoft client and implements the
+negotiate + WebSocket handshake against the already-secured `NotificationHub`.
+Writing that protocol by hand would mean re-implementing transport framing,
+reconnection and message parsing — a large, security-sensitive surface — for no
+benefit. The package is therefore a hard build-time dependency, and its
+availability is a **deployment gate** (see §9.4).
 
 ---
 

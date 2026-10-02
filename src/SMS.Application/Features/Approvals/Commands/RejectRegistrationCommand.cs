@@ -41,6 +41,7 @@ namespace SMS.Application.Features.Approvals.Commands
         private readonly ILecturerRepository _lecturerRepository;
         private readonly IAuditService _auditService;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<RejectRegistrationCommandHandler> _logger;
 
         public RejectRegistrationCommandHandler(
@@ -48,12 +49,14 @@ namespace SMS.Application.Features.Approvals.Commands
             ILecturerRepository lecturerRepository,
             IAuditService auditService,
             IUnitOfWork unitOfWork,
+            IBusinessEventNotifier notifier,
             ILogger<RejectRegistrationCommandHandler> logger)
         {
             _studentRepository = studentRepository;
             _lecturerRepository = lecturerRepository;
             _auditService = auditService;
             _unitOfWork = unitOfWork;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -61,11 +64,20 @@ namespace SMS.Application.Features.Approvals.Commands
             RejectRegistrationCommand request,
             CancellationToken cancellationToken)
         {
+            // Captured in each branch so the notification below can target the
+            // applicant's own identity account. A record with no linked UserId yields
+            // null, and the notifier treats that as a no-op rather than creating an
+            // orphan notification.
+            string? studentUserId = null;
+            string? lecturerUserId = null;
+
             if (request.UserType == "Student")
             {
                 var student = await _studentRepository.GetByIdAsync(request.UserId, cancellationToken);
                 if (student == null)
                     throw new NotFoundException("Student", request.UserId);
+
+                studentUserId = student.UserId;
 
                 student.RegistrationStatus = RegistrationStatus.Rejected;
                 student.IsEnrolled = false;
@@ -80,6 +92,8 @@ namespace SMS.Application.Features.Approvals.Commands
                 if (lecturer == null)
                     throw new NotFoundException("Lecturer", request.UserId);
 
+                lecturerUserId = lecturer.UserId;
+
                 lecturer.RegistrationStatus = RegistrationStatus.Rejected;
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -93,6 +107,17 @@ namespace SMS.Application.Features.Approvals.Commands
 
             _logger.LogInformation("{UserType} {UserId} registration rejected: {Reason}",
                 request.UserType, request.UserId, request.Reason);
+
+            // AFTER the commit, and only for the branch that actually matched. The
+            // recipient is the applicant's own account, and the reason travels with
+            // the notification so the applicant learns why.
+            var applicantUserId = request.UserType == "Student" ? studentUserId : lecturerUserId;
+            await _notifier.NotifyRegistrationDecisionAsync(
+                applicantUserId,
+                request.UserType.ToLowerInvariant(),
+                approved: false,
+                reason: request.Reason,
+                cancellationToken);
 
             return new ApprovalResultDto
             {

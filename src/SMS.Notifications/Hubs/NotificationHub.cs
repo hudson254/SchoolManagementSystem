@@ -34,10 +34,44 @@ namespace SMS.Notifications.Hubs
     {
         private readonly ILogger<NotificationHub> _logger;
 
+        /// <summary>
+        /// Optional group manager override, used only by tests.
+        /// <para>
+        /// In production the hub uses the framework-supplied <c>Hub.Groups</c>,
+        /// which is backed by <see cref="IGroupManager"/>. This property exists so
+        /// the group-join behaviour - the security-critical part of this class -
+        /// can be asserted directly rather than only through an end-to-end socket
+        /// test. It is never set by the composition root and cannot be influenced
+        /// by a client.
+        /// </para>
+        /// </summary>
+        internal IGroupManager? GroupsOverride { get; set; }
+
+        /// <summary>
+        /// The group manager in effect: the test override when present, otherwise
+        /// the framework's.
+        /// <para>
+        /// Deliberately named <c>EffectiveGroups</c> rather than <c>Groups</c>: a
+        /// member called <c>Groups</c> would silently hide <see cref="Hub.Groups"/>
+        /// and make it ambiguous which manager a given call site is using.
+        /// </para>
+        /// </summary>
+        private IGroupManager EffectiveGroups => GroupsOverride ?? base.Groups;
+
         public NotificationHub(ILogger<NotificationHub> logger)
         {
             _logger = logger;
         }
+
+        /// <summary>
+        /// True when this connection was rejected and aborted.
+        /// <para>
+        /// Exposed for tests only. <see cref="Hub.OnDisconnectedAsync"/> and the
+        /// framework report this in production; there it is not read, and it
+        /// cannot be influenced by a client, so it is safe to surface.
+        /// </para>
+        /// </summary>
+        public bool ContextAborted { get; private set; }
 
         public override async Task OnConnectedAsync()
         {
@@ -50,18 +84,19 @@ namespace SMS.Notifications.Hubs
                 // silently joining no group and looking like a broken client.
                 _logger.LogWarning(
                     "Rejected unauthenticated notification connection {ConnectionId}", connectionId);
+                ContextAborted = true;
                 Context.Abort();
                 return;
             }
 
             // Group membership is derived from the token, never from the payload.
-            await Groups.AddToGroupAsync(connectionId, GroupForUser(userId));
+            await EffectiveGroups.AddToGroupAsync(connectionId, GroupForUser(userId));
 
             // Role groups let an administrator broadcast to a role group. Membership is
             // likewise taken from the claims the server already validated.
             foreach (var role in GetClaimRoles())
             {
-                await Groups.AddToGroupAsync(connectionId, GroupForRole(role));
+                await EffectiveGroups.AddToGroupAsync(connectionId, GroupForRole(role));
             }
 
             _logger.LogInformation(

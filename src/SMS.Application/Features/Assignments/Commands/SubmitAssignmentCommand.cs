@@ -1,4 +1,5 @@
 using SMS.Domain.Interfaces;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -22,6 +23,7 @@ namespace SMS.Application.Features.Assignments.Commands
         private readonly IStudentRepository _studentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<SubmitAssignmentCommandHandler> _logger;
 
         public SubmitAssignmentCommandHandler(
@@ -29,12 +31,14 @@ namespace SMS.Application.Features.Assignments.Commands
             IStudentRepository studentRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<SubmitAssignmentCommandHandler> logger)
         {
             _assignmentRepository = assignmentRepository;
             _studentRepository = studentRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -82,6 +86,16 @@ namespace SMS.Application.Features.Assignments.Commands
 
             _logger.LogInformation("Assignment submitted by student {StudentNumber} for assignment {AssignmentId}",
                 student.StudentNumber, request.AssignmentId);
+
+            // AFTER the commit above. The recipient is the assignment's own lecturer -
+            // the one person who must act on this submission. The submitting student is
+            // NOT notified, so a submission can never notify its own author.
+            await _notifier.NotifyAssignmentSubmittedAsync(
+                assignment.Id,
+                assignment.LecturerId ?? Guid.Empty,
+                assignment.Title,
+                $"{student.FirstName} {student.LastName}".Trim(),
+                cancellationToken);
 
             return new AssignmentSubmissionDto
             {

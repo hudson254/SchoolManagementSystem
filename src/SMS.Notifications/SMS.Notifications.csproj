@@ -20,4 +20,11 @@
     <ProjectReference Include="..\SMS.Infrastructure\SMS.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- NotificationHub exposes an internal test seam (GroupsOverride) so the
+         security-critical group-join logic can be asserted directly. Production
+         code never sets it; only the unit-test assembly can reach it. -->
+    <InternalsVisibleTo Include="SMS.UnitTests" />
+  </ItemGroup>
+
 </Project>

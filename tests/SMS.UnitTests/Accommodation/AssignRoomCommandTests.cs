@@ -6,6 +6,7 @@ using FluentValidation.TestHelper;
 using Moq;
 using Microsoft.Extensions.Logging;
 using SMS.Application.Exceptions;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.Features.Accommodation.Commands;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
@@ -15,6 +16,11 @@ namespace SMS.UnitTests.Accommodation
 {
     public class AssignRoomCommandTests
     {
+        // Notification collaborator. These tests assert BUSINESS behaviour, so the
+        // notifier is stubbed out (see BusinessEventNotifierStub for why the stub
+        // must be explicit); notification routing is covered separately in
+        // BusinessEventNotifierTests.
+        private readonly Mock<IBusinessEventNotifier> notifierMock = BusinessEventNotifierStub.Create();
         private readonly AssignRoomCommandValidator _validator;
         private readonly Mock<IAccommodationRepository> _accommodationRepositoryMock;
         private readonly Mock<IStudentRepository> _studentRepositoryMock;
@@ -79,6 +85,7 @@ namespace SMS.UnitTests.Accommodation
                 _studentRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<AssignRoomCommandHandler>>());
 
             await Assert.ThrowsAsync<NotFoundException>(
@@ -113,6 +120,7 @@ namespace SMS.UnitTests.Accommodation
                 _studentRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<AssignRoomCommandHandler>>());
 
             await Assert.ThrowsAsync<BusinessRuleException>(
@@ -151,6 +159,7 @@ namespace SMS.UnitTests.Accommodation
                 _studentRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<AssignRoomCommandHandler>>());
 
             await Assert.ThrowsAsync<NotFoundException>(
@@ -217,6 +226,7 @@ namespace SMS.UnitTests.Accommodation
                 _studentRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<AssignRoomCommandHandler>>());
 
             await Assert.ThrowsAsync<ConflictException>(
@@ -280,6 +290,7 @@ namespace SMS.UnitTests.Accommodation
                 _studentRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 Mock.Of<ILogger<AssignRoomCommandHandler>>());
 
             var result = await handler.Handle(command, CancellationToken.None);

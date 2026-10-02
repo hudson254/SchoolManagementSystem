@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
@@ -62,6 +63,7 @@ namespace SMS.Application.Features.Units.Commands
         private readonly ICourseRepository _courseRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<UpdateUnitCommandHandler> _logger;
 
         public UpdateUnitCommandHandler(
@@ -69,12 +71,14 @@ namespace SMS.Application.Features.Units.Commands
             ICourseRepository courseRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<UpdateUnitCommandHandler> logger)
         {
             _unitRepository = unitRepository;
             _courseRepository = courseRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -114,6 +118,11 @@ namespace SMS.Application.Features.Units.Commands
                 }
             }
 
+            // Captured before the mutation so the notification describes the real
+            // change rather than restating the new state.
+            var wasActive = unit.IsActive;
+            var previousName = unit.Name;
+
             // Update the unit
             unit.Name = request.Name;
             unit.Code = request.Code;
@@ -136,6 +145,23 @@ namespace SMS.Application.Features.Units.Commands
             await _auditService.LogAsync("UpdateUnit", unit.Id.ToString(), $"Unit updated: {unit.Code}");
 
             _logger.LogInformation("Unit updated: {UnitCode}", unit.Code);
+
+            // AFTER the commit. Only students actually enrolled in THIS unit are told,
+            // and only when something they would act on changed: a rename, a detail
+            // change, or the unit being withdrawn. A no-op save notifies nobody, so
+            // repeatedly saving the unit form cannot flood anyone.
+            var renamed = !string.Equals(previousName, unit.Name, StringComparison.Ordinal);
+            var withdrawn = wasActive && !request.IsActive;
+
+            if (renamed || withdrawn || !request.IsActive)
+            {
+                var detail = withdrawn
+                    ? "This unit has been withdrawn and is no longer available."
+                    : $"This unit is now titled \"{unit.Name}\" ({unit.Credits} credits).";
+
+                await _notifier.NotifyUnitChangedAsync(
+                    unit.Id, unit.Code, unit.Name, detail, cancellationToken);
+            }
 
             // Return the DTO
             return new UnitDto

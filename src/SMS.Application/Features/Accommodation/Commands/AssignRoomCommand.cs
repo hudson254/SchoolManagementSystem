@@ -1,5 +1,6 @@
 using FluentValidation;
 using SMS.Shared.DTOs;
+using SMS.Application.Common.Interfaces;
 
 using SMS.Domain.Interfaces;
 using SMS.Application.DTOs;
@@ -37,6 +38,7 @@ namespace SMS.Application.Features.Accommodation.Commands
         private readonly IStudentRepository _studentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<AssignRoomCommandHandler> _logger;
 
         public AssignRoomCommandHandler(
@@ -44,12 +46,14 @@ namespace SMS.Application.Features.Accommodation.Commands
             IStudentRepository studentRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<AssignRoomCommandHandler> logger)
         {
             _accommodationRepository = accommodationRepository;
             _studentRepository = studentRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -102,6 +106,15 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             _logger.LogInformation("Room {RoomNumber} assigned to student {StudentNumber}",
                 room.RoomNumber, student.StudentNumber);
+
+            // AFTER the commit above, so the student is never told about a room
+            // allocation that was subsequently rolled back.
+            await _notifier.NotifyAccommodationAllocatedAsync(
+                request.StudentId,
+                lecturerId: null,
+                $"You have been allocated room {room.RoomNumber}. Please confirm your move-in arrangements.",
+                room.Id,
+                cancellationToken);
 
             return new AccommodationAssignmentDto
             {

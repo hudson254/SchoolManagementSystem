@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SMS.Application.Exceptions;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.Features.Accommodation.Commands;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
@@ -12,6 +13,11 @@ namespace SMS.UnitTests.Accommodation
 {
     public class AccommodationCapacityAndCheckInTests
     {
+        // Notification collaborator. These tests assert BUSINESS behaviour, so the
+        // notifier is stubbed out (see BusinessEventNotifierStub for why the stub
+        // must be explicit); notification routing is covered separately in
+        // BusinessEventNotifierTests.
+        private readonly Mock<IBusinessEventNotifier> notifierMock = BusinessEventNotifierStub.Create();
         private readonly Mock<IAccommodationRepository> _repositoryMock;
         private readonly Mock<ISemesterRepository> _semesterRepositoryMock;
         private readonly Mock<IUnitOfWork> _unitOfWorkMock;
@@ -38,6 +44,7 @@ namespace SMS.UnitTests.Accommodation
                 _semesterRepositoryMock.Object,
                 _unitOfWorkMock.Object,
                 _auditServiceMock.Object,
+                notifierMock.Object,
                 _assignLoggerMock.Object);
 
             _checkInHandler = new CheckInHouseHandler(

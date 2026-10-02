@@ -3,6 +3,7 @@ using SMS.Shared.DTOs;
 
 using SMS.Domain.Interfaces;
 using SMS.Application.Common;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -71,6 +72,7 @@ namespace SMS.Application.Features.Assignments.Commands
         private readonly ISemesterRepository _semesterRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<CreateAssignmentCommandHandler> _logger;
 
         public CreateAssignmentCommandHandler(
@@ -80,6 +82,7 @@ namespace SMS.Application.Features.Assignments.Commands
             ISemesterRepository semesterRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<CreateAssignmentCommandHandler> logger)
         {
             _assignmentRepository = assignmentRepository;
@@ -88,6 +91,7 @@ namespace SMS.Application.Features.Assignments.Commands
             _semesterRepository = semesterRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -156,6 +160,20 @@ namespace SMS.Application.Features.Assignments.Commands
             await _auditService.LogActivityAsync("Assignment", "Create", assignment.Id.ToString(), "create");
 
             _logger.LogInformation("Assignment created: {Title} for unit {UnitCode}", assignment.Title, unit.Code);
+
+            // AFTER the commit above. Recipients are the students actually enrolled in
+            // this unit (not the whole tenant), resolved centrally by the notifier and
+            // de-duplicated by the dispatcher.
+            // Due date is read from the persisted entity (non-nullable) rather than
+            // the local `dueDate` (DateTime?), which can be null when no closing
+            // date was supplied.
+            await _notifier.NotifyAssignmentPublishedAsync(
+                assignment.Id,
+                assignment.UnitId,
+                $"New Assignment: {assignment.Title}",
+                $"A new assignment, \"{assignment.Title}\", has been posted for {unit.Code} - {unit.Name}. It is due {assignment.DueDate:yyyy-MM-dd HH:mm} UTC.",
+                includeLecturer: true,
+                cancellationToken: cancellationToken);
 
             return new AssignmentDto
             {

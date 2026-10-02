@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
@@ -37,17 +38,20 @@ namespace SMS.Application.Features.Accommodation.Commands
         private readonly IAccommodationRepository _repository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<ReassignHouseHandler> _logger;
 
         public ReassignHouseHandler(
             IAccommodationRepository repository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<ReassignHouseHandler> logger)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -154,6 +158,16 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             _logger.LogInformation("{OccupantType} {OccupantId} reassigned from house {OldHouse} to house {NewHouse}",
                 request.OccupantType, occupantId, currentHouse.HouseNumber, newHouse.HouseNumber);
+
+            // AFTER the commit above: the occupant's new allocation is only real once
+            // the database write has succeeded.
+            await _notifier.NotifyAccommodationChangedAsync(
+                request.StudentId,
+                request.LecturerId,
+                "Accommodation Reassigned",
+                $"Your accommodation has been moved from house {currentHouse.HouseNumber} to house {newHouse.HouseNumber}.",
+                newHouse.Id,
+                cancellationToken);
 
             return true;
         }

@@ -53,6 +53,7 @@ namespace SMS.Application.Features.Approvals.Commands
         private readonly IUnitAllocationRepository _unitAllocationRepository;
         private readonly IAuditService _auditService;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<ApproveRegistrationCommandHandler> _logger;
 
         public ApproveRegistrationCommandHandler(
@@ -62,6 +63,7 @@ namespace SMS.Application.Features.Approvals.Commands
             IUnitAllocationRepository unitAllocationRepository,
             IAuditService auditService,
             IUnitOfWork unitOfWork,
+            IBusinessEventNotifier notifier,
             ILogger<ApproveRegistrationCommandHandler> logger)
         {
             _studentRepository = studentRepository;
@@ -70,6 +72,7 @@ namespace SMS.Application.Features.Approvals.Commands
             _unitAllocationRepository = unitAllocationRepository;
             _auditService = auditService;
             _unitOfWork = unitOfWork;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -109,6 +112,15 @@ namespace SMS.Application.Features.Approvals.Commands
 
                 _logger.LogInformation("Student {StudentId} registration approved", student.Id);
 
+                // AFTER the commit. This replaces the removed, never-registered
+                // RegistrationNotificationService: the same events now flow through
+                // INotificationDispatcher, so they get type/priority normalisation,
+                // action-URL sanitisation and fault isolation like every other
+                // notification. The recipient is the applicant's own account.
+                await _notifier.NotifyRegistrationDecisionAsync(
+                    student.UserId, "student", approved: true,
+                    reason: request.Notes, cancellationToken);
+
                 return new ApprovalResultDto
                 {
                     UserId = student.Id,
@@ -146,6 +158,11 @@ namespace SMS.Application.Features.Approvals.Commands
                     $"Lecturer registration approved. Notes: {request.Notes ?? "N/A"}");
 
                 _logger.LogInformation("Lecturer {LecturerId} registration approved", lecturer.Id);
+
+                // AFTER the commit - see the student branch above.
+                await _notifier.NotifyRegistrationDecisionAsync(
+                    lecturer.UserId, "lecturer", approved: true,
+                    reason: request.Notes, cancellationToken);
 
                 return new ApprovalResultDto
                 {

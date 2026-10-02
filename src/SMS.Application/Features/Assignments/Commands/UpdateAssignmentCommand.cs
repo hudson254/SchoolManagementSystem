@@ -3,6 +3,7 @@ using SMS.Shared.DTOs;
 
 using SMS.Domain.Interfaces;
 using SMS.Application.Common;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -60,17 +61,20 @@ namespace SMS.Application.Features.Assignments.Commands
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<UpdateAssignmentCommandHandler> _logger;
 
         public UpdateAssignmentCommandHandler(
             IAssignmentRepository assignmentRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<UpdateAssignmentCommandHandler> logger)
         {
             _assignmentRepository = assignmentRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -88,6 +92,11 @@ namespace SMS.Application.Features.Assignments.Commands
             {
                 _logger.LogWarning("Assignment has submissions, changes limited for ID: {AssignmentId}", request.Id);
             }
+
+            // Captured BEFORE the mutation below so the notification can describe what
+            // actually changed rather than restating the new state.
+            var previousDueDate = assignment.DueDate;
+            var previousStatus = assignment.Status;
 
             assignment.Title = request.Title;
             assignment.Description = request.Description ?? string.Empty;
@@ -109,6 +118,27 @@ namespace SMS.Application.Features.Assignments.Commands
             _logger.LogInformation("Assignment updated: {Title}", assignment.Title);
 
             var submissions = await _assignmentRepository.GetSubmissionsAsync(request.Id, cancellationToken);
+
+            // AFTER the commit. Students enrolled in the unit learn that the
+            // assignment they are working towards has materially changed (a moved due
+            // date, a new status). Students NOT enrolled in this unit are never
+            // included, so a unit's assessment is not leaked to a sibling unit.
+            var dueDateChanged = Math.Abs((assignment.DueDate - previousDueDate).TotalSeconds) > 1;
+            var statusChanged = !string.Equals(previousStatus, assignment.Status, StringComparison.OrdinalIgnoreCase);
+            if (dueDateChanged || statusChanged)
+            {
+                var detail = dueDateChanged
+                    ? $"The due date is now {assignment.DueDate:yyyy-MM-dd HH:mm} UTC."
+                    : $"Its status is now \"{assignment.Status}\".";
+
+                await _notifier.NotifyAssignmentPublishedAsync(
+                    assignment.Id,
+                    assignment.UnitId,
+                    $"Assignment Updated: {assignment.Title}",
+                    $"\"{assignment.Title}\" has changed. {detail}",
+                    includeLecturer: true,
+                    cancellationToken);
+            }
 
             return new AssignmentDto
             {

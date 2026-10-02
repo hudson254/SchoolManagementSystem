@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
@@ -36,6 +37,7 @@ namespace SMS.Application.Features.Accommodation.Commands
         private readonly ISemesterRepository _semesterRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<AssignHouseHandler> _logger;
 
         public AssignHouseHandler(
@@ -43,12 +45,14 @@ namespace SMS.Application.Features.Accommodation.Commands
             ISemesterRepository semesterRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<AssignHouseHandler> logger)
         {
             _repository = repository;
             _semesterRepository = semesterRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -131,6 +135,17 @@ namespace SMS.Application.Features.Accommodation.Commands
 
             _logger.LogInformation("House {HouseNumber} assigned to {OccupantType} {OccupantId}, occupancy now {Occupied}/{Capacity}",
                 house.HouseNumber, request.OccupantType, occupantId, house.OccupiedCount, house.Capacity);
+
+            // Notification AFTER the transaction above has committed, so the occupant
+            // is never told about an allocation that was then rolled back. The
+            // notifier swallows its own failures, so this cannot fail the request.
+            await _notifier.NotifyAccommodationAllocatedAsync(
+                request.StudentId,
+                request.LecturerId,
+                $"You have been allocated house {house.HouseNumber}. Please confirm your move-in arrangements.",
+                house.Id,
+                cancellationToken);
+
             return assignment.Id;
         }
     }

@@ -1,9 +1,12 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
+using System;
+using System.Collections.Generic;
 
 namespace SMS.Application.Features.Accommodation.Commands
 {
@@ -27,17 +30,20 @@ namespace SMS.Application.Features.Accommodation.Commands
         private readonly IAccommodationRepository _repository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<VacateHouseHandler> _logger;
 
         public VacateHouseHandler(
             IAccommodationRepository repository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<VacateHouseHandler> logger)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -82,6 +88,26 @@ namespace SMS.Application.Features.Accommodation.Commands
                 $"Vacated house {house.HouseNumber} (HouseId: {house.Id}, LaneId: {house.LaneId}, {activeAssignments.Count()} active assignment(s) closed)");
 
             _logger.LogInformation("House {HouseNumber} vacated ({Count} assignments closed)", house.HouseNumber, activeAssignments.Count());
+
+            // AFTER the commit. Each occupant is notified individually because
+            // vacating a house closes EVERY active assignment on it, and each of those
+            // occupants is a different user. Distinct() guards against a duplicate
+            // occupant row producing two copies of the same notification.
+            var notified = new HashSet<Guid>();
+            foreach (var closed in activeAssignments)
+            {
+                var occupantId = closed.StudentId ?? closed.LecturerId;
+                if (!occupantId.HasValue || occupantId.Value == Guid.Empty) continue;
+                if (!notified.Add(occupantId.Value)) continue;
+
+                await _notifier.NotifyAccommodationEndedAsync(
+                    closed.StudentId,
+                    closed.LecturerId,
+                    $"Your accommodation at house {house.HouseNumber} has ended. Please complete any outstanding check-out formalities.",
+                    house.Id,
+                    cancellationToken);
+            }
+
             return true;
         }
     }

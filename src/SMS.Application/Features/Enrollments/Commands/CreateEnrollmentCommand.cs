@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
 using SMS.Domain.Entities;
@@ -42,6 +43,7 @@ namespace SMS.Application.Features.Enrollments.Commands
         private readonly ICourseRepository _courseRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAuditService _auditService;
+        private readonly IBusinessEventNotifier _notifier;
         private readonly ILogger<CreateEnrollmentCommandHandler> _logger;
 
         public CreateEnrollmentCommandHandler(
@@ -50,6 +52,7 @@ namespace SMS.Application.Features.Enrollments.Commands
             ICourseRepository courseRepository,
             IUnitOfWork unitOfWork,
             IAuditService auditService,
+            IBusinessEventNotifier notifier,
             ILogger<CreateEnrollmentCommandHandler> logger)
         {
             _enrollmentRepository = enrollmentRepository;
@@ -57,6 +60,7 @@ namespace SMS.Application.Features.Enrollments.Commands
             _courseRepository = courseRepository;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -96,6 +100,16 @@ namespace SMS.Application.Features.Enrollments.Commands
             await _auditService.LogAsync("Enrollment", "Create", enrollment.Id.ToString());
 
             _logger.LogInformation("Enrollment created: Student {StudentId} enrolled in Unit {UnitId}", request.StudentId, request.UnitId);
+
+            // AFTER the commit. The recipient is the enrolled student only. The unit
+            // code/name come from the enrollment's own navigation properties, so the
+            // message cannot be mislabelled by a stale local variable.
+            await _notifier.NotifyStudentEnrolledAsync(
+                request.StudentId,
+                enrollment.Unit?.Code ?? string.Empty,
+                enrollment.Unit?.Name ?? course.Name,
+                enrollment.Semester?.Name ?? string.Empty,
+                cancellationToken);
 
             return new EnrollmentDto
             {

@@ -7,6 +7,8 @@ import { Sidebar } from './Sidebar';
 import { Footer } from './Footer';
 import { InstallPrompt, PwaUpdateBanner } from '../Pwa/InstallPrompt';
 import { useServiceWorker } from '../../hooks/useServiceWorker';
+import { useNotificationRealtime } from '../../hooks/useNotificationRealtime';
+import { useAuth } from '../../hooks/useAuth';
 
 const drawerWidth = 280;
 
@@ -14,10 +16,17 @@ export const Layout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { user } = useAuth();
 
   // Service worker lifecycle for the installed PWA. Surfacing an available update
   // is what stops an installed user being pinned to a stale frontend build.
   const { updateAvailable, applyUpdate } = useServiceWorker();
+
+  // Live notification delivery. Mounted here - once, inside the authenticated
+  // shell - so there is exactly ONE SignalR connection per signed-in session
+  // rather than one per page. The hook is gated on `user`, so it starts on login
+  // and its cleanup closes the socket on logout/unmount.
+  useNotificationRealtime(!!user);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
