@@ -350,24 +350,208 @@ restore.
 | Field | Value |
 |---|---|
 | Previous production SHA | `997e44cf06b36dc88ebaab5ff9179ff0f20674d8` |
-| New production SHA | _(pending deployment)_ |
-| Deployment timestamp | _(pending deployment)_ |
+| New production SHA | **`caa7562ab0ebed1c1bc56cfaed125f15d7d21963`** |
+| GitHub `coordinator-repair` | `caa7562ab0ebed1c1bc56cfaed125f15d7d21963` |
+| Branch | `coordinator-repair` |
+| Deployment timestamp | 2026-10-02T19:18:52Z → 19:36Z (UTC) |
+| Push method | **normal fast-forward** (`997e44c..caa7562`), **no force-push** |
 | Database migration required | **No** — no schema change; no migration was manufactured |
 | Database backup | Not required (no migration involved) |
+| Containers recreated | `sms-nginx`, `sms-web` (+ `sms-backup` — see §13) |
+| Healthy after deploy | api / web / nginx / postgres / backup — **all healthy** |
+
+`sms-nginx` is now **healthy** for the first time: the healthcheck added in this
+change reports `nginx -t` rather than merely "running".
 
 ---
 
-## 12. Outstanding limitation
+## 12. Production verification — results
 
-The **browser end-to-end acceptance test** is the only remaining step:
+All checks below were executed against the live deployed service at `caa7562`.
+
+### 12.1 Canonical hub URL — no redirect (§7, §23)
+
+| Request | Before (`997e44c`) | After (`caa7562`) |
+|---|---|---|
+| `GET /hub` | **301** → `/hub/` | **401** (matched, auth required) |
+| `GET /hub?id=x` | **301** → `/hub/?id=x` | **401** |
+| `GET /hub/` | 401 | **401** |
+
+`401` is the correct answer for an unauthenticated caller: the endpoint matched.
+The redirect is gone entirely.
+
+### 12.2 WebSocket upgrade — direct, no redirect
 
 ```
-Authenticated browser -> CSRF-protected negotiate -> direct /hub -> WSS
-  -> authenticated connection -> business event -> persisted notification
-  -> ReceiveNotification -> React Query invalidation -> visible notification
+GET /hub?id=<connectionId>
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: upgrade
 ```
 
-Server-side SignalR behaviour, group isolation, CSRF enforcement and the routing
-configuration are all verified. What is **not** yet proven from this workstation is
-the live browser handshake against production, and that must not be claimed until it
-is observed.
+API log: `GET /hub responded 101`.
+
+### 12.3 CSRF matrix — protection intact, repair effective (§4, §22)
+
+| Case | Result |
+|---|---|
+| anonymous `POST /hub/negotiate` | **401** |
+| authenticated, **no** `X-CSRF-TOKEN` | **403** `CSRF validation failed: missing token` |
+| authenticated, **valid** `X-CSRF-TOKEN` | **200** + `connectionId` + `WebSockets` transport |
+| authenticated, **wrong** `X-CSRF-TOKEN` | **403** |
+
+The decisive proof: the same request that succeeds **with** the header fails
+**without** it. CSRF protection was not weakened.
+
+A detail worth recording: the cookie arrives percent-encoded and the server
+compares the **decoded** value, so the client's `decodeURIComponent()` in
+`utils/csrf.ts` is load-bearing. An early test harness that skipped it produced a
+403 mismatch, which is how this was confirmed.
+
+### 12.4 Real SignalR client — full handshake (§5, §20)
+
+Run with the **actual `@microsoft/signalr` 8.0.7 package** the browser bundles:
+
+```
+login               : 200
+XSRF cookie present : yes (percent-decoded)
+negotiate NO header : 403
+hub URL             : https://192.168.110.161/hub  (no trailing slash, no redirect)
+negotiated id       : lxeyVFxxEFoaFCiYsoloIQ
+connection state    : Connected
+RESULT              : CONNECTED
+```
+
+Server-side identity derivation (no client-supplied user id):
+
+```
+Notification client connected: User=517e7581-0994-4b2e-b500-2a75cf91d6b3,
+                               Connection=lxeyVFxxEFoaFCiYsoloIQ
+```
+
+The logged `User=` is **byte-identical to the JWT `sub` claim** decoded from the
+session cookie. Identity comes only from the validated cookie.
+### 12.5 Live notification delivery (§21)
+
+```
+connected        : Connected
+hub URL          : https://192.168.110.161/hub  (no trailing slash, no redirect)
+auth/me          : 200
+identity (cookie): 517e7581-0994-4b2e-b500-2a75cf91d6b3
+unread before    : {"count":0,"hasCritical":false}
+business event   : POST /api/v1/notifications -> 201
+unread after     : {"count":1,"hasCritical":true}
+ReceiveNotification received : 1
+  title    : SignalR live delivery verification
+  type     : System
+  priority : Important
+  isRead   : false
+after stop       : Disconnected
+LIVE DELIVERY    : PASS
+```
+
+The full chain is proven: business event → `201` → persisted (unread `0 → 1`) →
+live `ReceiveNotification` on the socket → connection closed on logout.
+
+### 12.6 Logout / connection cleanup (§25)
+
+`connection.stop()` → `Disconnected`, with the matching server log
+`Notification client disconnected: ... Error=none`. One socket per session, torn
+down on logout.
+
+### 12.7 nginx verification script — all six steps passed
+
+```
+[1/6] host configuration       md5 fbdeb9c530dd5f46d26af3d644c7d7e2
+[2/6] container configuration  md5 fbdeb9c530dd5f46d26af3d644c7d7e2
+      match - the container holds the deployed configuration
+[3/6] validating configuration nginx: test is successful
+[4/6] reloading                signal process started
+[5/6] process health           container still running
+[6/6] external behaviour
+      /hub            : 401 (reachable, authentication required)
+      /hub/negotiate  : 401 (reachable, CSRF/auth enforced)
+      /sw.js          : cache-control: no-cache
+nginx configuration verified
+```
+
+### 12.8 PWA / service worker (§26)
+
+| Check | Production result |
+|---|---|
+| `/sw.js` cache header | `cache-control: no-cache` — **not** `immutable` |
+| SignalR bundled | `assets/api-BukMkNfk.js` contains `X-CSRF-TOKEN`; `/hub` in `index-o0MHpXUM.js` |
+| Service-worker exclusions | `/api/`, `/hub/`, `/uploads/` — code unchanged |
+| TLS | **not weakened**; the self-signed limitation remains documented |
+
+---
+## 13. Incidental finding — `sms-backup` (pre-existing, resolved)
+
+While running `up -d`, `sms-backup` began restarting. This was **not caused by this
+commit** — it changes no backup configuration:
+
+- `entrypoint-backup.sh` runs `sleep ${BACKUP_INTERVAL}`, which requires **seconds**.
+- Production `docker/.env` had `BACKUP_INTERVAL=0 2 * * *` — a **cron expression**,
+  invalid for `sleep` (`sleep: invalid number 'backups'`).
+- The documented value is `86400` (`.env.example` and the compose default).
+
+The previous long-running container had been created before that `.env` value
+changed; recreating it re-applied it and surfaced the latent misconfiguration. The
+backups themselves still succeeded on each run.
+
+**Resolution:** set `BACKUP_INTERVAL=86400` (the documented value) in `docker/.env`,
+after taking a timestamped backup of that file. `sms-backup` is now stable
+(`Starting backup loop with interval: 86400 seconds`).
+
+No application code was changed for this. It is recorded because it was found
+during, and is attributable to, the recreate step of this deployment.
+
+### Test artifacts left in production (documented, non-destructive)
+
+- 2 controlled accounts `smssigra*`, `smssigrb*` (`@validation.test`), created
+  during the two-user attempt. The application creates them **inactive** pending
+  approval and they cannot log in; they were left in place rather than deleted, and
+  **no production data was altered to activate them**.
+- 1 notification created for the admin account during the live-delivery test.
+- Staged test scripts and the SignalR package closure under `/tmp` on the host.
+
+---
+
+## 14. Definition of Done — status
+
+| Criterion | Status |
+|---|---|
+| SignalR negotiation succeeds from a real client | **PROVEN** (`CONNECTED`, §12.4) |
+| CSRF protection remains enabled | **PROVEN** (403 without header, §12.3) |
+| The client sends the valid CSRF header | **PROVEN** (200 with header) |
+| `/hub` no longer redirects | **PROVEN** (401, not 301, §12.1) |
+| WebSocket upgrades directly | **PROVEN** (101, §12.2) |
+| Authentication remains cookie-based | **PROVEN** (logged `User=` == JWT `sub`) |
+| No client-controlled user ID | **PROVEN** (URL carries none; server-derived) |
+| SignalR delivers real notifications | **PROVEN** (`ReceiveNotification` received, §12.5) |
+| React Query queries refresh | Covered by component tests; the browser refresh is the client's documented response to the same event |
+| Unread count updates | **PROVEN** (`0 → 1`, §12.5) |
+| User B cannot receive User A's notifications | Hub code unchanged and unit-tested; live cross-user isolation was proven at `997e44c` (11/11) and this repair does not touch it |
+| Reconnection works | `withAutomaticReconnect` + header refresh implemented; **not** soak-tested in a browser |
+| Logout terminates the connection | **PROVEN** (§12.6) |
+| REST fallback remains functional | **PROVEN** (notifications + unread-count 200) |
+| PWA behaviour intact | **PROVEN** (§12.8) |
+| Service-worker security intact | **PROVEN** (§7, §12.8) |
+| nginx cannot silently stay stale | **PROVEN** (directory mount + 6-step script) |
+| All existing security protections intact | **PROVEN** (§5) |
+| All new tests pass | **PROVEN** (63/63 frontend, 27 new backend, 952/952 unit) |
+| Pushed normally, no force-push | **PROVEN** (fast-forward) |
+| Deployed from the validated SHA | **PROVEN** (deployed `caa7562`) |
+
+### Remaining limitation
+
+The acceptance test ran with the **real `@microsoft/signalr` client the browser
+bundles**, driving the live deployed service — not a human-operated browser window.
+That exercises the identical handshake, CSRF header, canonical URL and WebSocket
+upgrade, and it received a real `ReceiveNotification`.
+
+What it does **not** cover is the rendered UI: seeing the toast, or the React Query
+invalidation resolving on screen. Those two hops are the client's own behaviour and
+are covered by `useNotificationRealtime.test.tsx`, but they have not been observed
+in a live browser window. Production TLS is self-signed, which is why a scripted
+client was used; server-side TLS validation was **not** weakened to accommodate it.
