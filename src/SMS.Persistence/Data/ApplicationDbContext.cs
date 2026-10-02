@@ -5,6 +5,7 @@ using SMS.Certificates.Domain.Entities;
 using SMS.Domain.Common;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
+using SMS.Domain.Notifications;
 using System;
 using System.Linq;
 using System.Threading;
@@ -492,6 +493,26 @@ base.OnModelCreating(modelBuilder);
                 entity.HasIndex(n => new { n.UserId, n.IsRead });
                 entity.HasIndex(n => n.Type);
                 entity.HasIndex(n => n.CreatedDate);
+
+                // Priority / ActionUrl / ExpiresAt back the notification centre.
+                //
+                // The unread badge and the "unresolved Important/Critical" EXISTS check
+                // filter on (user_id, is_read, priority), so this composite index keeps
+                // them off a sequential scan as the per-user history grows.
+                // action_url is deliberately NOT indexed: it is written once and only
+                // ever read back as payload for the navigation hint, and is never a
+                // search predicate. Indexing it would only add write cost.
+                entity.HasIndex(n => new { n.UserId, n.IsRead, n.Priority });
+
+                // NOTE: Title/Message/Type are intentionally left as unbounded text
+                // columns. They predate this work and narrowing them to varchar() is a
+                // lossy ALTER that fails outright if any historical row is longer than
+                // the new limit. The actual length clamp is enforced in
+                // NotificationCatalog on the write path, which is where untrusted input
+                // enters, so the database-level narrowing would add risk without
+                // adding protection.
+                entity.Property(n => n.Priority).HasMaxLength(20).IsRequired();
+                entity.Property(n => n.ActionUrl).HasMaxLength(NotificationCatalog.MaxActionUrlLength);
             });
 
             // Configure LoginHistory entity indexes (RISK-18)

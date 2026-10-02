@@ -28,25 +28,36 @@ import {
   DarkMode,
   LightMode,
   Dashboard as DashboardIcon,
-  PersonAdd as PersonAddIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Info as InfoIcon,
   Warning as WarningIcon,
+  ReportProblem as ReportProblemIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { notificationService } from '../../services/notification.service';
+import { notificationService, getNotificationTimestamp } from '../../services/notification.service';
+import {
+  formatNotificationDate,
+  getNotificationActionLabel,
+  getNotificationActionUrl,
+  getNotificationVisuals,
+  priorityRank,
+} from '../../utils/notifications';
 
 interface NotificationItem {
   id: string;
   title: string;
   message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  read: boolean;
-  timestamp: Date;
-  link?: string;
+  type: string;
+  priority: string;
+  isRead: boolean;
+  timestamp: string;
+  actionUrl: string | null;
+  actionLabel: string;
+  /** Severity rank, used to sort the most important unread item to the top. */
+  rank: number;
 }
 
 const typeOf = (raw: string): NotificationItem['type'] => {
@@ -70,11 +81,21 @@ export const Header: React.FC = () => {
   const { data: notificationsData } = useQuery({
     queryKey: ['header-notifications'],
     queryFn: () => notificationService.getNotifications({ page: 1, pageSize: 10 }),
-    enabled: true,
+    // Never poll the bell for a user who is not signed in.
+    enabled: !!user,
+    // The panel is a live view; refetching on window focus is what makes a
+    // notification raised in another tab (or while the window was in the
+    // background) appear without a manual reload. This is the documented
+    // substitute for real background push on a LAN-only deployment.
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
   });
   const { data: unreadData } = useQuery({
     queryKey: ['header-unread-count'],
     queryFn: () => notificationService.getUnreadCount(),
+    enabled: !!user,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
   });
 
   const markAllReadMutation = useMutation({
@@ -82,19 +103,46 @@ export const Header: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['header-notifications'] });
       queryClient.invalidateQueries({ queryKey: ['header-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  // Marking a single notification read must update the bell immediately, otherwise
+  // the badge stays stale until the next refetch.
+  const markAsReadMutation = useMutation({
+    mutationFn: (id: string) => notificationService.markAsRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['header-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['header-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 
   const rawNotifications = notificationsData?.items || [];
-  const notifications: NotificationItem[] = rawNotifications.map((n: any) => ({
-    id: n.id,
-    title: n.title || 'Notification',
-    message: n.message || '',
-    type: typeOf(n.type),
-    read: !!n.isRead,
-    timestamp: new Date(n.createdDate || Date.now()),
-  }));
+  const notifications: NotificationItem[] = rawNotifications
+    .map((n) => {
+      // Keep the raw record so the shared presentation helpers can read the real
+      // fields (priority, type) instead of the lossy 'type' bucket.
+      const visuals = getNotificationVisuals(n);
+      return {
+        id: n.id,
+        title: n.title || 'Notification',
+        message: n.message || '',
+        type: n.type,
+        priority: visuals.severityLabel,
+        isRead: !!n.isRead,
+        timestamp: getNotificationTimestamp(n),
+        actionUrl: getNotificationActionUrl(n),
+        actionLabel: getNotificationActionLabel(n),
+        rank: priorityRank(n.priority),
+      };
+    })
+    // Most severe first so an unresolved Important/Critical item is never buried
+    // under routine informational noise.
+    .sort((a, b) => b.rank - a.rank);
+
   const unreadCount = unreadData?.count || 0;
+  const hasCriticalUnread = !!unreadData?.hasCritical;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -112,6 +160,22 @@ export const Header: React.FC = () => {
     setNotificationAnchor(null);
   };
 
+  /**
+   * Opening a notification marks it read and, when it carries an action target,
+   * navigates there. The target was sanitised server-side AND re-checked by
+   * getNotificationActionUrl, and navigating is only a hint: the destination page
+   * and its API calls still enforce authorization and tenant isolation.
+   */
+  const handleNotificationClick = (notification: NotificationItem) => {
+    if (!notification.isRead) {
+      markAsReadMutation.mutate(notification.id);
+    }
+    if (notification.actionUrl) {
+      navigate(notification.actionUrl);
+    }
+    handleNotificationClose();
+  };
+
   const handleLogout = () => {
     handleMenuClose();
     logout();
@@ -124,16 +188,19 @@ export const Header: React.FC = () => {
     }
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'success':
-        return <CheckCircleIcon color="success" />;
-      case 'warning':
+  const getNotificationIcon = (notification: NotificationItem) => {
+    // Severity drives the icon so Important/Critical items are distinguishable
+    // WITHOUT relying on colour alone (the text label is rendered beside it).
+    switch (notification.priority) {
+      case 'Critical':
+      case 'Security':
+        return <ReportProblemIcon color="error" />;
+      case 'Important':
         return <WarningIcon color="warning" />;
-      case 'error':
-        return <ErrorIcon color="error" />;
-      default:
+      case 'Informational':
         return <InfoIcon color="info" />;
+      default:
+        return <InfoIcon color="primary" />;
     }
   };
 
@@ -200,9 +267,24 @@ export const Header: React.FC = () => {
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Notifications">
-          <IconButton onClick={handleNotificationOpen} sx={{ color: 'white' }}>
-            <Badge badgeContent={unreadCount} color="error">
+        <Tooltip title={hasCriticalUnread ? 'Notifications (action required)' : 'Notifications'}>
+          <IconButton
+            onClick={handleNotificationOpen}
+            sx={{ color: 'white' }}
+            aria-label={
+              unreadCount > 0
+                ? `Notifications, ${unreadCount} unread`
+                : 'Notifications'
+            }
+          >
+            <Badge
+              badgeContent={unreadCount}
+              color="error"
+              // A non-zero unread badge must not disappear when the count is a
+              // multiple of 10, and must stay visible at 0.
+              max={99}
+              showZero
+            >
               <Notifications />
             </Badge>
           </IconButton>
@@ -309,27 +391,40 @@ export const Header: React.FC = () => {
             <ListItem
               key={notification.id}
               sx={{
-                bgcolor: notification.read ? 'transparent' : 'rgba(87, 100, 38, 0.08)',
+                bgcolor: notification.isRead ? 'transparent' : 'rgba(87, 100, 38, 0.08)',
                 '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
                 cursor: 'pointer',
               }}
-              onClick={() => {
-                if (notification.link) {
-                  navigate(notification.link);
-                }
-                handleNotificationClose();
-              }}
+              onClick={() => handleNotificationClick(notification)}
             >
               <ListItemAvatar>
                 <Avatar sx={{ bgcolor: 'transparent' }}>
-                  {getNotificationIcon(notification.type)}
+                  {getNotificationIcon(notification)}
                 </Avatar>
               </ListItemAvatar>
               <ListItemText
                 primary={
-                  <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
-                    {notification.title}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" fontWeight={notification.isRead ? 400 : 600}>
+                      {notification.title}
+                    </Typography>
+                    {/* Severity as TEXT, so it is not conveyed by colour alone. */}
+                    {!notification.isRead && notification.priority !== 'Normal' && (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          color:
+                            notification.priority === 'Critical' || notification.priority === 'Security'
+                              ? 'error.main'
+                              : 'warning.main',
+                        }}
+                      >
+                        {notification.priority}
+                      </Typography>
+                    )}
+                  </Box>
                 }
                 secondary={
                   <>
@@ -337,8 +432,16 @@ export const Header: React.FC = () => {
                       {notification.message}
                     </Typography>
                     <Typography variant="caption" color="textSecondary">
-                      {notification.timestamp.toLocaleString()}
+                      {formatNotificationDate(notification.timestamp)}
                     </Typography>
+                    {notification.actionUrl && (
+                      <Typography
+                        variant="caption"
+                        sx={{ display: 'block', color: 'primary.main', fontWeight: 600 }}
+                      >
+                        {notification.actionLabel}
+                      </Typography>
+                    )}
                   </>
                 }
               />

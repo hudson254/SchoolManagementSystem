@@ -4194,6 +4194,10 @@ namespace SMS.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("ActionUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -4218,6 +4222,9 @@ namespace SMS.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_date");
 
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
@@ -4236,6 +4243,11 @@ namespace SMS.Persistence.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_date");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
@@ -4276,6 +4288,8 @@ namespace SMS.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("UserId", "IsRead");
+
+                    b.HasIndex("UserId", "IsRead", "Priority");
 
                     b.ToTable("Notifications");
                 });

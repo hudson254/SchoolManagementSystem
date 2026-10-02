@@ -25,6 +25,13 @@ namespace SMS.Application
             // Register the shared password policy service (server-side authority).
             services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
 
+            // The single write path for in-app notifications. Business handlers depend on this
+            // rather than on the repository or the MediatR command directly, so that
+            // recipient resolution, type/priority normalisation and action-URL
+            // sanitisation live in exactly one place, and a notification failure can
+            // never abort the business transition that triggered it.
+            services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+
             // OMS request notifications: thin adapter over the existing in-app
             // notification pipeline (no SMTP / Twilio / external gateway).
             services.AddScoped<IOmsRequestNotifier, OmsRequestNotifier>();

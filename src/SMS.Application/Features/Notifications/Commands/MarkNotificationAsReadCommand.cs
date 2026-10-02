@@ -3,6 +3,16 @@ using Microsoft.Extensions.Logging;
 
 namespace SMS.Application.Features.Notifications.Commands
 {
+    /// <summary>
+    /// Marks one of the CALLER'S notifications as read.
+    /// <para>
+    /// Security note: this handler previously forwarded the id straight to
+    /// <c>MarkAsReadAsync</c>, which resolves by primary key with no ownership check -
+    /// any authenticated user could mark any other user's notification as read. It now
+    /// uses the ownership-enforcing <c>MarkAsReadForUserAsync</c> and raises
+    /// NotFound for a notification the caller does not own.
+    /// </para>
+    /// </summary>
     public class MarkNotificationAsReadCommand : IRequest<MediatR.Unit>
     {
         public Guid NotificationId { get; set; }
@@ -11,31 +21,54 @@ namespace SMS.Application.Features.Notifications.Commands
     public class MarkNotificationAsReadHandler : IRequestHandler<MarkNotificationAsReadCommand, MediatR.Unit>
     {
         private readonly INotificationRepository _notificationRepository;
+        private readonly SMS.Application.Common.Interfaces.ICurrentUserService _currentUserService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<MarkNotificationAsReadHandler> _logger;
 
         public MarkNotificationAsReadHandler(
             INotificationRepository notificationRepository,
+            SMS.Application.Common.Interfaces.ICurrentUserService currentUserService,
             IUnitOfWork unitOfWork,
             ILogger<MarkNotificationAsReadHandler> logger)
         {
             _notificationRepository = notificationRepository;
+            _currentUserService = currentUserService;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
         public async Task<MediatR.Unit> Handle(MarkNotificationAsReadCommand request, CancellationToken cancellationToken)
         {
-            await _notificationRepository.MarkAsReadAsync(request.NotificationId, cancellationToken);
+            var userId = _currentUserService?.UserId;
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new SMS.Application.Exceptions.NotFoundException("Notification", request.NotificationId);
+
+            var updated = await _notificationRepository.MarkAsReadForUserAsync(
+                request.NotificationId, userId, cancellationToken);
+
+            if (!updated)
+            {
+                _logger.LogWarning(
+                    "Notification {NotificationId} was marked read by user {UserId} but is not visible to them",
+                    request.NotificationId, userId);
+                throw new SMS.Application.Exceptions.NotFoundException("Notification", request.NotificationId);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Notification {NotificationId} marked as read", request.NotificationId);
+            _logger.LogInformation("Notification {NotificationId} marked as read by {UserId}", request.NotificationId, userId);
             return MediatR.Unit.Value;
         }
     }
 
+    /// <summary>
+    /// Marks every unread notification belonging to the CALLER as read.
+    /// The recipient is resolved from the principal only; there is no client-supplied
+    /// UserId, so this can never touch another user's notifications.
+    /// </summary>
     public class MarkAllNotificationsAsReadCommand : IRequest<MediatR.Unit>
     {
-        public string? UserId { get; set; }
+        /// <summary>Unused by the HTTP surface; retained for internal callers.</summary>
+        internal string? UserId { get; set; }
     }
 
     public class MarkAllNotificationsAsReadHandler : IRequestHandler<MarkAllNotificationsAsReadCommand, MediatR.Unit>
@@ -59,8 +92,8 @@ namespace SMS.Application.Features.Notifications.Commands
 
         public async Task<MediatR.Unit> Handle(MarkAllNotificationsAsReadCommand request, CancellationToken cancellationToken)
         {
-            var userId = request.UserId ?? _currentUserService?.UserId;
-            if (!string.IsNullOrEmpty(userId))
+            var userId = _currentUserService?.UserId;
+            if (!string.IsNullOrWhiteSpace(userId))
             {
                 await _notificationRepository.MarkAllAsReadAsync(userId, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -70,6 +103,14 @@ namespace SMS.Application.Features.Notifications.Commands
         }
     }
 
+    /// <summary>
+    /// Soft-deletes one of the CALLER'S notifications.
+    /// <para>
+    /// Security note: previously resolved by primary key with no ownership check, so any
+    /// authenticated user could delete any notification in the tenant. It now deletes
+    /// through <c>DeleteForUserAsync</c> (a SOFT delete, so the row stays auditable).
+    /// </para>
+    /// </summary>
     public class DeleteNotificationCommand : IRequest<MediatR.Unit>
     {
         public Guid NotificationId { get; set; }
@@ -78,28 +119,41 @@ namespace SMS.Application.Features.Notifications.Commands
     public class DeleteNotificationHandler : IRequestHandler<DeleteNotificationCommand, MediatR.Unit>
     {
         private readonly INotificationRepository _notificationRepository;
+        private readonly SMS.Application.Common.Interfaces.ICurrentUserService _currentUserService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<DeleteNotificationHandler> _logger;
 
         public DeleteNotificationHandler(
             INotificationRepository notificationRepository,
+            SMS.Application.Common.Interfaces.ICurrentUserService currentUserService,
             IUnitOfWork unitOfWork,
             ILogger<DeleteNotificationHandler> logger)
         {
             _notificationRepository = notificationRepository;
+            _currentUserService = currentUserService;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
         public async Task<MediatR.Unit> Handle(DeleteNotificationCommand request, CancellationToken cancellationToken)
         {
-            var notification = await _notificationRepository.GetByIdAsync(request.NotificationId, cancellationToken);
-            if (notification != null)
+            var userId = _currentUserService?.UserId;
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new SMS.Application.Exceptions.NotFoundException("Notification", request.NotificationId);
+
+            var deleted = await _notificationRepository.DeleteForUserAsync(
+                request.NotificationId, userId, cancellationToken);
+
+            if (!deleted)
             {
-                await _notificationRepository.DeleteAsync(notification, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                _logger.LogInformation("Notification {NotificationId} deleted", request.NotificationId);
+                _logger.LogWarning(
+                    "Notification {NotificationId} was deleted by user {UserId} but is not visible to them",
+                    request.NotificationId, userId);
+                throw new SMS.Application.Exceptions.NotFoundException("Notification", request.NotificationId);
             }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Notification {NotificationId} deleted by {UserId}", request.NotificationId, userId);
             return MediatR.Unit.Value;
         }
     }

@@ -3,19 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Matches theme.ts primary.main and manifest.json theme_color so the browser
+         UI and the installed app chrome match the in-app design system. -->
     <meta name="theme-color" content="#576426" />
     <meta name="description" content="School Management System - Multi-tenant, production-ready" />
     <title>School Management System</title>
+
+    <!-- Progressive Web App -->
     <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/logo.png" />
+
+    <!-- Real, correctly-sized icons. The previous manifest pointed at the
+         595x420 logo.png for both a 192x192 and a 512x512 slot, which fails
+         Chrome's installability check. See scripts/generate-pwa-icons.mjs. -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+
+    <!-- iOS standalone support. iOS ignores the manifest for installation, so it
+         needs these meta tags to launch without browser chrome. -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="SMS" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+
+    <!-- External web fonts are deliberately NOT loaded. This deployment is
+         air-gapped, so a fonts.googleapis.com stylesheet could never resolve; it
+         only added a blocking request and a Content-Security-Policy violation.
+         The MUI theme falls back to its system font stack. -->
   </head>
   <body>
     <div id="root"></div>

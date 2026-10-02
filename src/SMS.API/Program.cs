@@ -1071,8 +1071,20 @@ app.MapGet("/metrics", async context =>
     await context.Response.WriteAsync(metrics);
 });
 
-// Map SignalR NotificationHub (RISK-14)
-app.MapHub<NotificationHub>("/hub");
+// Map SignalR NotificationHub.
+//
+// RISK-14 follow-up: this endpoint was previously mapped with no authorization at all
+// and the host sets no FallbackPolicy, so /hub was reachable anonymously. The hub also
+// exposed SubscribeToNotifications(userId), which let ANY caller - including an
+// unauthenticated one - join any user's notification group and read that user's live
+// notification stream. Both are fixed: NotificationHub now carries [Authorize], the
+// endpoint requires authorization explicitly, and group membership is derived solely
+// from the validated token's claims with no client-supplied user id anywhere.
+//
+// Authorization here gates CONNECTIONS only. What a connected user may then read is
+// still decided per-request by the notification API, which enforces ownership and the
+// tenant query filter.
+app.MapHub<NotificationHub>("/hub").RequireAuthorization();
 
 app.MapControllers();
 

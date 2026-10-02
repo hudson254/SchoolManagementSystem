@@ -5,6 +5,8 @@ import { Menu as MenuIcon } from '@mui/icons-material';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { Footer } from './Footer';
+import { InstallPrompt, PwaUpdateBanner } from '../Pwa/InstallPrompt';
+import { useServiceWorker } from '../../hooks/useServiceWorker';
 
 const drawerWidth = 280;
 
@@ -12,6 +14,10 @@ export const Layout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Service worker lifecycle for the installed PWA. Surfacing an available update
+  // is what stops an installed user being pinned to a stale frontend build.
+  const { updateAvailable, applyUpdate } = useServiceWorker();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -92,6 +98,10 @@ export const Layout: React.FC = () => {
         }}
       >
         <Box sx={{ flexGrow: 1, p: { xs: 2, sm: 3 } }}>
+          {/* Install and update prompts live inside the authenticated layout, so
+              they never appear on the login screen and require a signed-in user. */}
+          <InstallPrompt />
+          <PwaUpdateBanner updateAvailable={updateAvailable} onApplyUpdate={applyUpdate} />
           <Outlet />
         </Box>
         <Footer />

@@ -2,19 +2,40 @@ using SMS.Application.Common;
 using SMS.Application.DTOs;
 using SMS.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Linq;
 
 namespace SMS.Application.Features.Notifications.Queries
 {
+    /// <summary>
+    /// Lists the CALLER'S notification history.
+    /// <para>
+    /// The recipient is always resolved from the authenticated principal. There is no
+    /// client-supplied UserId on the query contract for this endpoint: an earlier
+    /// revision exposed one, which would have let any authenticated user enumerate
+    /// another user's notifications by passing their id.
+    /// </para>
+    /// </summary>
     public class GetMyNotificationsQuery : IRequest<PagedResult<NotificationDto>>
     {
-        public string? UserId { get; set; }
+        /// <summary>1-based page number. Clamped by the handler.</summary>
         public int Page { get; set; } = 1;
+
+        /// <summary>
+        /// Page size. Clamped to [1, 100] by the handler so a single request can never
+        /// ask the database for an unbounded page.
+        /// </summary>
         public int PageSize { get; set; } = 20;
+
+        /// <summary>null = all, true = read only, false = unread only.</summary>
         public bool? IsRead { get; set; }
     }
 
     public class GetMyNotificationsHandler : IRequestHandler<GetMyNotificationsQuery, PagedResult<NotificationDto>>
     {
+        /// <summary>Maximum page size accepted from a client.</summary>
+        public const int MaxPageSize = 100;
+
         private readonly INotificationRepository _notificationRepository;
         private readonly SMS.Application.Common.Interfaces.ICurrentUserService _currentUserService;
         private readonly ILogger<GetMyNotificationsHandler> _logger;
@@ -31,46 +52,41 @@ namespace SMS.Application.Features.Notifications.Queries
 
         public async Task<PagedResult<NotificationDto>> Handle(GetMyNotificationsQuery request, CancellationToken cancellationToken)
         {
-            var userId = request.UserId ?? _currentUserService?.UserId;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return new PagedResult<NotificationDto>();
-            }
+            var userId = _currentUserService?.UserId;
 
-            IEnumerable<Domain.Entities.Notification> notifications;
-            if (request.IsRead == false)
+            // No authenticated principal => no notifications. Never "all notifications".
+            if (string.IsNullOrWhiteSpace(userId))
             {
-                notifications = await _notificationRepository.GetUnreadNotificationsAsync(userId, cancellationToken);
-            }
-            else
-            {
-                notifications = await _notificationRepository.GetNotificationsByUserAsync(userId, cancellationToken);
-            }
-
-            var list = notifications.ToList();
-            var totalCount = list.Count;
-
-            var pagedItems = list
-                .Skip((request.Page - 1) * request.PageSize)
-                .Take(request.PageSize)
-                .Select(n => new NotificationDto
+                _logger.LogWarning("Rejected notification history request with no authenticated principal");
+                return new PagedResult<NotificationDto>
                 {
-                    Id = n.Id,
-                    Title = n.Title,
-                    Message = n.Message,
-                    Type = n.Type ?? "System",
-                    IsRead = n.IsRead,
-                    CreatedAt = n.CreatedDate ?? n.CreatedAt,
-                    SenderId = null
-                })
-                .ToList();
+                    Items = new System.Collections.Generic.List<NotificationDto>(),
+                    TotalCount = 0,
+                    Page = 1,
+                    PageSize = 0
+                };
+            }
+
+            var page = request.Page < 1 ? 1 : request.Page;
+            var pageSize = request.PageSize < 1
+                ? 20
+                : (request.PageSize > MaxPageSize ? MaxPageSize : request.PageSize);
+
+            // Paged IN THE DATABASE. The previous implementation loaded every row for
+            // the user and then Skip/Take'd in memory, so a user with a long history
+            // forced an unbounded read on every page load.
+            var (items, totalCount) = await _notificationRepository.GetPagedForUserAsync(
+                userId, page, pageSize, request.IsRead, unreadOnly: false, cancellationToken);
 
             return new PagedResult<NotificationDto>
             {
-                Items = pagedItems,
+                Items = NotificationMapper.ToDtoList(items),
                 TotalCount = totalCount,
-                Page = request.Page,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize)
+                Page = page,
+                // PageSize must be set explicitly: PagedResult computes TotalPages from
+                // it, and leaving it at the default of 10 produced a page count that
+                // disagreed with the items actually returned.
+                PageSize = pageSize
             };
         }
     }

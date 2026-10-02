@@ -12,6 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- SMS.Application supplies the INotificationRealtimePublisher port that the
+         SignalR publisher implements. It is a one-way reference (Application does not
+         depend on Notifications), so it introduces no cycle. -->
+    <ProjectReference Include="..\SMS.Application\SMS.Application.csproj" />
     <ProjectReference Include="..\SMS.Domain\SMS.Domain.csproj" />
     <ProjectReference Include="..\SMS.Infrastructure\SMS.Infrastructure.csproj" />
   </ItemGroup>
