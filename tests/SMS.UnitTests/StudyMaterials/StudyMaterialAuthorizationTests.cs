@@ -217,6 +217,39 @@ namespace SMS.UnitTests.StudyMaterials
                 CancellationToken.None));
         }
 
+        [Fact]
+        public async Task Create_AdminWithNoLecturerProfile_ShouldThrowForbiddenNotNullReference()
+        {
+            // Regression: production returned HTTP 500 here. An Administrator or
+            // Coordinator who does not also hold a Lecturer profile resolved a null
+            // lecturer, and the handler dereferenced lecturer.Id, raising
+            // NullReferenceException instead of refusing the upload.
+            var access = CreateAccessService(isAdmin: true);
+            // GetCurrentLecturerAsync returns null (no profile) and no
+            // SpecifiedLecturerId was supplied.
+
+            var handler = CreateHandler(access, CreateUploadService());
+
+            var act = () => handler.Handle(CreateCommand(), CancellationToken.None);
+
+            await act.Should().ThrowAsync<ForbiddenException>(
+                "an admin with no lecturer profile must be refused, not crash the request");
+        }
+
+        [Fact]
+        public async Task Create_AdminWithNoLecturerProfile_AndSpecifiedLecturerNotFound_ShouldThrowNotFound()
+        {
+            // SpecifiedLecturerId that resolves to nothing -> NotFound, still no crash.
+            var access = CreateAccessService(isAdmin: true);
+            var handler = CreateHandler(access, CreateUploadService());
+
+            var command = CreateCommand();
+            command.SpecifiedLecturerId = Guid.NewGuid();
+
+            await Assert.ThrowsAsync<NotFoundException>(
+                () => handler.Handle(command, CancellationToken.None));
+        }
+
         // ─────────────────────────────────────────────────────────────────────
         // Save-failure compensation: the upload bytes and UploadFile metadata row
         // are already committed when the LectureNote insert runs, so a failed

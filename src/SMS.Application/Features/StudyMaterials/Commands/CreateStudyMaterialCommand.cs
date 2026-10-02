@@ -106,13 +106,23 @@ namespace SMS.Application.Features.StudyMaterials.Commands
             else if (_academicAccessService.IsLecturerRole())
             {
                 lecturer = await _academicAccessService.GetCurrentLecturerAsync(cancellationToken);
-                if (lecturer == null)
-                {
-                    throw new ForbiddenException("StudyMaterial", _currentUserService.UserId ?? "unknown");
-                }
             }
             else
             {
+                throw new ForbiddenException("StudyMaterial", _currentUserService.UserId ?? "unknown");
+            }
+
+            // An Administrator/Coordinator only becomes the owning lecturer when a
+            // lecturer profile actually resolves for them: either one that exists,
+            // or an explicit SpecifiedLecturerId that was found. Without that
+            // profile there is no teaching relationship to check, so the upload is
+            // refused. Dereferencing a null here used to raise a NullReference
+            //Exception and surface as HTTP 500 instead of a 403.
+            if (lecturer == null)
+            {
+                _logger.LogWarning(
+                    "Study material upload blocked: no lecturer profile resolves for user {UserId}",
+                    _currentUserService.UserId ?? "unknown");
                 throw new ForbiddenException("StudyMaterial", _currentUserService.UserId ?? "unknown");
             }
 
