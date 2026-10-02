@@ -175,9 +175,35 @@ services:
     image: nginx:1.27-alpine
     container_name: sms-nginx
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # ── Deployment-safety: MOUNT THE DIRECTORY, NOT THE FILE ──────────────
+      # This previously read:
+      #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # A single-FILE bind mount is resolved to one inode when the container is
+      # created. `git checkout` REPLACES the file (new inode, new device) rather
+      # than rewriting it in place, so the running container kept the PREVIOUS
+      # configuration indefinitely while the repository showed the new one. That
+      # produced a real stale-config condition during the 997e44c deployment: the
+      # service-worker cache-header fix was in the repo but the live server was
+      # still serving the old config, and only an explicit container recreate
+      # resolved it.
+      #
+      # Mounting the whole ./nginx directory inverts that. The mount is
+      # directory-scoped, so a replaced file inside it is visible immediately,
+      # and `nginx -t` + `nginx -s reload` pick up the new content in place -
+      # with no downtime and no dependency on a recreate.
+      - ./nginx:/etc/nginx/sms:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - /etc/ssl/private:/etc/ssl/private:ro
+    # Point nginx at the mounted directory explicitly. The image's own
+    # /etc/nginx/nginx.conf is left untouched and still owns mime.types and the
+    # standard include paths.
+    command: ["nginx", "-c", "/etc/nginx/sms/nginx.conf", "-g", "daemon off;"]
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     ports:
       - "80:80"
       - "443:443"

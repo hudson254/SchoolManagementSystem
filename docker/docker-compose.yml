@@ -127,9 +127,15 @@ services:
     image: nginx:alpine
     container_name: sms-nginx
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Directory mount (not a single-file bind mount): a `git checkout` that
+      # replaces the config file changes its inode, and a single-file bind mount
+      # pins the OLD inode for the container's lifetime, leaving nginx serving a
+      # stale configuration. Mounting the directory makes the new file visible
+      # to a plain `nginx -s reload`. See docker/nginx/nginx.conf.
+      - ./nginx:/etc/nginx/sms:ro
       - ./certs:/etc/ssl/certs:ro
       - ./certs:/etc/ssl/private:ro
+    command: ["nginx", "-c", "/etc/nginx/sms/nginx.conf", "-g", "daemon off;"]
     ports:
       - "${NGINX_HTTP_PORT:-8080}:80"
       - "${NGINX_HTTPS_PORT:-8443}:443"

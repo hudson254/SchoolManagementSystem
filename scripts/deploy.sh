@@ -147,6 +147,28 @@ echo "  Images built successfully."
 echo -e "${YELLOW}[6/8] Starting services...${NC}"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" -p "$COMPOSE_PROJECT_NAME" up -d
 
+# Verify the nginx configuration after `up -d`.
+#
+# The configuration is bind-mounted as a DIRECTORY (see the nginx service in
+# docker/docker-compose.prod.yml). That replaced a single-file bind mount,
+# which pinned ONE inode for the container's lifetime: `git checkout` replaces
+# the file, so a still-running container kept serving the previous
+# configuration - the real stale-config condition seen during the 997e44c
+# deployment. A directory mount re-resolves the file on every read, so a plain
+# reload is always correct.
+#
+# scripts/verify-nginx-config.sh proves the container holds the deployed file,
+# validates it, reloads it, and checks the externally observable behaviour.
+# It must run after every deployment that touches nginx configuration.
+if [ -x "$SCRIPT_DIR/verify-nginx-config.sh" ]; then
+    "$SCRIPT_DIR/verify-nginx-config.sh" \
+        --compose-file "$COMPOSE_FILE" \
+        --env-file "$ENV_FILE" \
+        || { echo -e "  ${RED}ERROR: nginx verification failed.${NC}"; exit 1; }
+else
+    echo -e "  ${YELLOW}verify-nginx-config.sh not found or not executable; skipping.${NC}"
+fi
+
 # Reload nginx after the containers have been recreated.
 #
 # nginx.conf declares `upstream api_backend { server api:80; }` and

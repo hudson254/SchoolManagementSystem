@@ -1,11 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  HUB_PATH,
   NOTIFICATION_QUERY_KEYS,
   REALTIME_SEVERITIES,
   RECEIVE_NOTIFICATION_EVENT,
   UNREAD_COUNT_QUERY_KEYS,
+  buildHubHeaders,
   createNotificationHubClient,
   normalizePriority,
+  refreshHubHeaders,
   resolveHubUrl,
   type RealtimeNotification,
   type SignalRConnection,
@@ -316,5 +319,165 @@ describe('notificationHub', () => {
     expect(normalizePriority('nonsense')).toBe('Normal');
     expect(normalizePriority(undefined)).toBe('Normal');
     expect(REALTIME_SEVERITIES.has(normalizePriority('nonsense'))).toBe(false);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// CSRF handshake
+//
+// The production defect these guard against: `withUrl()` was given only
+// `withCredentials`, so `POST /hub/negotiate` was rejected by
+// CsrfProtectionMiddleware with 403 and no connection was ever established.
+// ───────────────────────────────────────────────────────────────────────────
+describe('notificationHub CSRF handshake', () => {
+  const setCookie = (value: string) => {
+    document.cookie = `XSRF-TOKEN=${value}`;
+  };
+
+  const clearCookie = () => {
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+  };
+
+  beforeEach(() => {
+    clearCookie();
+  });
+
+  afterEach(() => {
+    clearCookie();
+  });
+
+  it('sends the existing XSRF-TOKEN cookie as X-CSRF-TOKEN', () => {
+    setCookie('token-abc123');
+
+    const headers = buildHubHeaders();
+
+    expect(headers['X-CSRF-TOKEN']).toBe('token-abc123');
+  });
+
+  it('omits the header entirely when no CSRF cookie is present', () => {
+    // Sending an empty or fabricated token would fail validation anyway, and
+    // hard-coding one would be a security regression. The header must simply
+    // be absent, and the client must degrade to the REST fallback.
+    const headers = buildHubHeaders();
+
+    expect(headers).not.toHaveProperty('X-CSRF-TOKEN');
+    expect(Object.keys(headers)).toHaveLength(0);
+  });
+
+  it('reads the cookie lazily on every call, so a late-issued token is picked up', () => {
+    // Regression guard for the build-time-snapshot bug: the cookie is issued by
+    // the server's response, so it may appear AFTER the module loads. Because
+    // withUrl() receives a FUNCTION, each negotiate - including every automatic
+    // reconnect - re-reads the current value.
+    expect(buildHubHeaders()).not.toHaveProperty('X-CSRF-TOKEN');
+
+    setCookie('issued-later');
+
+    expect(buildHubHeaders()['X-CSRF-TOKEN']).toBe('issued-later');
+  });
+
+  it('URL-decodes the cookie value the way the server compares it', () => {
+    // The token is base64 and may contain '+', '/' and '=' which arrive
+    // percent-encoded on the wire. The middleware compares the DECODED value,
+    // so the client must decode too or the two sides would disagree.
+    const raw = 'VG9rZW4rL3dpdGg9';
+    setCookie(encodeURIComponent(raw));
+
+    expect(buildHubHeaders()['X-CSRF-TOKEN']).toBe(raw);
+  });
+
+  it('never sends an Authorization header or any access token', () => {
+    setCookie('token-abc123');
+
+    const headers = buildHubHeaders();
+
+    // Authentication is the httpOnly cookie the browser attaches by itself. No
+    // bearer token may ever be handed to JavaScript.
+    expect(headers).not.toHaveProperty('Authorization');
+    expect(Object.keys(headers)).toEqual(['X-CSRF-TOKEN']);
+  });
+
+  it('never hard-codes a CSRF token', async () => {
+    // Read through Vite's `?raw` import so the assertion needs no Node type
+    // declarations (the app tsconfig deliberately excludes them).
+    const source = (await import('./notificationHub.ts?raw')).default;
+
+    // A hard-coded token would look like a literal base64 blob. The real token is
+    // generated per session by CsrfProtectionMiddleware and only ever read from
+    // the cookie, so no such literal may appear in this module.
+    const literals = source.match(/['"][A-Za-z0-9+/]{32,}={0,2}['"]/g) ?? [];
+    expect(literals).toEqual([]);
+  });
+
+  it('refreshes an existing header object in place rather than replacing it', () => {
+    // SignalR holds a reference to the object passed to withUrl and re-reads it
+    // on every negotiate. Replacing our local variable would leave the connection
+    // using the stale object, so refreshHubHeaders must mutate the same target.
+    document.cookie = 'XSRF-TOKEN=first-token';
+
+    const headers = buildHubHeaders();
+    expect(headers['X-CSRF-TOKEN']).toBe('first-token');
+
+    document.cookie = 'XSRF-TOKEN=second-token';
+    const returned = refreshHubHeaders(headers);
+
+    // Same object identity...
+    expect(returned).toBe(headers);
+    // ...and now carrying the new token.
+    expect(headers['X-CSRF-TOKEN']).toBe('second-token');
+  });
+
+  it('deletes the header when the cookie disappears, rather than sending a blank', () => {
+    // An empty token would fail validation the same way, but a missing header is
+    // unambiguous and never looks like a successfully-sent value.
+    document.cookie = 'XSRF-TOKEN=some-token';
+    const headers = buildHubHeaders();
+
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    refreshHubHeaders(headers);
+
+    expect(headers).not.toHaveProperty('X-CSRF-TOKEN');
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Canonical hub URL
+//
+// The production defect these guard against: nginx had only `location /hub/`,
+// so `/hub` fell through to the SPA's `try_files $uri $uri/` and nginx answered
+// `301 -> /hub/`. A WebSocket handshake cannot follow an HTTP redirect.
+// ───────────────────────────────────────────────────────────────────────────
+describe('notificationHub canonical URL', () => {
+  it('uses /hub, matching app.MapHub<NotificationHub>("/hub")', () => {
+    expect(resolveHubUrl()).toBe('/hub');
+    expect(HUB_PATH).toBe('/hub');
+  });
+
+  it('never requests a trailing-slash form that nginx would redirect', () => {
+    const url = resolveHubUrl();
+
+    // A trailing slash is the exact shape that produced `301 -> /hub/`.
+    expect(url.endsWith('/')).toBe(false);
+  });
+
+  it('is a relative, same-origin path with no hard-coded host', () => {
+    const url = resolveHubUrl();
+
+    // Same-origin is what makes the httpOnly auth cookie and the CSRF cookie
+    // apply automatically without any CORS handling.
+    expect(url.startsWith('/')).toBe(true);
+    expect(url).not.toMatch(/https?:\/\//);
+  });
+
+  it('strips a trailing slash from a configured override', () => {
+    // A stale VITE_HUB_URL=/hub/ must not be able to reintroduce the redirect.
+    const originalEnv = (import.meta as any).env;
+    (import.meta as any).env = { ...originalEnv, VITE_HUB_URL: '/hub/' };
+
+    try {
+      expect(resolveHubUrl()).toBe('/hub');
+    } finally {
+      (import.meta as any).env = originalEnv;
+    }
   });
 });

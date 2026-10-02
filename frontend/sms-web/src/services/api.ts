@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { normalizeError } from '../utils/errors';
+import { CSRF_HEADER_NAME, getCsrfToken, isStateChangingMethod } from '../utils/csrf';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 // Note: In production this value must be "/api/v1" (relative path) so that nginx
@@ -22,13 +23,9 @@ const AUTH_REFRESH_SKIP_PATHS = [
   '/auth/resend-verification',
 ];
 
-// Reads the non-httpOnly XSRF-TOKEN cookie set by CsrfProtectionMiddleware
-// and returns its value (for the X-CSRF-TOKEN header on state-changing
-// requests), or null if the cookie is not present yet.
-const getCsrfToken = (): string | null => {
-  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
-};
+// The CSRF token reader now lives in utils/csrf.ts, shared with the SignalR
+// client, so the REST and realtime transports can never drift apart on the
+// cookie name or the header name.
 
 // ────────────────────────────────────────────────────────────────────────────
 // Single-flight refresh lock (module-level state)
@@ -93,13 +90,10 @@ class ApiClient {
     // back in the X-CSRF-TOKEN header.
     this.client.interceptors.request.use(
       (config) => {
-        const method = (config.method || 'get').toUpperCase();
-        const isStateChanging = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method);
-
-        if (isStateChanging && !config.headers['X-CSRF-TOKEN']) {
+        if (isStateChangingMethod(config.method) && !config.headers[CSRF_HEADER_NAME]) {
           const csrfToken = getCsrfToken();
           if (csrfToken) {
-            config.headers['X-CSRF-TOKEN'] = csrfToken;
+            config.headers[CSRF_HEADER_NAME] = csrfToken;
           }
         }
         return config;
