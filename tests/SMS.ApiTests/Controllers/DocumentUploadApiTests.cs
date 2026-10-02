@@ -691,6 +691,76 @@ namespace SMS.ApiTests.Controllers
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // GET /api/v1/study-materials/my-units — the Academics → Study Materials
+        // unit selector. It must list exactly the units the caller is entitled to,
+        // and must not become a probe for units outside their academic scope.
+        // ─────────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task MyUnits_Lecturer_ReturnsTaughtUnitAndNotUnrelatedUnit()
+        {
+            _fixture.UseLecturerIdentity();
+            var client = _fixture.CreateAuthenticatedClient();
+
+            var response = await client.GetAsync("/api/v1/study-materials/my-units");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var units = await response.Content.ReadFromJsonAsync<List<StudyMaterialUnitDto>>();
+            units.Should().NotBeNull();
+
+            units!.Should().Contain(u => u.UnitId == _fixture.UnitId,
+                because: "the lecturer is appointed to teach this unit");
+            units.Should().NotContain(u => u.UnitId == _fixture.OtherUnitId,
+                because: "the lecturer is not appointed to teach this unit");
+            units.Should().OnlyContain(u => u.AccessRole == "Lecturer" || u.AccessRole == "Student");
+        }
+
+        [Fact]
+        public async Task MyUnits_Student_ReturnsEnrolledUnitAndNotUnrelatedUnit()
+        {
+            _fixture.UseStudentIdentity();
+            var client = _fixture.CreateAuthenticatedClient();
+
+            var response = await client.GetAsync("/api/v1/study-materials/my-units");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var units = await response.Content.ReadFromJsonAsync<List<StudyMaterialUnitDto>>();
+            units.Should().NotBeNull();
+
+            units!.Should().Contain(u => u.UnitId == _fixture.UnitId,
+                because: "the student is enrolled in this unit");
+            units.Should().NotContain(u => u.UnitId == _fixture.OtherUnitId,
+                because: "the student is not enrolled in this unit");
+        }
+
+        [Fact]
+        public async Task MyUnits_RoleWithoutAcademicRelationship_ShouldBeForbidden()
+        {
+            // Receptionist: authenticated (so [Authorize] passes on the real admin
+            // token) but holds no lecturer/student relationship, so the handler
+            // must reject rather than serve a list.
+            _fixture.CurrentUserEmail = "receptionist.study@school.com";
+            _fixture.CurrentUserRoles = new[] { "Receptionist" };
+            var client = _fixture.CreateAuthenticatedClient();
+
+            var response = await client.GetAsync("/api/v1/study-materials/my-units");
+
+            response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
+                because: "roles with no academic relationship must not receive a study-material unit list");
+        }
+
+        [Fact]
+        public async Task MyUnits_AnonymousCaller_ShouldBeUnauthorized()
+        {
+            // No bearer token at all.
+            var anonClient = _fixture.CreateClient();
+
+            var response = await anonClient.GetAsync("/api/v1/study-materials/my-units");
+
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        }
+
         [Fact]
         public async Task LecturerDashboard_ReturnsRealCoursesAndAccommodation()
         {

@@ -47,6 +47,24 @@ namespace SMS.Persistence.Repositories
                 .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
         }
 
+        public async Task<IEnumerable<Unit>> GetUnitsByIdsAsync(
+            IReadOnlyCollection<Guid> unitIds,
+            CancellationToken cancellationToken = default)
+        {
+            if (unitIds == null || unitIds.Count == 0)
+            {
+                return Array.Empty<Unit>();
+            }
+
+            // The global tenant query filter on Unit is applied automatically here,
+            // so ids from another tenant are never returned.
+            var ids = unitIds.ToList();
+            return await _dbSet
+                .Include(u => u.Course)
+                .Where(u => ids.Contains(u.Id) && !u.IsDeleted && u.IsActive)
+                .ToListAsync(cancellationToken);
+        }
+
         public async Task<IEnumerable<Unit>> GetUnitsAsync(
             int page,
             int pageSize,

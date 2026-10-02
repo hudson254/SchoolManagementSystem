@@ -66,4 +66,28 @@ namespace SMS.Application.DTOs
             return string.IsNullOrEmpty(ext) ? string.Empty : ext.ToLowerInvariant();
         }
     }
+
+    /// <summary>
+    /// A unit the authenticated caller is entitled to open in Study Materials.
+    /// Derived server-side from the same persisted relationships that authorize
+    /// list/upload/download (lecturer teaching assignment, student enrollment),
+    /// so the unit selector can never offer a unit the API would reject, nor omit
+    /// one it would allow.
+    /// </summary>
+    public class StudyMaterialUnitDto
+    {
+        public Guid UnitId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public int Credits { get; set; }
+        public Guid CourseId { get; set; }
+        public string CourseName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// How the caller is entitled to the unit: "Lecturer" when it comes from a
+        /// teaching assignment (may upload), "Student" when it comes from an
+        /// enrollment (read/download only).
+        /// </summary>
+        public string AccessRole { get; set; } = string.Empty;
+    }
 }

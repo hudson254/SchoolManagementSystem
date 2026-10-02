@@ -42,6 +42,7 @@ import {
   ListAlt,
   AddCircleOutline,
   Insights,
+  FolderCopy,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -89,6 +90,18 @@ const menuItems: MenuItem[] = [
       { text: 'Units', icon: <Assignment />, path: '/units', roles: ['SystemAdministrator', 'Administrator', 'Coordinator'] },
       { text: 'Classes', icon: <Class />, path: '/classes', roles: ['SystemAdministrator', 'Administrator', 'Coordinator'] },
     ],
+  },
+  {
+    // Academics → Study Materials. Visible to the two roles that have a
+    // study-material workflow: lecturers manage materials for units they are
+    // appointed to teach, students read them for units they are enrolled in.
+    // Administrator/Coordinator already reach any unit's materials through the
+    // course-offering Units tab (CourseOfferingDetail), so they are not given
+    // this shortcut and no permission is broadened to obtain it.
+    text: 'Study Materials',
+    icon: <FolderCopy />,
+    path: '/study-materials',
+    roles: ['Lecturer', 'Student'],
   },
   {
     text: 'Timetable',

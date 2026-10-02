@@ -183,7 +183,40 @@ namespace SMS.Application.Features.StudyMaterials.Commands
             };
 
             await _lectureNoteRepository.AddAsync(note, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // The bytes and the UploadFile metadata row are already committed by
+                // UploadService at this point, so a failed insert would otherwise
+                // leave an orphaned file that no LectureNote references and that no
+                // scheduled job would ever reclaim. Retire the upload metadata
+                // through the existing abstraction and surface the orphaned file id
+                // in the log so it can be reconciled by an operator.
+                _logger.LogError(
+                    ex,
+                    "Failed to persist study material for unit {UnitCode}; retiring orphaned upload {UploadFileId}",
+                    unit.Code,
+                    upload.FileId);
+
+                try
+                {
+                    await _uploadService.DeleteAsync(upload.FileId, "system");
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogError(
+                        cleanupEx,
+                        "Could not retire orphaned upload {UploadFileId} for study material '{Title}'",
+                        upload.FileId,
+                        note.Title);
+                }
+
+                throw;
+            }
 
             _logger.LogInformation(
                 "Study material '{Title}' uploaded for unit {UnitCode} by lecturer {LecturerId} (file {FileId})",

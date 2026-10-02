@@ -38,7 +38,23 @@ export const canAdministrate = (roles: string[] | undefined | null): boolean =>
 export const canManageAcademic = (roles: string[] | undefined | null): boolean =>
   hasAnyRole(roles, SYSTEM_ADMINISTRATOR, ADMINISTRATOR, COORDINATOR);
 
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Study Materials — Academics → Study Materials.
+//
+// Lectures read/upload materials for units they are APPOINTED TO TEACH; students
+// read/download materials for units they are ENROLLED TO STUDY. Both roles get
+// the menu entry. Administrator/Coordinator/Coordinator-tier staff already reach
+// any unit's materials through the course-offering Units tab, and Receptionist
+// has no study-material workflow, so neither is granted this shortcut.
+//
+// PRESENTATION ONLY. The API re-derives entitlement per request from persisted
+// teaching/enrollment relationships; this list decides what is worth rendering.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Roles shown the Academics → Study Materials entry. */
+export const STUDY_MATERIALS_ROLES: string[] = [LECTURER, STUDENT];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // OMS (Order Management System) — mirrors SMS.Application.Common.OmsAuthorization
 // and the Oms.* policies wired in Program.cs (Phase 2C) so UI visibility always
 // agrees with what the backend will accept. The API remains authoritative;

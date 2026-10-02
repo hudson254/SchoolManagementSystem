@@ -11,7 +11,7 @@ import { theme } from './theme';
 import { ProtectedRoute } from './components/Common/ProtectedRoute';
 import { Layout } from './components/Layout/Layout';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
-import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES, OMS_REQUEST_VIEW_OWN_ROLES, OMS_REQUEST_SELF_ROLES, OMS_REQUEST_VIEW_ROLES } from './utils/roles';
+import { OMS_VIEW_ROLES, OMS_MANAGE_ROLES, OMS_REQUEST_VIEW_OWN_ROLES, OMS_REQUEST_SELF_ROLES, OMS_REQUEST_VIEW_ROLES, STUDY_MATERIALS_ROLES } from './utils/roles';
 
 // Lazy load pages (pages use named exports, so map them to default for React.lazy)
 const loadPage = (importFn: () => Promise<any>, componentName?: string) =>
@@ -34,6 +34,10 @@ const CourseOfferingFormPage = loadPage(() => import('./pages/CourseOfferingForm
 const Units = loadPage(() => import('./pages/Units'), 'Units');
 const AddUnitPage = loadPage(() => import('./pages/AddUnitPage'), 'AddUnitPage');
 const UnitStudyMaterialsPage = loadPage(() => import('./pages/UnitStudyMaterialsPage'), 'UnitStudyMaterialsPage');
+// Academics → Study Materials. The page only lists the units the caller is
+// entitled to (lecturer: units taught, student: units enrolled); the per-unit
+// page below re-authorizes every request server-side.
+const StudyMaterialsPage = loadPage(() => import('./pages/StudyMaterialsPage'), 'StudyMaterialsPage');
 const Classes = loadPage(() => import('./pages/Classes'), 'Classes');
 const Timetable = loadPage(() => import('./pages/Timetable'), 'Timetable');
 const Accommodation = loadPage(() => import('./pages/Accommodation'), 'Accommodation');
@@ -126,6 +130,7 @@ function App() {
                         <Route path="units/new" element={<AddUnitPage />} />
                         <Route path="units/:id" element={<AddUnitPage />} />
                         <Route path="units/:id/edit" element={<AddUnitPage />} />
+                        <Route path="study-materials" element={<ProtectedRoute roles={STUDY_MATERIALS_ROLES}><StudyMaterialsPage /></ProtectedRoute>} />
                         <Route path="units/:id/materials" element={<UnitStudyMaterialsPage />} />
                         <Route path="classes" element={<Classes />} />
                         <Route path="timetable" element={<Timetable />} />

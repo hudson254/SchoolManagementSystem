@@ -22,15 +22,43 @@ export interface StudyMaterial {
   isPublished: boolean;
 }
 
-/** Shared list of material file types accepted by the backend validation. */
+/** A unit the signed-in user may open in Study Materials. */
+export interface StudyMaterialUnit {
+  unitId: string;
+  code: string;
+  name: string;
+  credits: number;
+  courseId: string;
+  courseName: string;
+  /** "Lecturer" = appointed to teach (may upload); "Student" = enrolled (read only). */
+  accessRole: string;
+}
+
+/**
+ * Accepted study-material file types. Mirrors the backend `LecturerNotes`
+ * category, which resolves to UploadSettings.AllowedDocumentExtensions
+ * (src/SMS.Infrastructure/Options/UploadSettings.cs). The server is
+ * authoritative — it re-validates extension, MIME and magic bytes — this list
+ * only avoids showing a file picker rejection the API would not have raised.
+ */
 export const STUDY_MATERIAL_EXTENSIONS = [
-  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx',
+  '.xls', '.xlsx', '.odt', '.odp', '.ods',
+  '.rtf', '.txt', '.csv',
 ];
 
 /** Backend LecturerNotes category limit (50 MB). */
 export const STUDY_MATERIAL_MAX_SIZE_MB = 50;
 
 export const studyMaterialService = {
+  /**
+   * The units the signed-in user may open: those they are appointed to teach
+   * (lecturers) or enrolled to study (students). Resolved server-side from the
+   * same relationships that authorize the endpoints below, so this list can
+   * never offer a unit the API would reject.
+   */
+  getMyUnits: () => api.get<StudyMaterialUnit[]>('/study-materials/my-units'),
+
   /** List published materials for a unit (plain array). */
   getUnitMaterials: (unitId: string) =>
     api.get<StudyMaterial[]>(`/study-materials/unit/${unitId}`),

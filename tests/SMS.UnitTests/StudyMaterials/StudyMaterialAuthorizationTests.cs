@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -8,6 +10,7 @@ using Moq;
 using SMS.Application.Common.Interfaces;
 using SMS.Application.Exceptions;
 using SMS.Application.Features.StudyMaterials.Commands;
+using SMS.Application.Features.StudyMaterials.Queries;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
@@ -212,6 +215,206 @@ namespace SMS.UnitTests.StudyMaterials
                     OriginalFileName = "bad.exe"
                 },
                 CancellationToken.None));
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Save-failure compensation: the upload bytes and UploadFile metadata row
+        // are already committed when the LectureNote insert runs, so a failed
+        // insert must retire the orphaned upload rather than leak it forever.
+        // ─────────────────────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task Create_WhenSaveFails_ShouldRetireOrphanedUploadAndRethrow()
+        {
+            var access = CreateAccessService(isLecturer: true, currentLecturerId: _lecturerId, teachesUnit: true);
+            var upload = CreateUploadService();
+            var unitOfWork = new Mock<IUnitOfWork>();
+            unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("db down"));
+
+            var noteRepo = new Mock<ILectureNoteRepository>();
+            noteRepo.Setup(x => x.AddAsync(It.IsAny<LectureNote>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new LectureNote());
+
+            var unitRepo = new Mock<IUnitRepository>();
+            unitRepo.Setup(x => x.GetByIdAsync(_unitId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Unit { Id = _unitId, Name = "Data Structures", Code = "CSC201" });
+
+            var handler = new CreateStudyMaterialCommandHandler(
+                unitRepo.Object,
+                Mock.Of<ILecturerRepository>(),
+                noteRepo.Object,
+                upload.Object,
+                access.Object,
+                Mock.Of<SMS.Application.Common.Interfaces.ICurrentUserService>(),
+                unitOfWork.Object,
+                Mock.Of<ILogger<CreateStudyMaterialCommandHandler>>());
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => handler.Handle(CreateCommand(), CancellationToken.None));
+
+            upload.Verify(
+                x => x.DeleteAsync(It.IsAny<Guid>(), "system"),
+                Times.Once,
+                "the orphaned upload metadata must be retired when the insert fails");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // GetMyStudyMaterialUnits — the Academics → Study Materials unit selector.
+        // It must expose exactly the units the API would authorize: units the
+        // lecturer is appointed to teach, units the student is enrolled in, and
+        // nothing else.
+        // ─────────────────────────────────────────────────────────────────────
+
+        private static Mock<IAcademicAccessService> CreateSelectorAccess(
+            bool isAdmin = false, bool isLecturer = false, bool isStudent = false,
+            Guid? lecturerId = null, Guid? studentId = null)
+        {
+            var access = new Mock<IAcademicAccessService>();
+            access.Setup(x => x.IsAdminOrCoordinator()).Returns(isAdmin);
+            access.Setup(x => x.IsLecturerRole()).Returns(isLecturer);
+            access.Setup(x => x.IsStudentRole()).Returns(isStudent);
+            access.Setup(x => x.GetCurrentLecturerAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(lecturerId.HasValue
+                    ? new Lecturer { Id = lecturerId.Value, FirstName = "L", LastName = "T" }
+                    : null);
+            access.Setup(x => x.GetCurrentStudentAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(studentId.HasValue
+                    ? new Student { Id = studentId.Value, FirstName = "S", LastName = "T" }
+                    : null);
+            return access;
+        }
+
+        private static Mock<IUnitRepository> CreateUnitRepoReturning(params Guid[] presentIds)
+        {
+            var present = new HashSet<Guid>(presentIds);
+            var unitRepo = new Mock<IUnitRepository>();
+            unitRepo.Setup(x => x.GetUnitsByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) =>
+                    ids.Where(present.Contains)
+                        .Select(id => new Unit
+                        {
+                            Id = id,
+                            Code = "CSC201",
+                            Name = "Data Structures",
+                            Credits = 3,
+                            Course = new Course { Name = "Computer Science" }
+                        })
+                        .ToList());
+            return unitRepo;
+        }
+
+        private static GetMyStudyMaterialUnitsQueryHandler CreateSelectorHandler(
+            Mock<IAcademicAccessService> access,
+            IEnumerable<Guid> taughtUnitIds,
+            IEnumerable<Guid> enrolledUnitIds,
+            Mock<IUnitRepository>? unitRepo = null)
+        {
+            var lecturerRepo = new Mock<ILecturerRepository>();
+            lecturerRepo.Setup(x => x.GetTaughtUnitIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(taughtUnitIds);
+
+            var studentRepo = new Mock<IStudentRepository>();
+            studentRepo.Setup(x => x.GetEnrolledUnitIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(enrolledUnitIds);
+
+            return new GetMyStudyMaterialUnitsQueryHandler(
+                (unitRepo ?? CreateUnitRepoReturning()).Object,
+                lecturerRepo.Object,
+                studentRepo.Object,
+                access.Object,
+                Mock.Of<SMS.Application.Common.Interfaces.ICurrentUserService>(),
+                Mock.Of<ILogger<GetMyStudyMaterialUnitsQueryHandler>>());
+        }
+
+        [Fact]
+        public async Task MyUnits_Lecturer_ShouldReturnOnlyTaughtUnits()
+        {
+            var taught = Guid.NewGuid();
+            var access = CreateSelectorAccess(isLecturer: true, lecturerId: _lecturerId);
+
+            var handler = CreateSelectorHandler(
+                access,
+                taughtUnitIds: new[] { taught },
+                enrolledUnitIds: Array.Empty<Guid>(),
+                unitRepo: CreateUnitRepoReturning(taught));
+
+            var result = await handler.Handle(new GetMyStudyMaterialUnitsQuery(), CancellationToken.None);
+
+            result.Should().HaveCount(1);
+            result[0].UnitId.Should().Be(taught);
+            result[0].AccessRole.Should().Be("Lecturer");
+        }
+
+        [Fact]
+        public async Task MyUnits_Student_ShouldReturnOnlyEnrolledUnits()
+        {
+            var enrolled = Guid.NewGuid();
+            var access = CreateSelectorAccess(isStudent: true, studentId: Guid.NewGuid());
+
+            var handler = CreateSelectorHandler(
+                access,
+                taughtUnitIds: Array.Empty<Guid>(),
+                enrolledUnitIds: new[] { enrolled },
+                unitRepo: CreateUnitRepoReturning(enrolled));
+
+            var result = await handler.Handle(new GetMyStudyMaterialUnitsQuery(), CancellationToken.None);
+
+            result.Should().HaveCount(1);
+            result[0].UnitId.Should().Be(enrolled);
+            result[0].AccessRole.Should().Be("Student");
+        }
+
+        [Fact]
+        public async Task MyUnits_ShouldNeverReturnAUnitOutsideTheCallersRelationships()
+        {
+            // A unit belonging to another lecturer or another tenant is never part
+            // of the caller's entitlement set, so its id is never even submitted to
+            // the (tenant-scoped) unit lookup.
+            var entitled = Guid.NewGuid();
+            var notEntitled = Guid.NewGuid();
+            var access = CreateSelectorAccess(isLecturer: true, lecturerId: _lecturerId);
+
+            var handler = CreateSelectorHandler(
+                access,
+                taughtUnitIds: new[] { entitled },
+                enrolledUnitIds: Array.Empty<Guid>(),
+                unitRepo: CreateUnitRepoReturning(entitled, notEntitled));
+
+            var result = await handler.Handle(new GetMyStudyMaterialUnitsQuery(), CancellationToken.None);
+
+            result.Should().HaveCount(1);
+            result.Should().NotContain(u => u.UnitId == notEntitled);
+        }
+
+        [Fact]
+        public async Task MyUnits_ReceptionistLikeRole_ShouldThrowForbidden()
+        {
+            var access = CreateSelectorAccess(); // no lecturer/student/admin role
+
+            var handler = CreateSelectorHandler(
+                access,
+                taughtUnitIds: new[] { Guid.NewGuid() },
+                enrolledUnitIds: new[] { Guid.NewGuid() });
+
+            await Assert.ThrowsAsync<ForbiddenException>(
+                () => handler.Handle(new GetMyStudyMaterialUnitsQuery(), CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task MyUnits_AuthorizedRoleWithNoRelationships_ShouldReturnEmpty()
+        {
+            // Holds the Lecturer role but has no persisted teaching relationship.
+            var access = CreateSelectorAccess(isLecturer: true);
+
+            var handler = CreateSelectorHandler(
+                access,
+                taughtUnitIds: Array.Empty<Guid>(),
+                enrolledUnitIds: Array.Empty<Guid>());
+
+            var result = await handler.Handle(new GetMyStudyMaterialUnitsQuery(), CancellationToken.None);
+
+            result.Should().BeEmpty();
         }
     }
 }

@@ -28,6 +28,23 @@ namespace SMS.API.Controllers.v1
         }
 
         /// <summary>
+        /// The units the signed-in user may open in Study Materials: the units they
+        /// are appointed to teach (lecturers) or enrolled to study (students).
+        /// Derived from the same persisted relationships that authorize the list,
+        /// upload and download endpoints, so the selector can never disagree with
+        /// them. Roles with no academic relationship are rejected with 403.
+        /// </summary>
+        [HttpGet("my-units")]
+        [ProducesResponseType(typeof(IEnumerable<StudyMaterialUnitDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetMyUnits(CancellationToken cancellationToken)
+        {
+            var result = await Mediator.Send(new GetMyStudyMaterialUnitsQuery(), cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// List published study materials for a unit. Lecturers must teach the
         /// unit; students must be enrolled in it; admin/coordinator may view all.
         /// </summary>

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -61,7 +62,30 @@ namespace SMS.Application.Features.StudyMaterials.Queries
                 throw new ForbiddenException("StudyMaterial", _currentUserService.UserId ?? "unknown");
             }
 
-            var stream = await _uploadService.DownloadByPathAsync(material.FilePath);
+            Stream stream;
+            try
+            {
+                stream = await _uploadService.DownloadByPathAsync(material.FilePath);
+            }
+            catch (FileNotFoundException)
+            {
+                // The metadata row exists but the stored bytes are gone (manual
+                // cleanup, volume restore, bad mount). FileNotFoundException derives
+                // from IOException, which the exception middleware maps to HTTP 500.
+                // Reporting 404 keeps a missing file from looking like a server fault
+                // and avoids the raw filesystem path leaking into the error body.
+                _logger.LogWarning(
+                    "Study material {MaterialId} references a file that is no longer present in storage",
+                    request.MaterialId);
+                throw new NotFoundException("StudyMaterialFile", request.MaterialId);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                _logger.LogWarning(
+                    "Study material {MaterialId} references a storage directory that is no longer present",
+                    request.MaterialId);
+                throw new NotFoundException("StudyMaterialFile", request.MaterialId);
+            }
 
             var contentType = !string.IsNullOrEmpty(material.UploadFile?.MimeType)
                 ? material.UploadFile.MimeType
