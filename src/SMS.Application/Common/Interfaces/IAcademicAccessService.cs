@@ -27,14 +27,19 @@ namespace SMS.Application.Common.Interfaces
         bool IsStudentRole();
 
         /// <summary>
-        /// Whether the given lecturer is authorized to teach the given unit
-        /// (via unit allocations or course-offering lecturer assignments).
+        /// Whether the given lecturer holds an APPROVED and ACTIVE teaching
+        /// appointment for the given unit: active unit allocation, plus an active
+        /// course-offering teaching assignment when the allocation belongs to one,
+        /// plus an <c>Approved</c> lecturer registration. False for a lecturer who
+        /// is still <c>PendingApproval</c>.
         /// </summary>
         Task<bool> LecturerTeachesUnitAsync(Guid lecturerId, Guid unitId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Whether the current lecturer is authorized to teach the given unit
-        /// (via unit allocations or course-offering lecturer assignments).
+        /// Whether the CURRENT lecturer (resolved from the authenticated identity,
+        /// never from client input) holds an APPROVED and ACTIVE teaching
+        /// appointment for the given unit. False for a lecturer who is still
+        /// <c>PendingApproval</c>.
         /// </summary>
         Task<bool> LecturerTeachesUnitAsync(Guid unitId, CancellationToken cancellationToken = default);
 

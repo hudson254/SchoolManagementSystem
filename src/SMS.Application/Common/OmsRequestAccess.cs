@@ -62,6 +62,33 @@ namespace SMS.Application.Common
         }
 
         /// <summary>
+        /// True when the caller may modify the request's own mutable fields
+        /// (title, description, priority, due date).
+        /// <para>
+        /// Object-level, exactly like <see cref="CanView"/>: either the caller
+        /// raised the request (and holds an own-request role), or the caller holds
+        /// a privileged queue role that may update any request in the tenant.
+        /// </para>
+        /// <para>
+        /// Role membership alone is never sufficient for the non-owner branch:
+        /// <c>UpdateRequestRoles</c> covers every request-creating role, including
+        /// Student, so treating it as "may update anybody's request" let any
+        /// student overwrite another student's request.
+        /// </para>
+        /// </summary>
+        public static bool CanUpdate(Request request, string? userId, IEnumerable<string>? roles)
+        {
+            if (request == null)
+                return false;
+
+            if (OmsAuthorization.HasAnyRole(roles ?? Enumerable.Empty<string>(), OmsAuthorization.UpdateAnyRequestRoles))
+                return true;
+
+            return IsRequester(request, userId)
+                && OmsAuthorization.HasAnyRole(roles ?? Enumerable.Empty<string>(), OmsAuthorization.UpdateRequestRoles);
+        }
+
+        /// <summary>
         /// True when the caller may attach files to the request. Attachments may
         /// be added by anyone who can view the request while it is still open
         /// for work (i.e. not in a terminal status); terminal requests are

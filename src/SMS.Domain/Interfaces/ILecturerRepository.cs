@@ -21,8 +21,29 @@ namespace SMS.Domain.Interfaces
         Task<Lecturer> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Returns the distinct unit ids this lecturer is authorized to teach,
-        /// derived from unit allocations and course-offering lecturer assignments.
+        /// Returns the distinct unit ids this lecturer is currently AUTHORIZED to
+        /// teach.
+        /// <para>
+        /// Derived from persisted data only, and deliberately narrow so a lecturer
+        /// can never gain a unit that was not explicitly allocated to them:
+        /// </para>
+        /// <list type="number">
+        /// <item>the lecturer's own ACTIVE <c>UnitAllocation</c> rows - this is the
+        /// record of the units the lecturer actually selected; a
+        /// <c>PendingApproval</c> allocation therefore grants nothing;</item>
+        /// <item>when such an allocation is linked to a course offering, the offering
+        /// must ALSO carry an ACTIVE (<c>Status == "Active"</c>) teaching assignment
+        /// for this lecturer. Registration writes that assignment as
+        /// <c>PendingConfirmation</c> and only approval activates it, so a
+        /// still-pending lecturer is not entitled to anything.</item>
+        /// </list>
+        /// <para>
+        /// The previous implementation expanded every <c>CourseOfferingLecturer</c> row
+        /// (filtering only <c>IsActive</c>, never <c>Status</c>) to EVERY unit of that
+        /// offering. Because the offering snapshot is shared by all lecturers of the
+        /// course, one lecturer's pending registration granted every lecturer — and
+        /// every pending lecturer — the whole course.
+        /// </para>
         /// </summary>
         Task<IEnumerable<Guid>> GetTaughtUnitIdsAsync(Guid lecturerId, CancellationToken cancellationToken = default);
     }

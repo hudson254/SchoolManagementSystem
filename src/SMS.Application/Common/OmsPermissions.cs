@@ -143,8 +143,25 @@ namespace SMS.Application.Common
         /// <summary>Create requests: all roles.</summary>
         public static readonly string[] CreateRequestRoles = new[] { "SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student" };
 
-        /// <summary>Update own draft/returned requests.</summary>
-        public static readonly string[] UpdateRequestRoles = CreateRequestRoles;
+        /// <summary>
+        /// Update a request the caller raised themselves: all roles.
+        /// <para>
+        /// This set is OWNERSHIP-scoped - it says nothing about another user's
+        /// request. Membership here only makes an own-record update eligible; the
+        /// object-level decision is <see cref="OmsRequestAccess.CanUpdate"/>, which
+        /// additionally requires the caller to be the requester. Do NOT alias this
+        /// to <see cref="CreateRequestRoles"/> and use it as a "may update anything"
+        /// gate: that alias made every request-creating role (including Student)
+        /// able to modify other users' requests.
+        /// </para>
+        /// </summary>
+        public static readonly string[] UpdateRequestRoles = ViewOwnRequestsRoles;
+
+        /// <summary>
+        /// Update ANY request in the tenant queue rather than only their own:
+        /// SystemAdministrator, Administrator, Coordinator.
+        /// </summary>
+        public static readonly string[] UpdateAnyRequestRoles = CoordinatorRoles;
 
         /// <summary>Submit own requests: all roles.</summary>
         public static readonly string[] SubmitRequestRoles = CreateRequestRoles;

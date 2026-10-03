@@ -62,6 +62,32 @@ namespace SMS.Application.Features.Dashboard.Queries
                 throw new NotFoundException("Lecturer (current user)");
             }
 
+            // The lecturer's own active unit allocations are loaded FIRST because they
+            // define which units of a shared course offering this lecturer actually
+            // teaches. A `course_offering_units` snapshot is shared by every lecturer
+            // of the offering, so listing it wholesale would show each lecturer the
+            // units their colleagues were allocated.
+            var allocations = (await _unitAllocations.GetByLecturerAsync(lecturer.Id))
+                .Where(a => a.Status == "Active" && !a.IsDeleted)
+                .ToList();
+
+            var allocatedUnitsByOffering = new Dictionary<Guid, HashSet<Guid>>();
+            foreach (var allocation in allocations)
+            {
+                if (allocation.CourseOfferingId is not Guid offeringId || offeringId == Guid.Empty)
+                {
+                    continue;
+                }
+
+                if (!allocatedUnitsByOffering.TryGetValue(offeringId, out var unitIds))
+                {
+                    unitIds = new HashSet<Guid>();
+                    allocatedUnitsByOffering[offeringId] = unitIds;
+                }
+
+                unitIds.Add(allocation.UnitId);
+            }
+
             // 1. Course offerings this lecturer teaches (persisted teaching assignments).
             var teachingLinks = (await _courseOfferingLecturers.GetActiveByLecturerAsync(
                     lecturer.Id, cancellationToken))
@@ -78,8 +104,18 @@ namespace SMS.Application.Features.Dashboard.Queries
                 }
 
                 var offeringUnits = await _courseOfferingUnits.GetOrderedUnitsAsync(offering.Id, cancellationToken);
+
+                // When the lecturer has explicit allocations in THIS offering, only
+                // those units are theirs. An offering assignment with no allocation
+                // of its own is an administrative appointment, so the full offering
+                // snapshot is shown in that case (unchanged behaviour).
+                var lecturerUnitIds = allocatedUnitsByOffering.TryGetValue(offering.Id, out var ids)
+                    ? ids
+                    : null;
+
                 var unitDtos = offeringUnits
-                    .Where(u => u.IsActive && !u.IsDeleted)
+                    .Where(u => u.IsActive && !u.IsDeleted && u.UnitId.HasValue)
+                    .Where(u => lecturerUnitIds == null || lecturerUnitIds.Contains(u.UnitId!.Value))
                     .Select(u => new DashboardUnitDto
                     {
                         UnitId = u.UnitId ?? Guid.Empty,
@@ -106,10 +142,8 @@ namespace SMS.Application.Features.Dashboard.Queries
                 });
             }
 
-            // 2. Direct unit allocations (supplementary teaching assignments).
-            var allocations = (await _unitAllocations.GetByLecturerAsync(lecturer.Id))
-                .Where(a => a.Status == "Active" && !a.IsDeleted)
-                .ToList();
+            // 2. Direct unit allocations (supplementary teaching assignments), already
+            //    loaded above.
 
             var allocationUnitIds = allocations.Select(a => a.UnitId).Distinct().ToList();
             var allocationUnits = allocationUnitIds.Count > 0

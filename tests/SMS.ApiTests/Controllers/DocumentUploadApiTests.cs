@@ -244,6 +244,12 @@ namespace SMS.ApiTests.Controllers
                 Email = CurrentUserEmail,
                 EmployeeNumber = $"EMP-{suffix}",
                 IsActive = true,
+                // This lecturer models a FULLY approved teaching account: it holds an
+                // ACTIVE unit allocation (below) and an ACTIVE, confirmed offering
+                // assignment. Privileged teaching authorization requires all three
+                // dimensions, including an Approved registration - a lecturer still
+                // in PendingApproval is entitled to nothing.
+                RegistrationStatus = RegistrationStatus.Approved,
                 TenantId = DefaultTenantId
             });
 

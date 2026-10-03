@@ -83,12 +83,14 @@ mirrors it; hiding a control is never the control.
 
 | Rule | Enforced by |
 | --- | --- |
-| A lecturer may upload only to a unit they are appointed to teach | `CreateStudyMaterialCommandHandler` → `IAcademicAccessService.LecturerTeachesUnitAsync(lecturerId, unitId)` |
+| A lecturer may upload only to a unit they are **approved** and **actively** appointed to teach | `CreateStudyMaterialCommandHandler` → `IAcademicAccessService.LecturerTeachesUnitAsync(lecturerId, unitId)` |
+| A lecturer still in `PendingApproval` may do nothing privileged | `AcademicAccessService.LecturerTeachesUnitAsync` requires `Lecturer.RegistrationStatus == Approved`; `GetMyStudyMaterialUnitsQueryHandler` withholds their units |
+| Only the lecturer's **own allocated** units count — a shared offering never widens an appointment | `LecturerRepository.GetTaughtUnitIdsAsync` intersects ACTIVE allocations with ACTIVE (`Status == "Active"`) offering assignments, per lecturer |
 | The lecturer is resolved from the authenticated user, never from client input | `CreateStudyMaterialCommandHandler`; `SpecifiedLecturerId` is honoured only for Administrator/Coordinator |
 | A student may list/download only units they are enrolled in | `GetUnitStudyMaterialsQueryHandler`, `DownloadStudyMaterialQueryHandler` → `StudentEnrolledInUnitAsync(unitId)` |
 | A client-supplied `unitId` is never trusted | The unit is re-resolved through the repository and the relationship re-checked on every call |
 | Material `id` manipulation is not an IDOR vector | `DownloadStudyMaterialQueryHandler` loads the material, then authorizes against **its own** `UnitId` |
-| Delete requires ownership or teaching relationship | `DeleteStudyMaterialCommandHandler` |
+| Delete requires **ownership** of the material **and** an approved active appointment for its unit | `DeleteStudyMaterialCommandHandler` — a lecturer who merely teaches the unit may not delete a colleague's material (Administrator/Coordinator override unchanged) |
 | Roles with no academic relationship get nothing | All handlers; `my-units` returns `403` |
 ### Tenant isolation
 
@@ -168,7 +170,11 @@ See `STUDY_MATERIALS_REPAIR_AND_DEPLOYMENT_REPORT.md` for the executed results.
 
 `AcademicAccessService` derives relationships from persisted data only:
 
-* **Taught** — active `UnitAllocation` rows **plus** units of active
-  `CourseOfferingLecturer` assignments.
+* **Taught** — the lecturer's own **active** `UnitAllocation` rows, and only when
+  the allocation's course offering also carries an **active**
+  (`Status = "Active"`) `CourseOfferingLecturer` assignment for that lecturer.
+  Registration writes both as pending; administrator approval activates them.
+  A lecturer awaiting approval is therefore entitled to nothing, and a shared
+  offering snapshot never grants a lecturer a colleague's units.
 * **Enrolled** — legacy `Enrollment` rows, `StudentEnrollment` rows with status
   `Enrolled`, **plus** units of active `CourseOfferingEnrollment` rows.

@@ -12,6 +12,7 @@ using SMS.Domain.Common;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
+using SMS.UnitTests.Common;
 using Xunit;
 
 namespace SMS.UnitTests.Auth
@@ -57,7 +58,8 @@ namespace SMS.UnitTests.Auth
         private readonly Mock<IEnrollmentRepository> _enrollmentRepo = new();
         private readonly Mock<IBusinessEventNotifier> _notifier = new();
         private readonly Mock<SMS.Multitenancy.Interfaces.ITenantContext> _tenantContext = new();
-        private readonly Mock<IUnitOfWork> _unitOfWork = new();
+        private readonly Mock<IUnitOfWork> _unitOfWork =
+            new Mock<IUnitOfWork>().RunsTransactionInline<SMS.Domain.Entities.User>();
 
         private RegisterCommandHandler CreateHandler() =>
             new(

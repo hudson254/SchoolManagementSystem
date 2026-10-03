@@ -75,8 +75,12 @@ namespace SMS.Application.Features.OMS.Commands
             if (!RequestLifecycle.CanEdit(req.Status))
                 throw new BusinessRuleException($"Cannot edit a request in {req.Status} status.");
 
-            if (req.RequesterUserId != _currentUser.UserId &&
-                !OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.UpdateRequestRoles))
+            // Object-level ownership. Role membership alone is never sufficient:
+            // only the requester (or a privileged queue role that may update any
+            // request in the tenant) may modify this record. A student therefore
+            // cannot rewrite another student's request even though Student is a
+            // request-creating role.
+            if (!OmsRequestAccess.CanUpdate(req, _currentUser.UserId, _currentUser.Roles))
                 throw new ForbiddenException(OmsPermissions.UpdateRequest, _currentUser.UserId);
 
             if (request.RowVersion != null)

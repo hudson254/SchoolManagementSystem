@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SMS.Application.Common.Interfaces;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Services
@@ -102,12 +103,45 @@ namespace SMS.Application.Services
                 return false;
             }
 
-            var taughtUnitIds = await _lecturerRepository.GetTaughtUnitIdsAsync(lecturer.Id, cancellationToken).ConfigureAwait(false);
-            return taughtUnitIds.Contains(unitId);
+            return await LecturerTeachesUnitAsync(lecturer.Id, unitId, cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Whether <paramref name="lecturerId"/> currently holds an APPROVED and ACTIVE
+        /// teaching appointment for <paramref name="unitId"/>.
+        /// <para>
+        /// All the dimensions are checked, and every one of them is required:
+        /// </para>
+        /// <list type="bullet">
+        /// <item>the lecturer is resolved from the authenticated identity, never from
+        /// client input;</item>
+        /// <item>the lecturer's registration must be <c>Approved</c> - a
+        /// <c>PendingApproval</c> lecturer holds a persisted allocation but is not yet
+        /// entitled to perform privileged teaching actions;</item>
+        /// <item>the unit must be in the lecturer's own ACTIVE unit allocations, and,
+        /// when that allocation is linked to a course offering, the lecturer's teaching
+        /// assignment for that offering must be ACTIVE too.</item>
+        /// </list>
+        /// <para>
+        /// Tenant scoping is inherited: every row consulted is tenant-aware and read
+        /// through the tenant-filtered DbSet (and PostgreSQL RLS).
+        /// </para>
+        /// </summary>
         public async Task<bool> LecturerTeachesUnitAsync(Guid lecturerId, Guid unitId, CancellationToken cancellationToken = default)
         {
+            var lecturer = await _lecturerRepository.GetByIdAsync(lecturerId, cancellationToken).ConfigureAwait(false);
+            if (lecturer == null || lecturer.IsDeleted)
+            {
+                return false;
+            }
+
+            // Privileged teaching actions are gated on the approval workflow: the
+            // whole point of PendingApproval is that teaching has not started yet.
+            if (lecturer.RegistrationStatus != RegistrationStatus.Approved)
+            {
+                return false;
+            }
+
             var taughtUnitIds = await _lecturerRepository.GetTaughtUnitIdsAsync(lecturerId, cancellationToken).ConfigureAwait(false);
             return taughtUnitIds.Contains(unitId);
         }

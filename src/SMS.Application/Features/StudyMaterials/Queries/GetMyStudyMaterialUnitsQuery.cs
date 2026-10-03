@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using SMS.Application.Common.Interfaces;
 using SMS.Application.DTOs;
 using SMS.Application.Exceptions;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Features.StudyMaterials.Queries
@@ -67,10 +68,22 @@ namespace SMS.Application.Features.StudyMaterials.Queries
             if (_academicAccessService.IsLecturerRole() || _academicAccessService.IsAdminOrCoordinator())
             {
                 var lecturer = await _academicAccessService.GetCurrentLecturerAsync(cancellationToken);
-                if (lecturer != null)
+                if (lecturer != null && lecturer.RegistrationStatus == RegistrationStatus.Approved)
                 {
+                    // Derived from the same persisted relationships the mutation
+                    // handlers authorize against, so the selector can never offer a
+                    // unit the API would refuse. A lecturer whose registration is
+                    // still PendingApproval is offered nothing at all: the selection
+                    // is persisted and visible on the dashboard, but teaching has
+                    // not been approved yet.
                     var ids = await _lecturerRepository.GetTaughtUnitIdsAsync(lecturer.Id, cancellationToken);
                     taughtUnitIds = new HashSet<Guid>(ids);
+                }
+                else if (lecturer != null)
+                {
+                    _logger.LogInformation(
+                        "Study material units withheld for {UserId}: lecturer {LecturerId} is {RegistrationStatus}, not approved",
+                        userId, lecturer.Id, lecturer.RegistrationStatus);
                 }
             }
 

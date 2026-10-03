@@ -16,6 +16,7 @@ using SMS.Domain.Common;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
+using SMS.UnitTests.Common;
 using Xunit;
 
 namespace SMS.UnitTests.Enrollments
@@ -72,7 +73,7 @@ namespace SMS.UnitTests.Enrollments
             var unitRepo = new Mock<IUnitRepository>();
             var unitAllocationRepo = new Mock<IUnitAllocationRepository>();
             var tenantContext = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
-            var unitOfWork = new Mock<IUnitOfWork>();
+            var unitOfWork = new Mock<IUnitOfWork>().RunsTransactionInline<SMS.Domain.Entities.User>();
             var enrollmentRepo = new Mock<IEnrollmentRepository>();
             var courseOfferingRepo = new Mock<ICourseOfferingRepository>();
             var courseOfferingEnrollmentRepo = new Mock<ICourseOfferingEnrollmentRepository>();

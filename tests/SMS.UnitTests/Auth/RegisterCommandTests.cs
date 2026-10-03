@@ -12,6 +12,7 @@ using SMS.Application.Services;
 using SMS.Domain.Common;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
+using SMS.UnitTests.Common;
 using Xunit;
 
 namespace SMS.UnitTests.Auth
@@ -55,7 +56,7 @@ namespace SMS.UnitTests.Auth
             _unitAllocationRepositoryMock = new Mock<IUnitAllocationRepository>();
             _semesterRepositoryMock = new Mock<ISemesterRepository>();
             _tenantContextMock = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
-            _unitOfWorkMock = new Mock<IUnitOfWork>();
+            _unitOfWorkMock = new Mock<IUnitOfWork>().RunsTransactionInline<SMS.Domain.Entities.User>();
             _enrollmentRepositoryMock = new Mock<IEnrollmentRepository>();
             _courseOfferingRepositoryMock = new Mock<ICourseOfferingRepository>();
             _courseOfferingEnrollmentRepositoryMock = new Mock<ICourseOfferingEnrollmentRepository>();

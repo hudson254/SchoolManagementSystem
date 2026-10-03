@@ -53,6 +53,10 @@ namespace SMS.Application.Features.StudyMaterials.Commands
         public async Task<bool> Handle(DeleteStudyMaterialCommand request, CancellationToken cancellationToken)
         {
             var material = await _lectureNoteRepository.GetByIdAsync(request.MaterialId, cancellationToken);
+
+            // The material's UnitId is read from the stored row, never from the
+            // client-supplied unitId query parameter, so the relationship is always
+            // checked against the unit the material actually belongs to.
             if (material == null || material.UnitId != request.UnitId)
             {
                 throw new NotFoundException("StudyMaterial", request.MaterialId);
@@ -61,15 +65,29 @@ namespace SMS.Application.Features.StudyMaterials.Commands
             bool allowed;
             if (_academicAccessService.IsAdminOrCoordinator())
             {
+                // Administrative override is unchanged.
                 allowed = true;
             }
             else if (_academicAccessService.IsLecturerRole())
             {
                 var currentLecturer = await _academicAccessService.GetCurrentLecturerAsync(cancellationToken);
+
+                // Two independent, object-level requirements for a lecturer:
+                //   1. they uploaded this material (material.LecturerId), AND
+                //   2. they hold an APPROVED, ACTIVE teaching appointment for the
+                //      material's unit.
+                //
+                // "Teaches the unit" alone is NOT sufficient: the unit-level
+                // entitlement is shared by every lecturer appointed to that unit, so
+                // using it as the delete rule let Lecturer B remove Lecturer A's
+                // material merely because both lectured the same course. Study
+                // materials are lecturer-owned records (LectureNote.LecturerId is the
+                // uploader of record), so deletion requires ownership; the
+                // administrative override above remains the escape hatch.
                 allowed = currentLecturer != null &&
-                          (currentLecturer.Id == material.LecturerId ||
-                           await _academicAccessService.LecturerTeachesUnitAsync(
-                               currentLecturer.Id, material.UnitId, cancellationToken));
+                          currentLecturer.Id == material.LecturerId &&
+                          await _academicAccessService.LecturerTeachesUnitAsync(
+                              currentLecturer.Id, material.UnitId, cancellationToken);
             }
             else
             {

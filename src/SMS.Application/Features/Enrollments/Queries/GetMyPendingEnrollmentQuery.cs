@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using SMS.Application.Common.Interfaces;
+using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
@@ -87,7 +88,18 @@ namespace SMS.Application.Features.Enrollments.Queries
                 ?? student.Enrollments?.FirstOrDefault()?.CourseId;
             var courseName = student.SelectedCourse?.Name
                 ?? student.Enrollments?.FirstOrDefault()?.Course?.Name;
-            var unitsCount = student.Enrollments?.Count ?? 0;
+
+            // UnitsCount must reflect the student's REAL, persisted unit enrollments.
+            // It is derived from the authoritative enrollment relationship
+            // (Student -> Enrollments, each row one course unit) rather than
+            // hard-coded, and the query is already tenant scoped (the Student is
+            // resolved through the tenant-filtered DbSet) and user scoped (the rows
+            // hang off this student only). Soft-deleted enrollments never count, and
+            // the count is identical before and after approval so the reported
+            // number matches the selection the student actually submitted.
+            var enrollments = student.Enrollments?.Where(e => !e.IsDeleted).ToList()
+                              ?? new List<Enrollment>();
+            var unitsCount = enrollments.Count;
 
             // Never report a selection that does not exist, and never report "no
             // selection" when one was persisted. needsCourseSelection stays

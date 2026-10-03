@@ -301,15 +301,25 @@ namespace SMS.UnitTests.StudyMaterials
 
         private static Mock<IAcademicAccessService> CreateSelectorAccess(
             bool isAdmin = false, bool isLecturer = false, bool isStudent = false,
-            Guid? lecturerId = null, Guid? studentId = null)
+            Guid? lecturerId = null, Guid? studentId = null,
+            RegistrationStatus lecturerStatus = RegistrationStatus.Approved)
         {
             var access = new Mock<IAcademicAccessService>();
             access.Setup(x => x.IsAdminOrCoordinator()).Returns(isAdmin);
             access.Setup(x => x.IsLecturerRole()).Returns(isLecturer);
             access.Setup(x => x.IsStudentRole()).Returns(isStudent);
+            // The registration status matters: privileged teaching entitlement is
+            // gated on the lecturer being Approved, exactly as the real
+            // AcademicAccessService derives it.
             access.Setup(x => x.GetCurrentLecturerAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(lecturerId.HasValue
-                    ? new Lecturer { Id = lecturerId.Value, FirstName = "L", LastName = "T" }
+                    ? new Lecturer
+                    {
+                        Id = lecturerId.Value,
+                        FirstName = "L",
+                        LastName = "T",
+                        RegistrationStatus = lecturerStatus
+                    }
                     : null);
             access.Setup(x => x.GetCurrentStudentAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(studentId.HasValue

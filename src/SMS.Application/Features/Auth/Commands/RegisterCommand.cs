@@ -280,23 +280,68 @@ namespace SMS.Application.Features.Auth.Commands
                     throw new ConflictException("Username is already taken");
             }
 
-            var user = await _userManagerService.CreateUserAsync(username, request.Email, request.Password, request.Role);
-            if (user == null)
-                throw new ExternalServiceException("User creation service returned null");
+            // ── Atomicity of the registration ──────────────────────────────────────
+            // ASP.NET Identity and the academic repositories share ONE
+            // ApplicationDbContext (AddEntityFrameworkStores<ApplicationDbContext>),
+            // but there is no ambient transaction here: every SaveChangesAsync below
+            // commits on its own. A failure AFTER CreateUserAsync (an unresolvable
+            // academic period, a course/unit that does not exist, a rejected foreign
+            // unit, a duplicate username) therefore left a usable Identity account
+            // with no Student/Lecturer profile behind it - an orphan that also made
+            // the same email unregistrable afterwards (409).
+            //
+            // The unit of work is run inside a single transaction so the Identity
+            // user, its role assignment, the profile and every enrollment /
+            // allocation / offering row either all commit or all roll back.
+            // ExecuteInTransactionAsync (rather than BeginTransactionAsync) is used
+            // because the Npgsql retrying execution strategy owns user-initiated
+            // transactions; the tenant GUC is session scoped, so RLS is unaffected by
+            // the surrounding transaction.
+            User? createdUser = null;
+            User typedUser;
+            try
+            {
+                typedUser = await _unitOfWork.ExecuteInTransactionAsync(async () =>
+                {
+                    var user = await _userManagerService.CreateUserAsync(
+                        username, request.Email, request.Password, request.Role);
+                    if (user == null)
+                        throw new ExternalServiceException("User creation service returned null");
 
-            var typedUser = (User)user;
-            typedUser.FirstName = parsed.FirstName;
-            typedUser.LastName = parsed.LastName;
-            typedUser.MiddleName = parsed.MiddleName;
-            typedUser.Title = title;
-            typedUser.PhoneNumber = request.PhoneNumber;
-            typedUser.Organization = request.Organization;
-            await _userManagerService.UpdateUserAsync(typedUser);
+                    // Captured immediately so the compensating cleanup below can
+                    // still identify the account if a LATER step of this same
+                    // transaction fails.
+                    createdUser = user;
 
-            if (request.Role.Equals("Student", StringComparison.OrdinalIgnoreCase))
-                await CreateStudentRecord(request, typedUser, parsed, title, cancellationToken);
-            else if (request.Role.Equals("Lecturer", StringComparison.OrdinalIgnoreCase))
-                await CreateLecturerRecord(request, typedUser, parsed, title, cancellationToken);
+                    var newUser = (User)user;
+                    newUser.FirstName = parsed.FirstName;
+                    newUser.LastName = parsed.LastName;
+                    newUser.MiddleName = parsed.MiddleName;
+                    newUser.Title = title;
+                    newUser.PhoneNumber = request.PhoneNumber;
+                    newUser.Organization = request.Organization;
+                    await _userManagerService.UpdateUserAsync(newUser);
+
+                    if (request.Role.Equals("Student", StringComparison.OrdinalIgnoreCase))
+                        await CreateStudentRecord(request, newUser, parsed, title, cancellationToken);
+                    else if (request.Role.Equals("Lecturer", StringComparison.OrdinalIgnoreCase))
+                        await CreateLecturerRecord(request, newUser, parsed, title, cancellationToken);
+
+                    return newUser;
+                }, cancellationToken);
+            }
+            catch
+            {
+                // Defence in depth. The transaction above already discards the
+                // Identity user together with the academic rows, but a failure
+                // raised while BEGIN/COMMIT was itself being established (or by a
+                // provider that cannot enlist Identity) would still leave the
+                // account behind. Only the user THIS attempt created is removed, so
+                // an account created by any other process is never touched, and the
+                // original failure is rethrown unchanged.
+                await CompensateFailedRegistrationAsync(createdUser, request.Email);
+                throw;
+            }
 
             var roles = await _userManagerService.GetRolesAsync(typedUser);
             var rolesList = roles?.ToList() ?? new List<string>();
@@ -325,6 +370,58 @@ namespace SMS.Application.Features.Auth.Commands
                 Roles = rolesList,
                 RegistrationStatus = RegistrationStatus.PendingCourseSelection.ToString()
             };
+        }
+
+        /// <summary>
+        /// Removes the Identity account created by THIS registration attempt when the
+        /// attempt failed, so a failed registration leaves no orphan user behind.
+        /// <para>
+        /// Scoped deliberately: only the exact user object handed back by
+        /// <c>CreateUserAsync</c> for this attempt is removed. An account that already
+        /// existed, or that was created by an unrelated process (seeders,
+        /// <c>POST /users</c>, a concurrent registration), can never be matched,
+        /// because the handler returns early with 409 when
+        /// <c>FindByEmailAsync</c> finds one.
+        /// </para>
+        /// <para>
+        /// Cleanup failures are swallowed and logged: the original registration
+        /// failure is the one the caller must see, and a failed compensation must
+        /// never replace it with a different, misleading error.
+        /// </para>
+        /// </summary>
+        private async Task CompensateFailedRegistrationAsync(User? createdUser, string email)
+        {
+            if (createdUser == null || string.IsNullOrEmpty(createdUser.Id))
+            {
+                // The Identity user was never created (the failure happened while
+                // validating the request, or before CreateUserAsync), so there is
+                // nothing to compensate.
+                return;
+            }
+
+            try
+            {
+                var existing = await _userManagerService.FindByIdAsync(createdUser.Id);
+                if (existing == null)
+                {
+                    // Already rolled back with the surrounding transaction.
+                    return;
+                }
+
+                var deleted = await _userManagerService.DeleteUserAsync(existing.Id);
+                if (deleted)
+                {
+                    _logger.LogWarning(
+                        "Compensating cleanup removed the Identity account created for failed registration of {Email}",
+                        email);
+                }
+            }
+            catch (Exception cleanupException)
+            {
+                _logger.LogError(cleanupException,
+                    "Could not remove the Identity account left behind by the failed registration of {Email}. " +
+                    "An administrator must delete it manually.", email);
+            }
         }
 
         /// <summary>

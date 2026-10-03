@@ -23,8 +23,17 @@ namespace SMS.Persistence.Repositories
             // SelectedCourse is included so callers (enrollment status, dashboard,
             // course selection) can surface the course the student chose at
             // registration without issuing a second round trip.
+            //
+            // Enrollments is included for the SAME reason: GetMyPendingEnrollmentQuery
+            // reports UnitsCount from student.Enrollments, and lazy-loading proxies are
+            // NOT enabled anywhere in this application, so an un-included navigation is
+            // always an empty collection at runtime (not just in tests). Without this
+            // Include the count was permanently 0 for every student, however many
+            // Enrollment rows registration had persisted.
             return await _dbSet
                 .Include(s => s.SelectedCourse)
+                .Include(s => s.Enrollments)
+                    .ThenInclude(e => e.Course)
                 .FirstOrDefaultAsync(s => s.Email == email && !s.IsDeleted);
         }
 

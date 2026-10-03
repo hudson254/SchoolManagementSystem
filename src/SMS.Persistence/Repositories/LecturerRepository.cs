@@ -48,34 +48,59 @@ namespace SMS.Persistence.Repositories
         {
             var result = new HashSet<Guid>();
 
-            // 1. Direct unit allocations (active status)
-            var allocatedUnitIds = await _context.Set<UnitAllocation>()
+            // 1. The lecturer's own unit allocations. Only ACTIVE rows count:
+            // registration creates them as "PendingApproval" and
+            // ApproveRegistrationCommand is what flips them to "Active", so a
+            // lecturer awaiting approval is entitled to nothing here.
+            var allocations = await _context.Set<UnitAllocation>()
                 .Where(u => u.LecturerId == lecturerId && u.Status == "Active" && !u.IsDeleted)
-                .Select(u => u.UnitId)
-                .Distinct()
+                .Select(u => new { u.UnitId, u.CourseOfferingId })
                 .ToListAsync(cancellationToken);
-            foreach (var id in allocatedUnitIds)
+
+            if (allocations.Count == 0)
             {
-                result.Add(id);
+                return result;
             }
 
-            // 2. Course-offering lecturer assignments -> offering units
-            var offeringIds = await _context.Set<CourseOfferingLecturer>()
-                .Where(l => l.LecturerId == lecturerId && l.IsActive && !l.IsDeleted)
-                .Select(l => l.CourseOfferingId)
+            // 2. An allocation that belongs to a course offering is only a valid
+            // teaching entitlement while the lecturer's teaching assignment for
+            // THAT offering is itself active. Registration writes the assignment as
+            // "PendingConfirmation"; ApproveRegistrationCommand activates it.
+            //
+            // Filtering on Status (not merely IsActive) is what stops a pending
+            // lecturer from being treated as a teacher, and restricting the unit set
+            // to this lecturer's own allocations is what stops a shared offering
+            // snapshot from leaking another lecturer's units into this lecturer's
+            // entitlement.
+            var offeringIds = allocations
+                .Where(a => a.CourseOfferingId.HasValue && a.CourseOfferingId.Value != Guid.Empty)
+                .Select(a => a.CourseOfferingId!.Value)
                 .Distinct()
-                .ToListAsync(cancellationToken);
+                .ToList();
 
-            if (offeringIds.Count > 0)
-            {
-                var offeringUnitIds = await _context.Set<CourseOfferingUnit>()
-                    .Where(u => u.UnitId != null && offeringIds.Contains(u.CourseOfferingId) && u.IsActive && !u.IsDeleted)
-                    .Select(u => u.UnitId!.Value)
+            var activeOfferingIds = offeringIds.Count == 0
+                ? new HashSet<Guid>()
+                : new HashSet<Guid>(await _context.Set<CourseOfferingLecturer>()
+                    .Where(l => l.LecturerId == lecturerId &&
+                                offeringIds.Contains(l.CourseOfferingId) &&
+                                l.Status == "Active" && l.IsActive && !l.IsDeleted)
+                    .Select(l => l.CourseOfferingId)
                     .Distinct()
-                    .ToListAsync(cancellationToken);
-                foreach (var id in offeringUnitIds)
+                    .ToListAsync(cancellationToken));
+
+            foreach (var allocation in allocations)
+            {
+                // An allocation with no offering is a direct administrative
+                // teaching appointment and stands on its own.
+                if (!allocation.CourseOfferingId.HasValue || allocation.CourseOfferingId.Value == Guid.Empty)
                 {
-                    result.Add(id);
+                    result.Add(allocation.UnitId);
+                    continue;
+                }
+
+                if (activeOfferingIds.Contains(allocation.CourseOfferingId.Value))
+                {
+                    result.Add(allocation.UnitId);
                 }
             }
 
