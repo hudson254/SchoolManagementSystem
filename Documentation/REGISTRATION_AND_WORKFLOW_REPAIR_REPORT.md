@@ -205,7 +205,18 @@ fail identically on the pristine baseline commit. Verified statically and by uni
 
 * `Documentation/REGISTRATION_AND_WORKFLOW_REPAIR_REPORT.md` (this file)
 
-## 8. Remaining Issues
+## 8. Commit
+
+| Item | Value |
+|---|---|
+| Commit SHA | `34372f5dff44d93c82420ea2f5c886d6cc42c83e` |
+| Commit message | `fix(registration): persist course/unit selections and unblock student requests` |
+| Files changed | 15 (+1500 / -31) |
+| Database changes | None (no migration) |
+| API changes | Authorization policy added; no endpoint added, removed or re-shaped |
+| Frontend changes | None required |
+
+## 9. Remaining Issues
 
 1. **Live E2E verification is outstanding.** Integration (72) and API (207) tests cannot run
    without PostgreSQL. Start Docker and re-run both suites, plus a manual pass over the
