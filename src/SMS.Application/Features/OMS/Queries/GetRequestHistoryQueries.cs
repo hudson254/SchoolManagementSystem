@@ -41,7 +41,14 @@ namespace SMS.Application.Features.OMS.Queries
             if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
                 throw new UnauthorizedException("An authenticated user is required.");
 
-            if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
+            // Coarse role gate only. Whether the caller may see THIS request is decided
+            // by OmsRequestAccess.EnsureCanView below, which enforces ownership,
+            // assignment and tenant scoping. A role that may raise a request
+            // (Student, Receptionist) must be able to read its own history,
+            // otherwise the request detail page 403s for the very request the
+            // user just created.
+            if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewOwnRequestsRoles)
+                && !OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
                 throw new ForbiddenException(OmsPermissions.ViewRequestHistory, _currentUser.UserId);
 
             // Object-level authorization: history rows belong to a specific request,
@@ -133,7 +140,11 @@ namespace SMS.Application.Features.OMS.Queries
             if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
                 throw new UnauthorizedException("An authenticated user is required.");
 
-            if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
+            // Coarse gate only; OmsRequestAccess.EnsureCanView below owns the object-level
+            // decision. A requester (Student, Receptionist) must be able to see the
+            // attachments on the request they raised.
+            if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewOwnRequestsRoles)
+                && !OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
                 throw new ForbiddenException(OmsPermissions.ViewRequests, _currentUser.UserId);
 
             var req = await _requestRepository.GetByIdAsync(query.RequestId, cancellationToken);
@@ -175,7 +186,10 @@ namespace SMS.Application.Features.OMS.Queries
             if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
                 throw new UnauthorizedException("An authenticated user is required.");
 
-            if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
+            // Coarse gate only; OmsRequestAccess.EnsureCanView below owns the object-level
+            // decision (ownership of the owning request).
+            if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewOwnRequestsRoles)
+                && !OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
                 throw new ForbiddenException(OmsPermissions.ViewRequests, _currentUser.UserId);
 
             var attachment = await _requestRepository.GetAttachmentByIdAsync(query.AttachmentId);

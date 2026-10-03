@@ -54,6 +54,86 @@ namespace SMS.UnitTests.Notifications
                 .ReturnsAsync(new Student { Id = studentId, UserId = userId });
         }
 
+        // ── Accommodation / registration fan-out ─────────────────────────────
+
+        [Fact]
+        public async Task NewAccount_NotifiesAdministratorCoordinatorAndReceptionist()
+        {
+            await Build().NotifyAccommodationRequiredAsync(
+                "John Doe", "Student", "STU20260101123", "Computer Science");
+
+            // Recipients are resolved by ROLE through the existing dispatcher, which
+            // stamps the tenant and de-duplicates. This is the ONLY write path.
+            _dispatcher.Verify(d => d.NotifyRolesAsync(
+                It.Is<IEnumerable<string>>(roles =>
+                    roles.Contains("Administrator")
+                    && roles.Contains("Coordinator")
+                    && roles.Contains("Receptionist")),
+                "Accommodation Allocation Required",
+                It.Is<string>(m =>
+                    m.Contains("John Doe")            // who needs accommodation
+                    && m.Contains("Student")          // their role
+                    && m.Contains("STU20260101123")    // their registration id
+                    && m.Contains("Computer Science") // course chosen at registration
+                    && m.Contains("Accommodation allocation required")), // the action
+                NotificationTypes.Accommodation,
+                "STU20260101123",
+                "/accommodation",
+                NotificationPriorities.Important,
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task NewAccount_AccommodationNotification_ExcludesRolesThatCannotAllocate()
+        {
+            await Build().NotifyAccommodationRequiredAsync(
+                "Jane Smith", "Lecturer", "LEC20260101123", "Computer Science");
+
+            // Lecturer/Student must never receive an allocation task they cannot
+            // action. Only the existing accommodation back-office tier is targeted.
+            _dispatcher.Verify(d => d.NotifyRolesAsync(
+                It.Is<IEnumerable<string>>(roles =>
+                    !roles.Contains("Lecturer") && !roles.Contains("Student")),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task NewAccount_PendingApproval_NotifiesApproversAndLinksToApprovals()
+        {
+            await Build().NotifyRegistrationAwaitingApprovalAsync(
+                "John Doe", "Student", "Computer Science", "CS101, CS102");
+
+            _dispatcher.Verify(d => d.NotifyRolesAsync(
+                It.Is<IEnumerable<string>>(roles =>
+                    roles.Contains("Administrator") && roles.Contains("Coordinator")),
+                "Registration Awaiting Approval",
+                It.Is<string>(m =>
+                    m.Contains("John Doe")
+                    && m.Contains("Computer Science")
+                    && m.Contains("CS101, CS102")
+                    && m.Contains("Registration awaiting approval")),
+                NotificationTypes.AccountApproval,
+                It.IsAny<string?>(),
+                "/users",
+                NotificationPriorities.Important,
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task AccommodationNotification_WithoutAPersonName_IsANoOp()
+        {
+            await Build().NotifyAccommodationRequiredAsync("   ", "Student", "STU1", "CS");
+
+            // A blank name carries no actionable information; better to write nothing
+            // than to fan out an unusable notification to every back-office user.
+            _dispatcher.Verify(d => d.NotifyRolesAsync(
+                It.IsAny<IEnumerable<string>>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
         // ── Accommodation ────────────────────────────────────────────────────
 
         [Fact]

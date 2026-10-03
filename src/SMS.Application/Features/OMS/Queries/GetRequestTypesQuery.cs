@@ -35,7 +35,14 @@ public class GetRequestTypesQueryHandler : IRequestHandler<GetRequestTypesQuery,
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
             throw new UnauthorizedException("An authenticated user is required.");
 
-        if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
+        // The request-type catalogue is reference/configuration data (code, display
+        // name, default priority) - it exposes no request content and no tenant
+        // records. Every role that is permitted to CREATE a request needs it to
+        // render the New Request form, so it is gated on "may view own requests"
+        // (which includes Student and Receptionist) as well as the privileged queue
+        // roles. Actual request DATA stays protected by OmsRequestAccess.
+        if (!OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewOwnRequestsRoles)
+            && !OmsAuthorization.HasAnyRole(_currentUser.Roles, OmsAuthorization.ViewRequestsRoles))
             throw new ForbiddenException(OmsPermissions.ViewRequests, _currentUser.UserId);
 
         var types = await _requestRepository.GetAllTypesAsync(cancellationToken);

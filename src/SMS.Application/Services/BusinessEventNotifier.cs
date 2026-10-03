@@ -44,11 +44,41 @@ namespace SMS.Application.Services
         /// <see cref="NotificationCatalog.NormalizeActionUrl"/> by the dispatcher,
         /// so a typo here degrades to "no button" rather than to an unsafe link.
         /// </summary>
+        // The accommodation page is a real SPA route (`/accommodation`), so this is the
+        // actionable destination for a person needing a room allocated.
         private const string AccommodationUrl = "/accommodation";
+
+        // There is no /approvals SPA page: the registration approval queue is the
+        // existing GET /approval/pending API surfaced through the account
+        // management screens. Pointing at /users keeps the notification's action
+        // button on a route that actually resolves instead of a dead link; the
+        // notification body itself carries the name, role, course and units.
+        private const string ApprovalsUrl = "/users";
         private const string AssignmentUrl = "/assignments";
         private const string UnitUrl = "/units";
         private const string CourseUrl = "/courses";
         private const string EnrollmentUrl = "/courses";
+
+        /// <summary>
+        /// Roles that allocate accommodation. This is the existing back-office
+        /// accommodation tier - the same roles the AccommodationController's
+        /// ReceptionistAccess endpoints are gated on - so the notification never
+        /// reaches a role that could not act on it. Deliberately declared here (and
+        /// not invented per call site) so the fan-out cannot drift.
+        /// </summary>
+        internal static readonly string[] AccommodationAllocationRoles =
+        {
+            "SystemAdministrator", "Administrator", "Coordinator", "Receptionist"
+        };
+
+        /// <summary>
+        /// Roles that decide a pending registration (mirrors ApprovalController's
+        /// ReceptionistAccess policy).
+        /// </summary>
+        internal static readonly string[] RegistrationApprovalRoles =
+        {
+            "SystemAdministrator", "Administrator", "Coordinator", "Receptionist"
+        };
 
         private readonly INotificationDispatcher _dispatcher;
         private readonly IStudentRepository _studentRepository;
@@ -447,6 +477,59 @@ namespace SMS.Application.Services
         }
 
         // ── Registration / account approval ──────────────────────────────────
+
+        /// <inheritdoc/>
+        public async Task NotifyAccommodationRequiredAsync(
+            string personName, string role, string? identifier, string? courseName,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(personName)) return;
+
+            // Identifies the person well enough for the recipient to act without
+            // opening the record first: name, role, registration identifier and
+            // the course selected at registration.
+            var details = new List<string> { $"Role: {role}" };
+            if (!string.IsNullOrWhiteSpace(identifier)) details.Add($"{role} ID: {identifier.Trim()}");
+            if (!string.IsNullOrWhiteSpace(courseName)) details.Add($"Course: {courseName.Trim()}");
+            details.Add("Accommodation allocation required");
+
+            _logger.LogInformation(
+                "Raising accommodation-required notification for {Role} '{PersonName}' (tenant-isolated role fan-out)",
+                role, personName);
+
+            await _dispatcher.NotifyRolesAsync(
+                AccommodationAllocationRoles,
+                "Accommodation Allocation Required",
+                $"{personName.Trim()} has just registered as a {role}. {string.Join(" · ", details)}.",
+                NotificationTypes.Accommodation,
+                referenceId: identifier,
+                actionUrl: AccommodationUrl,
+                priority: NotificationPriorities.Important,
+                cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public async Task NotifyRegistrationAwaitingApprovalAsync(
+            string personName, string role, string? courseName, string? unitSummary,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(personName)) return;
+
+            var details = new List<string> { $"Role: {role}" };
+            if (!string.IsNullOrWhiteSpace(courseName)) details.Add($"Course: {courseName.Trim()}");
+            if (!string.IsNullOrWhiteSpace(unitSummary)) details.Add($"Units: {unitSummary.Trim()}");
+            details.Add("Registration awaiting approval");
+
+            await _dispatcher.NotifyRolesAsync(
+                RegistrationApprovalRoles,
+                "Registration Awaiting Approval",
+                $"{personName.Trim()} has registered as a {role}. {string.Join(" · ", details)}.",
+                NotificationTypes.AccountApproval,
+                referenceId: null,
+                actionUrl: ApprovalsUrl,
+                priority: NotificationPriorities.Important,
+                cancellationToken: cancellationToken);
+        }
 
         /// <summary>
         /// Registration outcome. The recipient is the applicant themselves, so the

@@ -51,7 +51,15 @@ namespace SMS.UnitTests.Enrollments
             Mock<IUserManagerService> UserManager,
             Mock<IJwtService> Jwt,
             Mock<IUsernameGenerator> UsernameGenerator,
-            Mock<INameParser> NameParser) BuildRegisterHandler()
+            Mock<INameParser> NameParser,
+            Mock<IEnrollmentRepository> EnrollmentRepo,
+            Mock<ICourseOfferingRepository> OfferingRepo,
+            Mock<ICourseOfferingEnrollmentRepository> OfferingEnrollmentRepo,
+            Mock<ICourseOfferingLecturerRepository> OfferingLecturerRepo,
+            Mock<ICourseOfferingUnitRepository> OfferingUnitRepo,
+            Mock<IUnitRepository> UnitRepo,
+            Mock<IUnitAllocationRepository> UnitAllocationRepo,
+            Mock<IBusinessEventNotifier> Notifier) BuildRegisterHandler()
         {
             var userManager = new Mock<IUserManagerService>();
             var jwt = new Mock<IJwtService>();
@@ -65,6 +73,12 @@ namespace SMS.UnitTests.Enrollments
             var unitAllocationRepo = new Mock<IUnitAllocationRepository>();
             var tenantContext = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
             var unitOfWork = new Mock<IUnitOfWork>();
+            var enrollmentRepo = new Mock<IEnrollmentRepository>();
+            var courseOfferingRepo = new Mock<ICourseOfferingRepository>();
+            var courseOfferingEnrollmentRepo = new Mock<ICourseOfferingEnrollmentRepository>();
+            var courseOfferingLecturerRepo = new Mock<ICourseOfferingLecturerRepository>();
+            var courseOfferingUnitRepo = new Mock<ICourseOfferingUnitRepository>();
+            var notifier = new Mock<IBusinessEventNotifier>();
 
             tenantContext.Setup(x => x.TenantId).Returns(TenantId.ToString());
 
@@ -83,10 +97,18 @@ namespace SMS.UnitTests.Enrollments
                 new Mock<ISemesterRepository>().Object,
                 tenantContext.Object,
                 unitOfWork.Object,
-                new PasswordPolicyService());
+                new PasswordPolicyService(),
+                enrollmentRepo.Object,
+                courseOfferingRepo.Object,
+                courseOfferingEnrollmentRepo.Object,
+                courseOfferingLecturerRepo.Object,
+                courseOfferingUnitRepo.Object,
+                notifier.Object);
 
             return (handler, studentRepo, courseRepo, userManager, jwt,
-                usernameGenerator, nameParser);
+                usernameGenerator, nameParser, enrollmentRepo, courseOfferingRepo,
+                courseOfferingEnrollmentRepo, courseOfferingLecturerRepo, courseOfferingUnitRepo,
+                unitRepo, unitAllocationRepo, notifier);
         }
 
         private static RegisterCommand BuildStudentCommand(Guid courseId) => new RegisterCommand
@@ -144,7 +166,7 @@ namespace SMS.UnitTests.Enrollments
             var courseId = Guid.NewGuid();
             var programmeId = Guid.NewGuid();
             var (handler, studentRepo, courseRepo, userManager, jwt,
-                usernameGenerator, nameParser) = BuildRegisterHandler();
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo, offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
 
             var command = BuildStudentCommand(courseId);
             ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
@@ -171,7 +193,14 @@ namespace SMS.UnitTests.Enrollments
             capturedStudent.Should().NotBeNull();
             capturedStudent!.SelectedCourseId.Should().Be(courseId,
                 "the course chosen at registration must be persisted, not just validated");
-            capturedStudent.RegistrationStatus.Should().Be(RegistrationStatus.PendingCourseSelection);
+            // The course WAS selected during this registration, so the account is no
+            // longer "awaiting course selection". PendingCourseSelection used to be
+            // written here, which made the registration invisible to
+            // GetPendingApprovalsQuery (filters on PendingApproval) and made
+            // ApproveRegistrationCommand throw - an approval dead-end no admin could
+            // clear. PendingApproval is the state the existing approval workflow
+            // actually consumes.
+            capturedStudent.RegistrationStatus.Should().Be(RegistrationStatus.PendingApproval);
             capturedStudent.IsEnrolled.Should().BeFalse();
             capturedStudent.ProgrammeId.Should().Be(programmeId);
         }
@@ -184,7 +213,7 @@ namespace SMS.UnitTests.Enrollments
             var courseId = Guid.NewGuid();
             var fallbackProgrammeId = Guid.NewGuid();
             var (handler, studentRepo, courseRepo, userManager, jwt,
-                usernameGenerator, nameParser) = BuildRegisterHandler();
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo, offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
 
             var command = BuildStudentCommand(courseId);
             ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
@@ -225,7 +254,7 @@ namespace SMS.UnitTests.Enrollments
             // (a 500 on POST /register). This test pins that distinction.
             var courseId = Guid.NewGuid();
             var (handler, studentRepo, courseRepo, userManager, jwt,
-                usernameGenerator, nameParser) = BuildRegisterHandler();
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo, offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
 
             var command = BuildStudentCommand(courseId);
             ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
@@ -261,7 +290,7 @@ namespace SMS.UnitTests.Enrollments
         public async Task RegisterStudent_WithoutCourseId_ShouldThrowValidationException()
         {
             var (handler, _, courseRepo, userManager, jwt,
-                usernameGenerator, nameParser) = BuildRegisterHandler();
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo, offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
 
             var command = BuildStudentCommand(Guid.NewGuid());
             command.CourseId = null;
@@ -281,7 +310,7 @@ namespace SMS.UnitTests.Enrollments
         {
             var courseId = Guid.NewGuid();
             var (handler, studentRepo, courseRepo, userManager, jwt,
-                usernameGenerator, nameParser) = BuildRegisterHandler();
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo, offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
 
             var command = BuildStudentCommand(courseId);
             ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
@@ -303,6 +332,181 @@ namespace SMS.UnitTests.Enrollments
                 x => x.AddAsync(It.IsAny<Student>(), It.IsAny<CancellationToken>()),
                 Times.Never,
                 "an inactive course must never be persisted as a selection");
+        }
+
+        [Fact]
+        public async Task RegisterStudent_PersistsAnEnrollmentRowPerSelectedUnit_SoUnitsAreImmediatelyRetrievable()
+        {
+            var courseId = Guid.NewGuid();
+            var (handler, studentRepo, courseRepo, userManager, jwt,
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo,
+                offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
+
+            var command = BuildStudentCommand(courseId);
+            ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
+                nameParser, Guid.NewGuid().ToString());
+
+            var units = new List<SMS.Domain.Entities.Unit>
+            {
+                new() { Id = Guid.NewGuid(), Code = "CS101", Name = "Intro", CourseId = courseId, IsActive = true },
+                new() { Id = Guid.NewGuid(), Code = "CS102", Name = "Logic", CourseId = courseId, IsActive = true },
+                new() { Id = Guid.NewGuid(), Code = "CS999", Name = "Retired", CourseId = courseId, IsActive = false }
+            };
+
+            courseRepo.Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Course { Id = courseId, Name = "CS", Code = "CSC", IsActive = true });
+            unitRepo.Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(units);
+
+            Guid? capturedStudentId = null;
+            studentRepo.Setup(x => x.AddAsync(It.IsAny<Student>(), It.IsAny<CancellationToken>()))
+                .Callback<Student, CancellationToken>((s, _) => capturedStudentId = s.Id)
+                .ReturnsAsync((Student s, CancellationToken _) => s);
+
+            var saved = new List<Enrollment>();
+            enrollmentRepo.Setup(x => x.AddAsync(It.IsAny<Enrollment>(), It.IsAny<CancellationToken>()))
+                .Callback<Enrollment, CancellationToken>((e, _) => saved.Add(e))
+                .ReturnsAsync((Enrollment e, CancellationToken _) => e);
+
+            await handler.Handle(command, CancellationToken.None);
+
+            // Only ACTIVE units are enrolled - an inactive unit must never be.
+            saved.Should().HaveCount(2);
+            saved.Select(e => e.UnitId).Should().BeEquivalentTo(
+                units.Where(u => u.IsActive).Select(u => u.Id));
+
+            // Every row points at the persisted student, so the enrollment is not
+            // an orphan and the dashboard/status queries can join it.
+            saved.Should().OnlyContain(e => e.StudentId == capturedStudentId!.Value);
+            saved.Should().OnlyContain(e => e.CourseId == courseId);
+
+            // PendingApproval/inactive matches the existing enrollment command and is
+            // exactly what ApproveRegistrationCommand later flips to Active.
+            saved.Should().OnlyContain(e => e.Status == "PendingApproval");
+            saved.Should().OnlyContain(e => e.IsActive == false);
+        }
+
+        [Fact]
+        public async Task RegisterStudent_WhenActiveOfferingExists_CreatesPendingCourseOfferingEnrollment()
+        {
+            var courseId = Guid.NewGuid();
+            var offeringId = Guid.NewGuid();
+            var (handler, studentRepo, courseRepo, userManager, jwt,
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo,
+                offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
+
+            var command = BuildStudentCommand(courseId);
+            ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
+                nameParser, Guid.NewGuid().ToString());
+
+            courseRepo.Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Course { Id = courseId, Name = "CS", Code = "CSC", IsActive = true });
+            unitRepo.Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<SMS.Domain.Entities.Unit>
+                {
+                    new() { Id = Guid.NewGuid(), Code = "CS101", Name = "Intro", CourseId = courseId, IsActive = true }
+                });
+
+            // Exactly one active offering -> it is the unambiguous match.
+            offeringRepo.Setup(x => x.GetByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<CourseOffering> { new() { Id = offeringId, CourseId = courseId, IsActive = true } });
+            offeringEnrollmentRepo
+                .Setup(x => x.ExistsByOfferingAndStudentAsync(offeringId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+
+            var created = new List<CourseOfferingEnrollment>();
+            offeringEnrollmentRepo.Setup(x => x.AddAsync(It.IsAny<CourseOfferingEnrollment>(), It.IsAny<CancellationToken>()))
+                .Callback<CourseOfferingEnrollment, CancellationToken>((e, _) => created.Add(e))
+                .ReturnsAsync((CourseOfferingEnrollment e, CancellationToken _) => e);
+
+            await handler.Handle(command, CancellationToken.None);
+
+            created.Should().HaveCount(1);
+            created[0].CourseOfferingId.Should().Be(offeringId);
+
+            // PendingConfirmation keeps it out of GetActiveByStudentAsync until an
+            // administrator confirms - the pre-existing contract, unchanged.
+            created[0].Status.Should().Be("PendingConfirmation");
+            created[0].ConfirmationStatus.Should().Be(ConfirmationStatus.Pending);
+        }
+
+        [Fact]
+        public async Task RegisterStudent_WhenNoActiveOffering_RecordsSelectionWithoutFabricatingOne()
+        {
+            var courseId = Guid.NewGuid();
+            var (handler, studentRepo, courseRepo, userManager, jwt,
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo,
+                offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
+
+            var command = BuildStudentCommand(courseId);
+            ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
+                nameParser, Guid.NewGuid().ToString());
+
+            courseRepo.Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Course { Id = courseId, Name = "CS", Code = "CSC", IsActive = true });
+            unitRepo.Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<SMS.Domain.Entities.Unit>
+                {
+                    new() { Id = Guid.NewGuid(), Code = "CS101", Name = "Intro", CourseId = courseId, IsActive = true }
+                });
+            offeringRepo.Setup(x => x.GetByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<CourseOffering>());
+
+            Student? captured = null;
+            studentRepo.Setup(x => x.AddAsync(It.IsAny<Student>(), It.IsAny<CancellationToken>()))
+                .Callback<Student, CancellationToken>((s, _) => captured = s)
+                .ReturnsAsync((Student s, CancellationToken _) => s);
+
+            await handler.Handle(command, CancellationToken.None);
+
+            // The selection is still authoritative on the student record...
+            captured!.SelectedCourseId.Should().Be(courseId);
+
+            // ...but registration must NOT invent a course offering: offering
+            // creation carries its own academic-year/period uniqueness rule.
+            offeringEnrollmentRepo.Verify(
+                x => x.AddAsync(It.IsAny<CourseOfferingEnrollment>(), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task RegisterStudent_RaisesAccommodationAndApprovalNotifications()
+        {
+            var courseId = Guid.NewGuid();
+            var (handler, studentRepo, courseRepo, userManager, jwt,
+                usernameGenerator, nameParser, enrollmentRepo, offeringRepo, offeringEnrollmentRepo,
+                offeringLecturerRepo, offeringUnitRepo, unitRepo, unitAllocationRepo, notifier) = BuildRegisterHandler();
+
+            var command = BuildStudentCommand(courseId);
+            ArrangeHappyPath(command, userManager, jwt, usernameGenerator,
+                nameParser, Guid.NewGuid().ToString());
+
+            courseRepo.Setup(x => x.GetByIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Course { Id = courseId, Name = "Computer Science", Code = "CS101", IsActive = true });
+            unitRepo.Setup(x => x.GetUnitsByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<SMS.Domain.Entities.Unit>
+                {
+                    new() { Id = Guid.NewGuid(), Code = "CS101", Name = "Intro", CourseId = courseId, IsActive = true }
+                });
+            offeringRepo.Setup(x => x.GetByCourseIdAsync(courseId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<CourseOffering>());
+
+            await handler.Handle(command, CancellationToken.None);
+
+            // Accommodation allocation is required for every new account, so the
+            // back-office roles must be told - naming the person and the course.
+            notifier.Verify(x => x.NotifyAccommodationRequiredAsync(
+                It.Is<string>(n => n.Contains("John") && n.Contains("Doe")),
+                "Student",
+                It.IsAny<string?>(),
+                It.Is<string?>(c => c == "Computer Science"),
+                It.IsAny<CancellationToken>()), Times.Once);
+
+            notifier.Verify(x => x.NotifyRegistrationAwaitingApprovalAsync(
+                It.IsAny<string>(), "Student",
+                It.Is<string?>(c => c == "Computer Science"),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()), Times.Once);
         }
 
         // ─────────────────────────────────────────────────────────────────────

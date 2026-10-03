@@ -86,6 +86,30 @@ namespace SMS.Application.Common.Interfaces
             CancellationToken cancellationToken = default);
 
         // ── Registration / account approval ──────────────────────────────────
+
+        /// <summary>
+        /// Raised by the account-creation workflow (registration) for every newly
+        /// created student or lecturer that needs an accommodation allocation.
+        /// <para>
+        /// Recipients are resolved by ROLE (Administrator, Coordinator, Receptionist)
+        /// because accommodation is a shared back-office queue rather than one
+        /// person's responsibility, and all three roles already hold the existing
+        /// accommodation policies. The dispatcher resolves live role membership and
+        /// stamps the tenant, so a foreign-tenant admin can never receive it.
+        /// </para>
+        /// </summary>
+        Task NotifyAccommodationRequiredAsync(
+            string personName, string role, string? identifier, string? courseName,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Raised when a registration has been submitted and is awaiting an
+        /// administrator decision. Recipients are the approval roles.
+        /// </summary>
+        Task NotifyRegistrationAwaitingApprovalAsync(
+            string personName, string role, string? courseName, string? unitSummary,
+            CancellationToken cancellationToken = default);
+
         Task NotifyRegistrationDecisionAsync(
             string? userId, string userType, bool approved, string? reason = null,
             CancellationToken cancellationToken = default);

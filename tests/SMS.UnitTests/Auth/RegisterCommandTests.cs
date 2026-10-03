@@ -33,6 +33,12 @@ namespace SMS.UnitTests.Auth
         private readonly Mock<SMS.Multitenancy.Interfaces.ITenantContext> _tenantContextMock;
         private readonly Mock<IUnitOfWork> _unitOfWorkMock;
         private readonly Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler> _logger;
+        private readonly Mock<IEnrollmentRepository> _enrollmentRepositoryMock;
+        private readonly Mock<ICourseOfferingRepository> _courseOfferingRepositoryMock;
+        private readonly Mock<ICourseOfferingEnrollmentRepository> _courseOfferingEnrollmentRepositoryMock;
+        private readonly Mock<ICourseOfferingLecturerRepository> _courseOfferingLecturerRepositoryMock;
+        private readonly Mock<ICourseOfferingUnitRepository> _courseOfferingUnitRepositoryMock;
+        private readonly Mock<IBusinessEventNotifier> _notifierMock;
 
         public RegisterCommandTests()
         {
@@ -50,6 +56,12 @@ namespace SMS.UnitTests.Auth
             _semesterRepositoryMock = new Mock<ISemesterRepository>();
             _tenantContextMock = new Mock<SMS.Multitenancy.Interfaces.ITenantContext>();
             _unitOfWorkMock = new Mock<IUnitOfWork>();
+            _enrollmentRepositoryMock = new Mock<IEnrollmentRepository>();
+            _courseOfferingRepositoryMock = new Mock<ICourseOfferingRepository>();
+            _courseOfferingEnrollmentRepositoryMock = new Mock<ICourseOfferingEnrollmentRepository>();
+            _courseOfferingLecturerRepositoryMock = new Mock<ICourseOfferingLecturerRepository>();
+            _courseOfferingUnitRepositoryMock = new Mock<ICourseOfferingUnitRepository>();
+            _notifierMock = new Mock<IBusinessEventNotifier>();
             _logger = Mock.Of<Microsoft.Extensions.Logging.ILogger<RegisterCommandHandler>>();
 
             _tenantContextMock.Setup(x => x.TenantId).Returns(Guid.NewGuid().ToString());
@@ -72,7 +84,13 @@ namespace SMS.UnitTests.Auth
                 _semesterRepositoryMock.Object,
                 _tenantContextMock.Object,
                 _unitOfWorkMock.Object,
-                new PasswordPolicyService());
+                new PasswordPolicyService(),
+                _enrollmentRepositoryMock.Object,
+                _courseOfferingRepositoryMock.Object,
+                _courseOfferingEnrollmentRepositoryMock.Object,
+                _courseOfferingLecturerRepositoryMock.Object,
+                _courseOfferingUnitRepositoryMock.Object,
+                _notifierMock.Object);
         }
 
         [Fact]

@@ -20,7 +20,7 @@ namespace SMS.API.Controllers.v1.Oms;
 public class OmsRequestsController : BaseApiController
 {
     [HttpGet]
-    [Authorize(Policy = OmsPolicy.CanViewRequests)]
+    [Authorize(Policy = OmsPolicy.CanViewOwnRequest)]
     public async Task<IActionResult> GetRequests(
         [FromQuery] RequestStatus? status = null,
         [FromQuery] string? requestType = null,
@@ -47,7 +47,7 @@ public class OmsRequestsController : BaseApiController
     }
 
     [HttpGet("{requestId:guid}")]
-    [Authorize(Policy = OmsPolicy.CanViewRequests)]
+    [Authorize(Policy = OmsPolicy.CanViewOwnRequest)]
     public async Task<IActionResult> GetRequestById(Guid requestId, CancellationToken cancellationToken = default)
     {
         return Ok(await Mediator.Send(new GetRequestByIdQuery { RequestId = requestId }, cancellationToken));
@@ -246,7 +246,7 @@ public class OmsRequestsController : BaseApiController
     }
 
     [HttpGet("{requestId:guid}/history")]
-    [Authorize(Policy = OmsPolicy.CanViewRequests)]
+    [Authorize(Policy = OmsPolicy.CanViewOwnRequest)]
     public async Task<IActionResult> GetRequestHistory(
         Guid requestId,
         CancellationToken cancellationToken = default)
@@ -264,7 +264,7 @@ public class OmsRequestsController : BaseApiController
     }
 
     [HttpGet("types")]
-    [Authorize(Policy = OmsPolicy.CanViewRequests)]
+    [Authorize(Policy = OmsPolicy.CanViewOwnRequest)]
     public async Task<IActionResult> GetRequestTypes(
         CancellationToken cancellationToken = default)
     {
@@ -335,7 +335,7 @@ public class OmsRequestsController : BaseApiController
     }
 
     [HttpGet("{requestId:guid}/attachments")]
-    [Authorize(Policy = OmsPolicy.CanViewRequests)]
+    [Authorize(Policy = OmsPolicy.CanViewOwnRequest)]
     public async Task<IActionResult> GetRequestAttachments(
         Guid requestId,
         CancellationToken cancellationToken = default)
@@ -345,7 +345,7 @@ public class OmsRequestsController : BaseApiController
     }
 
     [HttpGet("attachments/{attachmentId:guid}/download")]
-    [Authorize(Policy = OmsPolicy.CanViewRequests)]
+    [Authorize(Policy = OmsPolicy.CanViewOwnRequest)]
     public async Task<IActionResult> DownloadRequestAttachment(
         Guid attachmentId,
         CancellationToken cancellationToken = default)

@@ -19,6 +19,21 @@ public static class OmsPolicy
 
     // --- OMS Request policies (Phase 2C) ---
     public const string CanViewRequests = "Oms.CanViewRequests";
+
+    /// <summary>
+    /// Read access limited to the caller's OWN requests and to the request-type
+    /// catalogue needed to open one.
+    /// <para>
+    /// This is deliberately SEPARATE from <see cref="CanViewRequests"/>, which is
+    /// the privileged tenant-wide queue. A role that is allowed to CREATE a
+    /// request (see OmsAuthorization.CreateRequestRoles) must also be able to read
+    /// the type catalogue and its own requests; otherwise "New Request" fails with
+    /// 403 before the form can render. Fine-grained ownership is still enforced in
+    /// the handlers, so this policy never widens the queue.
+    /// </para>
+    /// </summary>
+    public const string CanViewOwnRequest = "Oms.CanViewOwnRequest";
+
     public const string CanCreateRequest = "Oms.CanCreateRequest";
     public const string CanUpdateRequest = "Oms.CanUpdateRequest";
     public const string CanSubmitRequest = "Oms.CanSubmitRequest";

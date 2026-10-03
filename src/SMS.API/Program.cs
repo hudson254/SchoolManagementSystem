@@ -837,6 +837,17 @@ builder.Services.AddAuthorization(options =>
     // --- OMS Request policies (Phase 2C): mirror OmsAuthorization Request role mappings ---
     options.AddPolicy("Oms.CanViewRequests", policy =>
         policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer"));
+    // Own-request scope. Every role may read the request-type catalogue and the
+    // requests they raised themselves (mirrors OmsAuthorization.ViewOwnRequestsRoles,
+    // which includes Student and Receptionist). This is NOT a queue policy: the
+    // tenant-wide queue stays behind Oms.CanViewRequests, and every handler that
+    // uses this policy additionally re-checks object-level ownership
+    // (GetRequestsQueryHandler.ResolveScope forces "mine";
+    // GetRequestByIdQueryHandler requires isOwner). Required because Student is
+    // allowed to CREATE requests but was otherwise 403'd on the type catalogue the
+    // New Request page loads on mount.
+    options.AddPolicy("Oms.CanViewOwnRequest", policy =>
+        policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student", "Receptionist"));
     options.AddPolicy("Oms.CanCreateRequest", policy =>
         policy.RequireRole("SystemAdministrator", "Administrator", "Coordinator", "Lecturer", "Student"));
     options.AddPolicy("Oms.CanUpdateRequest", policy =>

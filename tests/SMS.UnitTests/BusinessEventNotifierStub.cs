@@ -76,6 +76,14 @@ namespace SMS.UnitTests
                 It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(),
                 It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
+            mock.Setup(m => m.NotifyAccommodationRequiredAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+            mock.Setup(m => m.NotifyRegistrationAwaitingApprovalAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
             return mock;
         }
     }
